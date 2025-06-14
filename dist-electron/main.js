@@ -227,7 +227,6 @@ async function createWindow() {
     electron_1.ipcMain.handle('set-ignore-mouse-events', (event, ignore, options) => {
         const win = electron_1.BrowserWindow.fromWebContents(event.sender);
         if (win) {
-            console.log(`Setting ignore mouse events: ignore=${ignore}, options=${JSON.stringify(options)}`);
             win.setIgnoreMouseEvents(ignore, options);
         }
     });
@@ -236,7 +235,6 @@ async function createWindow() {
         const win = electron_1.BrowserWindow.fromWebContents(event.sender);
         if (!win)
             return;
-        console.log(`Setting ignore mouse events with exceptions: ${JSON.stringify(exceptRegions)}`);
         // 设置窗口为穿透模式
         win.setIgnoreMouseEvents(true, { forward: true });
         // 使用更可靠的方法：注入一个脚本来处理鼠标事件
@@ -287,8 +285,6 @@ async function createWindow() {
         
         // 使用防抖处理mousemove事件
         window._mouseMoveHandler = debounce(window._mouseMoveHandler, 50);
-        
-        console.log('Mouse event handler installed');
       })();
     `).catch(err => {
             console.error('Failed to inject mouse event handler:', err);

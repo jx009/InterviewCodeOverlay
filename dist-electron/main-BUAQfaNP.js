@@ -480,6 +480,12 @@ function initializeIpcHandlers(deps) {
       return { success: false, error: "Failed to delete last screenshot" };
     }
   });
+  require$$1$1.ipcMain.on("show-settings-dialog", () => {
+    const mainWindow = deps.getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("show-settings-dialog");
+    }
+  });
 }
 function bind(fn, thisArg) {
   return function wrap() {
@@ -15574,7 +15580,7 @@ class MultipartBody {
 }
 let fileFromPathWarned = false;
 async function fileFromPath(path2, ...args) {
-  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-ZvKbcZyr.js"));
+  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-YoMK-tHd.js"));
   if (!fileFromPathWarned) {
     console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path2)}) instead`);
     fileFromPathWarned = true;
@@ -42529,14 +42535,12 @@ async function createWindow() {
   require$$1$1.ipcMain.handle("set-ignore-mouse-events", (event, ignore, options) => {
     const win = require$$1$1.BrowserWindow.fromWebContents(event.sender);
     if (win) {
-      console.log(`Setting ignore mouse events: ignore=${ignore}, options=${JSON.stringify(options)}`);
       win.setIgnoreMouseEvents(ignore, options);
     }
   });
   require$$1$1.ipcMain.handle("set-ignore-mouse-events-except", (event, exceptRegions) => {
     const win = require$$1$1.BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
-    console.log(`Setting ignore mouse events with exceptions: ${JSON.stringify(exceptRegions)}`);
     win.setIgnoreMouseEvents(true, { forward: true });
     win.webContents.executeJavaScript(`
       (function() {
@@ -42585,8 +42589,6 @@ async function createWindow() {
         
         // 使用防抖处理mousemove事件
         window._mouseMoveHandler = debounce(window._mouseMoveHandler, 50);
-        
-        console.log('Mouse event handler installed');
       })();
     `).catch((err) => {
       console.error("Failed to inject mouse event handler:", err);
@@ -42995,4 +42997,4 @@ exports.showMainWindow = showMainWindow;
 exports.state = state;
 exports.takeScreenshot = takeScreenshot;
 exports.toggleMainWindow = toggleMainWindow;
-//# sourceMappingURL=main-CoYVRNHO.js.map
+//# sourceMappingURL=main-BUAQfaNP.js.map

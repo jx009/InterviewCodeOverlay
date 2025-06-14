@@ -22,8 +22,6 @@ const ClickThroughManager: React.FC<ClickThroughManagerProps> = ({
   useEffect(() => {
     if (!isInitialized) return;
     
-    console.log('Setting up click-through with selectors:', nonClickThroughSelectors);
-    
     // 计算不应穿透的区域
     const calculateExceptRegions = () => {
       if (!containerRef.current) return [];
@@ -52,7 +50,6 @@ const ClickThroughManager: React.FC<ClickThroughManagerProps> = ({
     // 设置区域性穿透
     const setupClickThrough = () => {
       const exceptRegions = calculateExceptRegions();
-      console.log('Setting up click-through with except regions:', exceptRegions);
       window.electronAPI.setIgnoreMouseEventsExcept(exceptRegions);
     };
     
@@ -61,7 +58,6 @@ const ClickThroughManager: React.FC<ClickThroughManagerProps> = ({
     
     // 创建一个MutationObserver，以确保在DOM变化后仍能正确处理事件
     const observer = new MutationObserver(() => {
-      console.log('DOM changed, recalculating except regions');
       setupClickThrough();
     });
     

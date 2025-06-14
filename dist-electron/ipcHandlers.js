@@ -286,4 +286,11 @@ function initializeIpcHandlers(deps) {
             return { success: false, error: "Failed to delete last screenshot" };
         }
     });
+    // 处理显示设置对话框的请求
+    electron_1.ipcMain.on("show-settings-dialog", () => {
+        const mainWindow = deps.getMainWindow();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("show-settings-dialog");
+        }
+    });
 }

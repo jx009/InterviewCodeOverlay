@@ -247,6 +247,11 @@ const electronAPI = {
   setIgnoreMouseEventsExcept: (exceptRegions: Array<{x: number, y: number, width: number, height: number}>) => {
     return ipcRenderer.invoke('set-ignore-mouse-events-except', exceptRegions);
   },
+
+  // 新增：显示设置对话框
+  showSettings: () => {
+    return ipcRenderer.send('show-settings-dialog');
+  },
 }
 
 // Before exposing the API

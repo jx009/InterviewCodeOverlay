@@ -100,7 +100,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         window.location.reload();
       }, 1500);
     } catch (err) {
-      console.error("Error logging out:", err);
+      // 减少控制台输出
       showToast('Error', 'Failed to log out', 'error');
     }
   }
@@ -124,11 +124,11 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               try {
                 const result = await window.electronAPI.triggerScreenshot()
                 if (!result.success) {
-                  console.error("Failed to take screenshot:", result.error)
+                  // 减少控制台输出
                   showToast("Error", "Failed to take screenshot", "error")
                 }
               } catch (error) {
-                console.error("Error taking screenshot:", error)
+                // 减少控制台输出
                 showToast("Error", "Failed to take screenshot", "error")
               }
             }}
@@ -168,14 +168,11 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                   const result =
                     await window.electronAPI.triggerProcessScreenshots()
                   if (!result.success) {
-                    console.error(
-                      "Failed to process screenshots:",
-                      result.error
-                    )
+                    // 减少控制台输出
                     showToast("Error", "Failed to process screenshots", "error")
                   }
                 } catch (error) {
-                  console.error("Error processing screenshots:", error)
+                  // 减少控制台输出
                   showToast("Error", "Failed to process screenshots", "error")
                 }
               }}
@@ -199,7 +196,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
           {/* Settings with Tooltip */}
           <div
-            className="relative inline-block"
+            className="relative inline-block top-area"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
@@ -241,10 +238,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             const result =
                               await window.electronAPI.toggleMainWindow()
                             if (!result.success) {
-                              console.error(
-                                "Failed to toggle window:",
-                                result.error
-                              )
+                              // 减少控制台输出
                               showToast(
                                 "Error",
                                 "Failed to toggle window",
@@ -252,7 +246,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               )
                             }
                           } catch (error) {
-                            console.error("Error toggling window:", error)
+                            // 减少控制台输出
                             showToast(
                               "Error",
                               "Failed to toggle window",
@@ -285,10 +279,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             const result =
                               await window.electronAPI.triggerScreenshot()
                             if (!result.success) {
-                              console.error(
-                                "Failed to take screenshot:",
-                                result.error
-                              )
+                              // 减少控制台输出
                               showToast(
                                 "Error",
                                 "Failed to take screenshot",
@@ -296,7 +287,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               )
                             }
                           } catch (error) {
-                            console.error("Error taking screenshot:", error)
+                            // 减少控制台输出
                             showToast(
                               "Error",
                               "Failed to take screenshot",
@@ -335,10 +326,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             const result =
                               await window.electronAPI.triggerProcessScreenshots()
                             if (!result.success) {
-                              console.error(
-                                "Failed to process screenshots:",
-                                result.error
-                              )
+                              // 减少控制台输出
                               showToast(
                                 "Error",
                                 "Failed to process screenshots",
@@ -346,10 +334,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               )
                             }
                           } catch (error) {
-                            console.error(
-                              "Error processing screenshots:",
-                              error
-                            )
+                            // 减少控制台输出
                             showToast(
                               "Error",
                               "Failed to process screenshots",
@@ -389,10 +374,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                           try {
                             const result = await window.electronAPI.deleteLastScreenshot()
                             if (!result.success) {
-                              console.error(
-                                "Failed to delete last screenshot:",
-                                result.error
-                              )
+                              // 减少控制台输出
                               showToast(
                                 "Error",
                                 result.error || "Failed to delete screenshot",
@@ -400,7 +382,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               )
                             }
                           } catch (error) {
-                            console.error("Error deleting screenshot:", error)
+                            // 减少控制台输出
                             showToast(
                               "Error",
                               "Failed to delete screenshot",
@@ -430,28 +412,41 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
                     {/* Separator and Log Out */}
                     <div className="pt-3 mt-3 border-t border-white/10">
-                      {/* Simplified Language Selector */}
+                      {/* 语言选择器 - 可点击切换 */}
                       <div className="mb-3 px-2">
-                        <div 
-                          className="flex items-center justify-between cursor-pointer hover:bg-white/10 rounded px-2 py-1 transition-colors"
-                          onClick={() => extractLanguagesAndUpdate('next')}
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-                              extractLanguagesAndUpdate('prev');
-                            } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-                              extractLanguagesAndUpdate('next');
-                            }
-                          }}
-                        >
+                        <div className="flex items-center justify-between cursor-pointer hover:bg-white/10 rounded px-2 py-1 transition-colors">
                           <span className="text-[11px] text-white/70">Language</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-white/90">{currentLanguage}</span>
-                            <div className="text-white/40 text-[8px]">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
-                                <path d="M7 13l5 5 5-5M7 6l5 5 5-5"/>
-                              </svg>
-                            </div>
+                            <select
+                              className="bg-transparent border-none text-[11px] text-white/90 cursor-pointer focus:outline-none"
+                              value={currentLanguage}
+                              onChange={(e) => {
+                                const newLang = e.target.value;
+                                setLanguage(newLang);
+                                window.electronAPI.updateConfig({ language: newLang });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                                  extractLanguagesAndUpdate('prev');
+                                } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                                  extractLanguagesAndUpdate('next');
+                                }
+                              }}
+                            >
+                              <option value="python">Python</option>
+                              <option value="javascript">JavaScript</option>
+                              <option value="java">Java</option>
+                              <option value="cpp">C++</option>
+                              <option value="csharp">C#</option>
+                              <option value="go">Go</option>
+                              <option value="rust">Rust</option>
+                              <option value="typescript">TypeScript</option>
+                              <option value="kotlin">Kotlin</option>
+                              <option value="swift">Swift</option>
+                              <option value="php">PHP</option>
+                              <option value="ruby">Ruby</option>
+                              <option value="scala">Scala</option>
+                            </select>
                           </div>
                         </div>
                       </div>

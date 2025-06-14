@@ -327,4 +327,12 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
       return { success: false, error: "Failed to delete last screenshot" }
     }
   })
+  
+  // 处理显示设置对话框的请求
+  ipcMain.on("show-settings-dialog", () => {
+    const mainWindow = deps.getMainWindow()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("show-settings-dialog")
+    }
+  })
 }
