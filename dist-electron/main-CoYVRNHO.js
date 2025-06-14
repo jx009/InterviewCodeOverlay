@@ -35,7 +35,9 @@ class ConfigHelper extends require$$0$1.EventEmitter {
       solutionModel: "gpt-4o",
       debuggingModel: "gpt-4o",
       language: "python",
-      opacity: 1
+      opacity: 1,
+      showCopyButton: true
+      // 默认显示复制按钮
     };
     try {
       this.configPath = path.join(require$$1$1.app.getPath("userData"), "config.json");
@@ -15572,7 +15574,7 @@ class MultipartBody {
 }
 let fileFromPathWarned = false;
 async function fileFromPath(path2, ...args) {
-  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-BBSAFgqN.js"));
+  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-ZvKbcZyr.js"));
   if (!fileFromPathWarned) {
     console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path2)}) instead`);
     fileFromPathWarned = true;
@@ -42524,6 +42526,72 @@ async function createWindow() {
     movable: true
   };
   state.mainWindow = new require$$1$1.BrowserWindow(windowSettings);
+  require$$1$1.ipcMain.handle("set-ignore-mouse-events", (event, ignore, options) => {
+    const win = require$$1$1.BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      console.log(`Setting ignore mouse events: ignore=${ignore}, options=${JSON.stringify(options)}`);
+      win.setIgnoreMouseEvents(ignore, options);
+    }
+  });
+  require$$1$1.ipcMain.handle("set-ignore-mouse-events-except", (event, exceptRegions) => {
+    const win = require$$1$1.BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    console.log(`Setting ignore mouse events with exceptions: ${JSON.stringify(exceptRegions)}`);
+    win.setIgnoreMouseEvents(true, { forward: true });
+    win.webContents.executeJavaScript(`
+      (function() {
+        // 清除之前的事件监听器
+        if (window._mouseMoveHandler) {
+          document.removeEventListener('mousemove', window._mouseMoveHandler);
+          delete window._mouseMoveHandler;
+        }
+        
+        // 创建新的事件处理函数
+        window._mouseMoveHandler = function(e) {
+          const mousePos = { x: e.clientX, y: e.clientY };
+          
+          // 检查鼠标是否在任何例外区域内
+          const exceptRegions = ${JSON.stringify(exceptRegions)};
+          const isInExceptRegion = exceptRegions.some(function(region) {
+            return mousePos.x >= region.x && 
+                   mousePos.x <= region.x + region.width && 
+                   mousePos.y >= region.y && 
+                   mousePos.y <= region.y + region.height;
+          });
+          
+          // 根据鼠标位置设置穿透
+          if (isInExceptRegion) {
+            window.electronAPI.setIgnoreMouseEvents(false);
+          } else {
+            window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+          }
+        };
+        
+        // 添加事件监听器
+        document.addEventListener('mousemove', window._mouseMoveHandler);
+        
+        // 添加一个防抖函数，避免频繁调用
+        function debounce(func, wait) {
+          let timeout;
+          return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(function() {
+              func.apply(context, args);
+            }, wait);
+          };
+        }
+        
+        // 使用防抖处理mousemove事件
+        window._mouseMoveHandler = debounce(window._mouseMoveHandler, 50);
+        
+        console.log('Mouse event handler installed');
+      })();
+    `).catch((err) => {
+      console.error("Failed to inject mouse event handler:", err);
+    });
+  });
   state.mainWindow.webContents.on("did-finish-load", () => {
     console.log("Window finished loading");
   });
@@ -42927,4 +42995,4 @@ exports.showMainWindow = showMainWindow;
 exports.state = state;
 exports.takeScreenshot = takeScreenshot;
 exports.toggleMainWindow = toggleMainWindow;
-//# sourceMappingURL=main-CgqQruT8.js.map
+//# sourceMappingURL=main-CoYVRNHO.js.map

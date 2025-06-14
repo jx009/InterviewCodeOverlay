@@ -15,6 +15,7 @@ import {
 import { ToastContext } from "./contexts/toast"
 import { WelcomeScreen } from "./components/WelcomeScreen"
 import SettingsDialog from "./components/Settings/SettingsDialog"
+import ClickThroughManager from "./components/ClickThroughManager"
 
 // Create a React Query client
 const queryClient = new QueryClient({
@@ -246,11 +247,39 @@ function App() {
           <div className="relative">
             {isInitialized ? (
               hasApiKey ? (
-                <SubscribedApp
-                  credits={credits}
-                  currentLanguage={currentLanguage}
-                  setLanguage={updateLanguage}
-                />
+                <ClickThroughManager
+                  nonClickThroughSelectors={[
+                    // 顶部区域
+                    '.top-area', 
+                    // 交互元素
+                    '.pointer-events-auto',
+                    'button',
+                    'select',
+                    'input',
+                    '.settings-button',
+                    // 设置相关
+                    '.settings-dialog',
+                    '[role="dialog"]',
+                    // 复制按钮
+                    '.absolute.top-2.right-2',
+                    // 其他可能需要交互的元素
+                    'a',
+                    '[role="button"]',
+                    '[role="menuitem"]',
+                    '[role="tab"]',
+                    '[role="switch"]',
+                    '[role="checkbox"]',
+                    '[role="radio"]',
+                    '.react-select__control',
+                    '.react-select__menu'
+                  ]}
+                >
+                  <SubscribedApp
+                    credits={credits}
+                    currentLanguage={currentLanguage}
+                    setLanguage={updateLanguage}
+                  />
+                </ClickThroughManager>
               ) : (
                 <WelcomeScreen onOpenSettings={handleOpenSettings} />
               )

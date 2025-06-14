@@ -221,6 +221,79 @@ async function createWindow() {
         movable: true
     };
     state.mainWindow = new electron_1.BrowserWindow(windowSettings);
+    // 不在这里设置全局穿透，而是通过IPC消息来控制
+    // state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    // 添加事件监听器，用于处理鼠标事件
+    electron_1.ipcMain.handle('set-ignore-mouse-events', (event, ignore, options) => {
+        const win = electron_1.BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+            console.log(`Setting ignore mouse events: ignore=${ignore}, options=${JSON.stringify(options)}`);
+            win.setIgnoreMouseEvents(ignore, options);
+        }
+    });
+    // 新增：区域性穿透API
+    electron_1.ipcMain.handle('set-ignore-mouse-events-except', (event, exceptRegions) => {
+        const win = electron_1.BrowserWindow.fromWebContents(event.sender);
+        if (!win)
+            return;
+        console.log(`Setting ignore mouse events with exceptions: ${JSON.stringify(exceptRegions)}`);
+        // 设置窗口为穿透模式
+        win.setIgnoreMouseEvents(true, { forward: true });
+        // 使用更可靠的方法：注入一个脚本来处理鼠标事件
+        win.webContents.executeJavaScript(`
+      (function() {
+        // 清除之前的事件监听器
+        if (window._mouseMoveHandler) {
+          document.removeEventListener('mousemove', window._mouseMoveHandler);
+          delete window._mouseMoveHandler;
+        }
+        
+        // 创建新的事件处理函数
+        window._mouseMoveHandler = function(e) {
+          const mousePos = { x: e.clientX, y: e.clientY };
+          
+          // 检查鼠标是否在任何例外区域内
+          const exceptRegions = ${JSON.stringify(exceptRegions)};
+          const isInExceptRegion = exceptRegions.some(function(region) {
+            return mousePos.x >= region.x && 
+                   mousePos.x <= region.x + region.width && 
+                   mousePos.y >= region.y && 
+                   mousePos.y <= region.y + region.height;
+          });
+          
+          // 根据鼠标位置设置穿透
+          if (isInExceptRegion) {
+            window.electronAPI.setIgnoreMouseEvents(false);
+          } else {
+            window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+          }
+        };
+        
+        // 添加事件监听器
+        document.addEventListener('mousemove', window._mouseMoveHandler);
+        
+        // 添加一个防抖函数，避免频繁调用
+        function debounce(func, wait) {
+          let timeout;
+          return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(function() {
+              func.apply(context, args);
+            }, wait);
+          };
+        }
+        
+        // 使用防抖处理mousemove事件
+        window._mouseMoveHandler = debounce(window._mouseMoveHandler, 50);
+        
+        console.log('Mouse event handler installed');
+      })();
+    `).catch(err => {
+            console.error('Failed to inject mouse event handler:', err);
+        });
+    });
     // Add more detailed logging for window events
     state.mainWindow.webContents.on("did-finish-load", () => {
         console.log("Window finished loading");

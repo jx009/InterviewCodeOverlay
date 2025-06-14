@@ -18,7 +18,8 @@ class ConfigHelper extends events_1.EventEmitter {
             solutionModel: "gpt-4o",
             debuggingModel: "gpt-4o",
             language: "python",
-            opacity: 1.0
+            opacity: 1.0,
+            showCopyButton: true // 默认显示复制按钮
         };
         // Use the app's user data directory to store the config
         try {

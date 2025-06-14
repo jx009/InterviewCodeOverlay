@@ -50,6 +50,19 @@ const SolutionSection = ({
   currentLanguage: string
 }) => {
   const [copied, setCopied] = useState(false)
+  const [showCopyButton, setShowCopyButton] = useState(true)
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const config = await window.electronAPI.getConfig()
+        setShowCopyButton(config.showCopyButton !== false)
+      } catch (error) {
+        console.error("Failed to load copy button config:", error)
+      }
+    }
+    fetchConfig()
+  }, [])
 
   const copyToClipboard = () => {
     if (typeof content === "string") {
@@ -74,29 +87,35 @@ const SolutionSection = ({
           </div>
         </div>
       ) : (
-        <div className="w-full relative">
-          <button
-            onClick={copyToClipboard}
-            className="absolute top-2 right-2 text-xs text-white bg-white/10 hover:bg-white/20 rounded px-2 py-1 transition"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
-          <SyntaxHighlighter
-            showLineNumbers
-            language={currentLanguage == "golang" ? "go" : currentLanguage}
-            style={dracula}
-            customStyle={{
-              maxWidth: "100%",
-              margin: 0,
-              padding: "1rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-              backgroundColor: "rgba(22, 27, 34, 0.5)"
-            }}
-            wrapLongLines={true}
-          >
-            {content as string}
-          </SyntaxHighlighter>
+        <div className="w-full relative pointer-events-none">
+          {showCopyButton && (
+            <button
+              onClick={copyToClipboard}
+              className="absolute top-2 right-2 text-xs text-white bg-white/10 hover:bg-white/20 rounded px-2 py-1 transition pointer-events-auto z-10"
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          )}
+          <div className="max-h-[500px] overflow-auto">
+            <SyntaxHighlighter
+              showLineNumbers
+              language={currentLanguage == "golang" ? "go" : currentLanguage}
+              style={dracula}
+              customStyle={{
+                maxWidth: "100%",
+                margin: 0,
+                padding: "1rem",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+                backgroundColor: "rgba(22, 27, 34, 0.5)",
+                userSelect: "none"
+              }}
+              wrapLongLines={true}
+              className="pointer-events-none"
+            >
+              {content as string}
+            </SyntaxHighlighter>
+          </div>
         </div>
       )}
     </div>
@@ -477,7 +496,7 @@ const Solutions: React.FC<SolutionsProps> = ({
           <div className="space-y-3 px-4 py-3">
           {/* Conditionally render the screenshot queue if solutionData is available */}
           {solutionData && (
-            <div className="bg-transparent w-fit">
+            <div className="bg-transparent w-fit top-area">
               <div className="pb-3">
                 <div className="space-y-3 w-fit">
                   <ScreenshotQueue
@@ -491,17 +510,19 @@ const Solutions: React.FC<SolutionsProps> = ({
           )}
 
           {/* Navbar of commands with the SolutionsHelper */}
-          <SolutionCommands
-            onTooltipVisibilityChange={handleTooltipVisibilityChange}
-            isProcessing={!problemStatementData || !solutionData}
-            extraScreenshots={extraScreenshots}
-            credits={credits}
-            currentLanguage={currentLanguage}
-            setLanguage={setLanguage}
-          />
+          <div className="top-area">
+            <SolutionCommands
+              onTooltipVisibilityChange={handleTooltipVisibilityChange}
+              isProcessing={!problemStatementData || !solutionData}
+              extraScreenshots={extraScreenshots}
+              credits={credits}
+              currentLanguage={currentLanguage}
+              setLanguage={setLanguage}
+            />
+          </div>
 
           {/* Main Content - Modified width constraints */}
-          <div className="w-full text-sm text-black bg-black/60 rounded-md">
+          <div className="w-full text-sm text-black bg-black/60 rounded-md pointer-events-none main-content">
             <div className="rounded-lg overflow-hidden">
               <div className="px-4 py-3 space-y-4 max-w-full">
                 {!solutionData && (

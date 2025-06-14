@@ -28,7 +28,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     solutionModel: config.solutionModel || '',
     debuggingModel: config.debuggingModel || '',
     language: config.language || 'python',
-    opacity: config.opacity || 1.0
+    opacity: config.opacity || 1.0,
+    showCopyButton: config.showCopyButton !== false // 默认为true
   });
 
   const [isDirty, setIsDirty] = useState(false);
@@ -41,7 +42,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       solutionModel: config.solutionModel || '',
       debuggingModel: config.debuggingModel || '',
       language: config.language || 'python',
-      opacity: config.opacity || 1.0
+      opacity: config.opacity || 1.0,
+      showCopyButton: config.showCopyButton !== false // 默认为true
     });
   }, [config]);
 
@@ -94,6 +96,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     setIsDirty(true);
   };
 
+  const handleToggleCopyButton = (show: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      showCopyButton: show
+    }));
+    setIsDirty(true);
+  };
+
   const handleSave = () => {
     onConfigUpdate(formData);
     setIsDirty(false);
@@ -107,7 +117,8 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       solutionModel: config.solutionModel || '',
       debuggingModel: config.debuggingModel || '',
       language: config.language || 'python',
-      opacity: config.opacity || 1.0
+      opacity: config.opacity || 1.0,
+      showCopyButton: config.showCopyButton !== false // 默认为true
     });
     setIsDirty(false);
     onClose();
@@ -260,6 +271,22 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          <hr className="border-gray-200" />
+
+          {/* 显示设置 */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium block">显示设置</label>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">显示代码复制按钮</span>
+              <input
+                type="checkbox"
+                checked={formData.showCopyButton !== false}
+                onChange={(e) => handleInputChange('showCopyButton', e.target.checked)}
+                className="w-4 h-4"
+              />
+            </div>
           </div>
 
           <hr className="border-gray-200" />

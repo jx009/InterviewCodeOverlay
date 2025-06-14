@@ -236,7 +236,17 @@ const electronAPI = {
       ipcRenderer.removeListener("delete-last-screenshot", subscription)
     }
   },
-  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot")
+  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot"),
+  
+  // 添加控制鼠标事件穿透的方法
+  setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => {
+    return ipcRenderer.invoke('set-ignore-mouse-events', ignore, options);
+  },
+  
+  // 新增：区域性穿透API
+  setIgnoreMouseEventsExcept: (exceptRegions: Array<{x: number, y: number, width: number, height: number}>) => {
+    return ipcRenderer.invoke('set-ignore-mouse-events-except', exceptRegions);
+  },
 }
 
 // Before exposing the API
