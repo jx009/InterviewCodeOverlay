@@ -52,7 +52,7 @@ class ConfigHelper extends events_1.EventEmitter {
     sanitizeModelSelection(model, provider) {
         if (provider === "openai") {
             // OpenAI models supported by ismaque.org
-            const allowedModels = ['gpt-4o', 'gpt-4o-mini', 'gpt-4', 'gpt-3.5-turbo'];
+            const allowedModels = ['o4-mini-high', 'gpt-4o-mini', 'gpt-4', 'gpt-3.5-turbo'];
             if (!allowedModels.includes(model)) {
                 console.warn(`Invalid OpenAI model specified: ${model}. Using default model: gpt-4o`);
                 return 'gpt-4o';
@@ -70,10 +70,10 @@ class ConfigHelper extends events_1.EventEmitter {
         }
         else if (provider === "anthropic") {
             // Claude models supported by ismaque.org
-            const allowedModels = ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'];
+            const allowedModels = ['claude-3-7-sonnet-thinking', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'];
             if (!allowedModels.includes(model)) {
                 console.warn(`Invalid Anthropic model specified: ${model}. Using default model: claude-3-7-sonnet-20250219`);
-                return 'claude-3-7-sonnet-20250219';
+                return 'claude-3-7-sonnet-thinking';
             }
             return model;
         }

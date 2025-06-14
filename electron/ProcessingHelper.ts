@@ -378,14 +378,14 @@ export class ProcessingHelper {
       const messages = [
         {
           role: "system" as const, 
-          content: "你是一个编程题目解释助手。分析编程题目的截图，提取所有相关信息。以JSON格式返回信息，包含以下字段：problem_statement（题目描述）, constraints（约束条件）, example_input（示例输入）, example_output（示例输出）。只返回结构化的JSON，不要其他文本。"
+          content: "你是一个编程题目解释助手。请严格按照要求分析编程题目的截图，提取所有相关信息。\n\n重要要求：\n1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记\n2. JSON必须包含以下字段：problem_statement, constraints, example_input, example_output\n3. 如果某个字段无法从截图中获取，请设置为空字符串\n4. 确保返回的是有效的JSON格式\n\n示例输出格式：\n{\"problem_statement\":\"题目描述\",\"constraints\":\"约束条件\",\"example_input\":\"示例输入\",\"example_output\":\"示例输出\"}"
         },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const, 
-              text: `从这些截图中提取编程题目详情，以JSON格式返回。我们将使用${language}语言来解决这个问题。`
+              text: `从这些截图中提取编程题目详情、输入描述、输出描述以及示例，以严格的JSON格式返回。我们将使用${language}语言来解决这个问题。请确保返回的是有效的JSON格式，不要包含任何其他文本。`
             },
             ...imageDataList.map(data => ({
               type: "image_url" as const,
@@ -400,21 +400,93 @@ export class ProcessingHelper {
         model: extractionModel,
         messages: messages,
         max_tokens: 4000,
-        temperature: 0.2
+        temperature: 0.1  // 降低温度以提高输出稳定性
       });
 
-      // Parse the response
+      // Parse the response with improved error handling
       try {
         const responseText = extractionResponse.choices[0].message.content;
-        // Handle when API might wrap the JSON in markdown code blocks
-        const jsonText = responseText.replace(/```json|```/g, '').trim();
+        console.log("Raw API response:", responseText); // 添加调试输出
+        
+        // More comprehensive cleaning of the response
+        let jsonText = responseText.trim();
+        
+        // Remove markdown code blocks
+        jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        
+        // Remove any leading/trailing non-JSON text
+        const jsonStart = jsonText.indexOf('{');
+        const jsonEnd = jsonText.lastIndexOf('}');
+        
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          jsonText = jsonText.substring(jsonStart, jsonEnd + 1);
+        }
+        
+        // Try to parse the JSON
         problemInfo = JSON.parse(jsonText);
+        
+        // Validate required fields and provide defaults if missing
+        problemInfo = {
+          problem_statement: problemInfo.problem_statement || "无法从截图中提取题目描述",
+          constraints: problemInfo.constraints || "无法从截图中提取约束条件",
+          example_input: problemInfo.example_input || "无法从截图中提取示例输入", 
+          example_output: problemInfo.example_output || "无法从截图中提取示例输出"
+        };
+        
+        console.log("Parsed problem info:", problemInfo); // 添加调试输出
+        
       } catch (error) {
         console.error("Error parsing API response:", error);
-        return {
-          success: false,
-          error: "解析题目信息失败，请重试或使用更清晰的截图。"
-        };
+        console.error("Raw response text:", extractionResponse.choices[0].message.content);
+        
+        // 尝试备用解析方法：使用正则表达式提取关键信息
+        try {
+          const responseText = extractionResponse.choices[0].message.content;
+          console.log("Attempting fallback parsing...");
+          
+          // 尝试从响应中提取关键信息，即使不是完整的JSON
+          const extractField = (fieldName: string, text: string): string => {
+            const patterns = [
+              new RegExp(`"${fieldName}"\\s*:\\s*"([^"]*)"`, 'i'),
+              new RegExp(`${fieldName}[:：]\\s*(.+?)(?=\\n|$)`, 'i'),
+              new RegExp(`【${fieldName}】\\s*(.+?)(?=\\n|【|$)`, 'i')
+            ];
+            
+            for (const pattern of patterns) {
+              const match = text.match(pattern);
+              if (match && match[1]) {
+                return match[1].trim();
+              }
+            }
+            return "";
+          };
+          
+          problemInfo = {
+            problem_statement: extractField("problem_statement", responseText) || 
+                             extractField("题目描述", responseText) || 
+                             "无法从截图中提取题目描述",
+            constraints: extractField("constraints", responseText) || 
+                        extractField("约束条件", responseText) || 
+                        "无法从截图中提取约束条件",
+            example_input: extractField("example_input", responseText) || 
+                          extractField("示例输入", responseText) || 
+                          "无法从截图中提取示例输入",
+            example_output: extractField("example_output", responseText) || 
+                           extractField("示例输出", responseText) || 
+                           "无法从截图中提取示例输出"
+          };
+          
+          console.log("Fallback parsing successful:", problemInfo);
+          
+        } catch (fallbackError) {
+          console.error("Fallback parsing also failed:", fallbackError);
+          
+          // 如果备用解析也失败，提供更详细的错误信息
+          return {
+            success: false,
+            error: `解析题目信息失败：${error.message}。API返回内容格式异常，无法提取题目信息。请确保截图清晰完整，或尝试重新截图后重试。`
+          };
+        }
       }
       
       // Update the user on progress
@@ -514,7 +586,7 @@ export class ProcessingHelper {
         });
       }
 
-      // Create prompt for solution generation (in Chinese)
+      // Create prompt for solution generation (in Chinese) - 优化为ACM模式
       const promptText = `
 为以下编程题目生成详细的解决方案：
 
@@ -533,14 +605,27 @@ ${problemInfo.example_output || "未提供示例输出。"}
 编程语言：${language}
 
 请按照以下格式提供回复：
-1. 代码：一个干净、优化的${language}实现
+1. 代码：一个完整的ACM竞赛模式的${language}实现
 2. 解题思路：关键洞察和方法推理的要点列表
 3. 时间复杂度：O(X)格式，并提供详细解释（至少2句话）
 4. 空间复杂度：O(X)格式，并提供详细解释（至少2句话）
 
+**重要的代码格式要求：**
+- 必须生成完整的ACM竞赛编程模式代码
+- 对于Java语言，必须使用 "public class Main" 作为主类名
+- 必须使用标准输入读取所有数据，不要使用预定义的变量或硬编码的测试数据
+- 输入处理必须严格按照题目描述的输入格式来实现
+- 代码必须是完整的、可以直接复制粘贴到在线判题系统运行的格式
+- 包含适当的导入语句和必要的库引用
+
 对于复杂度解释，请务必详细。例如："时间复杂度：O(n)，因为我们只需要遍历数组一次。这是最优的，因为我们需要至少检查每个元素一次才能找到解决方案。"或者"空间复杂度：O(n)，因为在最坏情况下，我们需要在哈希表中存储所有元素。额外空间使用量与输入规模成线性关系。"
 
-你的解决方案应该高效、有良好注释，并处理边界情况。
+你的解决方案应该：
+- 完全符合ACM竞赛编程规范
+- 正确处理输入输出格式
+- 高效且有良好注释
+- 处理边界情况
+- 可以直接在各种在线判题平台运行
 `;
 
       let responseContent;
@@ -704,34 +789,53 @@ ${problemInfo.example_output || "未提供示例输出。"}
           role: "system" as const, 
           content: `你是一位编程面试助手，帮助调试和改进解决方案。分析这些包含错误信息、错误输出或测试用例的截图，并提供详细的调试帮助。
 
-你的回复必须严格按照以下结构和标题格式（使用 ### 作为标题）：
-### 发现的问题
-- 用清晰解释将每个问题列为要点
+请按照以下格式提供回复：
+1. 代码：修正后的完整ACM竞赛模式的${language}实现
+2. 解题思路：关键修改和改进的要点列表
+3. 时间复杂度：O(X)格式，并提供详细解释（至少2句话）
+4. 空间复杂度：O(X)格式，并提供详细解释（至少2句话）
+5. 修改说明：详细说明相比原代码进行了哪些修改和为什么需要这些修改
 
-### 具体改进和修正
-- 将需要的具体代码更改列为要点
+**重要的代码格式要求：**
+- 必须生成完整的ACM竞赛编程模式代码
+- 对于Java语言，必须使用 "public class Main" 作为主类名
+- 必须使用标准输入读取所有数据，不要使用预定义的变量或硬编码的测试数据
+- 输入处理必须严格按照题目描述的输入格式来实现
+- 代码必须是完整的、可以直接复制粘贴到在线判题系统运行的格式
+- 包含适当的导入语句和必要的库引用
 
-### 优化建议
-- 如果适用，列出任何性能优化
+对于复杂度解释，请务必详细。例如："时间复杂度：O(n)，因为我们只需要遍历数组一次。这是最优的，因为我们需要至少检查每个元素一次才能找到解决方案。"或者"空间复杂度：O(n)，因为在最坏情况下，我们需要在哈希表中存储所有元素。额外空间使用量与输入规模成线性关系。"
 
-### 更改解释
-在这里提供为什么需要这些更改的清晰解释
-
-### 关键要点
-- 最重要要点的总结列表
-
-如果你包含代码示例，请使用正确的markdown代码块和语言规范（例如 \`\`\`java）。`
+你的解决方案应该：
+- 完全符合ACM竞赛编程规范
+- 正确处理输入输出格式
+- 高效且有良好注释
+- 处理边界情况
+- 可以直接在各种在线判题平台运行`
         },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const, 
-              text: `我正在解决这个编程题目："${problemInfo.problem_statement}"，使用${language}语言。我需要调试或改进我的解决方案的帮助。这里是我的代码、错误或测试用例的截图。请提供详细分析，包括：
-1. 你在我的代码中发现的问题
-2. 具体的改进和修正
-3. 任何能让解决方案更好的优化
-4. 为什么需要这些更改的清晰解释` 
+              text: `我正在解决这个编程题目："${problemInfo.problem_statement}"，使用${language}语言。
+
+题目约束：
+${problemInfo.constraints || "未提供具体约束条件。"}
+
+示例输入：
+${problemInfo.example_input || "未提供示例输入。"}
+
+示例输出：
+${problemInfo.example_output || "未提供示例输出。"}
+
+我需要调试或改进我的解决方案的帮助。这里是我的代码、错误或测试用例的截图。请提供详细分析，包括：
+1. 修正后的完整ACM模式代码
+2. 关键修改和改进的要点
+3. 时间复杂度和空间复杂度分析
+4. 详细的修改说明
+
+请确保提供的修正代码是完整的ACM竞赛格式，可以直接在在线判题系统运行。` 
             },
             ...imageDataList.map(data => ({
               type: "image_url" as const,
@@ -764,33 +868,81 @@ ${problemInfo.example_output || "未提供示例输出。"}
         });
       }
 
-      let extractedCode = "// 调试模式 - 请参见下面的分析";
-      const codeMatch = debugContent.match(/```(?:[a-zA-Z]+)?([\s\S]*?)```/);
-      if (codeMatch && codeMatch[1]) {
-        extractedCode = codeMatch[1].trim();
+      // Extract parts from the response (same logic as generateSolutionsHelper)
+      const codeMatch = debugContent.match(/```(?:\w+)?\s*([\s\S]*?)```/);
+      const code = codeMatch ? codeMatch[1].trim() : debugContent;
+      
+      // Extract thoughts, looking for bullet points or numbered lists
+      const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法|修改|改进)[:：]([\s\S]*?)(?:时间复杂度|$)/i;
+      const thoughtsMatch = debugContent.match(thoughtsRegex);
+      let thoughts: string[] = [];
+      
+      if (thoughtsMatch && thoughtsMatch[1]) {
+        // Extract bullet points or numbered items
+        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g);
+        if (bulletPoints) {
+          thoughts = bulletPoints.map(point => 
+            point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
+          ).filter(Boolean);
+        } else {
+          // If no bullet points found, split by newlines and filter empty lines
+          thoughts = thoughtsMatch[1].split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+        }
+      }
+      
+      // Extract complexity information
+      const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i;
+      const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i;
+      
+      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。每个元素只被处理一次，哈希表查找操作是O(1)的。";
+      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。在最坏情况下，我们可能需要在找到解决方案对之前存储所有元素。";
+      
+      const timeMatch = debugContent.match(timeComplexityPattern);
+      if (timeMatch && timeMatch[1]) {
+        timeComplexity = timeMatch[1].trim();
+        if (!timeComplexity.match(/O\([^)]+\)/i)) {
+          timeComplexity = `O(n) - ${timeComplexity}`;
+        } else if (!timeComplexity.includes('-') && !timeComplexity.includes('因为')) {
+          const notationMatch = timeComplexity.match(/O\([^)]+\)/i);
+          if (notationMatch) {
+            const notation = notationMatch[0];
+            const rest = timeComplexity.replace(notation, '').trim();
+            timeComplexity = `${notation} - ${rest}`;
+          }
+        }
+      }
+      
+      const spaceMatch = debugContent.match(spaceComplexityPattern);
+      if (spaceMatch && spaceMatch[1]) {
+        spaceComplexity = spaceMatch[1].trim();
+        if (!spaceComplexity.match(/O\([^)]+\)/i)) {
+          spaceComplexity = `O(n) - ${spaceComplexity}`;
+        } else if (!spaceComplexity.includes('-') && !spaceComplexity.includes('因为')) {
+          const notationMatch = spaceComplexity.match(/O\([^)]+\)/i);
+          if (notationMatch) {
+            const notation = notationMatch[0];
+            const rest = spaceComplexity.replace(notation, '').trim();
+            spaceComplexity = `${notation} - ${rest}`;
+          }
+        }
       }
 
-      let formattedDebugContent = debugContent;
-      
-      if (!debugContent.includes('# ') && !debugContent.includes('## ')) {
-        formattedDebugContent = debugContent
-          .replace(/发现的问题|问题识别|发现的错误/i, '## 发现的问题')
-          .replace(/代码改进|改进|建议的更改/i, '## 代码改进')
-          .replace(/优化|性能改进/i, '## 优化建议')
-          .replace(/解释|详细分析/i, '## 解释');
+      // Extract modification explanation
+      const modificationPattern = /(?:修改说明|修改|改进说明|变更)[:：]?([\s\S]*?)(?=\n\s*$|$)/i;
+      const modificationMatch = debugContent.match(modificationPattern);
+      let modifications = "基于截图分析的代码修改和优化";
+      if (modificationMatch && modificationMatch[1]) {
+        modifications = modificationMatch[1].trim();
       }
 
-      const bulletPoints = formattedDebugContent.match(/(?:^|\n)[ ]*(?:[-*•]|\d+\.)[ ]+([^\n]+)/g);
-      const thoughts = bulletPoints 
-        ? bulletPoints.map(point => point.replace(/^[ ]*(?:[-*•]|\d+\.)[ ]+/, '').trim()).slice(0, 5)
-        : ["基于你的截图的调试分析"];
-      
       const response = {
-        code: extractedCode,
-        debug_analysis: formattedDebugContent,
-        thoughts: thoughts,
-        time_complexity: "N/A - 调试模式",
-        space_complexity: "N/A - 调试模式"
+        code: code,
+        thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
+        time_complexity: timeComplexity,
+        space_complexity: spaceComplexity,
+        modifications: modifications
       };
 
       return { success: true, data: response };
