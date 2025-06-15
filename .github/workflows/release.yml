@@ -1,0 +1,58 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送版本标签时触发
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  release:
+    name: Release on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package for macOS
+        if: matrix.platform == 'mac'
+        run: npm run package-mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false # 禁用代码签名（如果没有证书）
+
+      - name: Package for Windows
+        if: matrix.platform == 'win'
+        run: npm run package-win
+
+      - name: Package for Linux
+        if: matrix.platform == 'linux'
+        run: npx electron-builder build --linux
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-build
+          path: release/
+          retention-days: 30 
