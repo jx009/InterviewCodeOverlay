@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String?  @unique
+  password  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  config    UserConfig?
+  usage     UsageRecord[]
+  sessions  UserSession[]
+
+  @@map("users")
+}
+
+model UserConfig {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // AI Model Settings
+  selectedProvider String   @default("claude") // claude, gemini, openai
+  extractionModel  String   @default("claude-3-7-sonnet-20250219")
+  solutionModel    String   @default("claude-3-7-sonnet-20250219")
+  debuggingModel   String   @default("claude-3-7-sonnet-20250219")
+  
+  // Language Settings
+  language         String   @default("python")
+  
+  // UI Settings
+  opacity          Float    @default(1.0)
+  showCopyButton   Boolean  @default(true)
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_configs")
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  isActive     Boolean  @default(true)
+
+  @@map("user_sessions")
+}
+
+model UsageRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action      String   // "extraction", "solution", "debugging"
+  model       String   // 使用的具体模型
+  provider    String   // AI提供商
+  tokensUsed  Int?     // 使用的token数量
+  success     Boolean  @default(true)
+  errorMsg    String?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("usage_records")
+}
+
+// AI模型定义表 - 用于管理支持的模型
+model AIModel {
+  id          String   @id @default(cuid())
+  modelId     String   @unique // claude-3-7-sonnet-20250219
+  name        String   // Claude 3.7 Sonnet
+  provider    String   // claude, gemini, openai
+  category    String   // extraction, solution, debugging, general
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0) // 排序优先级
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ai_models")
+} 

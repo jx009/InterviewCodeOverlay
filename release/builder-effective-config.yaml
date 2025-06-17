@@ -1,0 +1,69 @@
+directories:
+  output: release
+  buildResources: assets
+appId: com.chunginlee.interviewcoder
+productName: Interview Coder
+files:
+  - filter:
+      - dist/**/*
+      - dist-electron/**/*
+      - package.json
+      - electron/**/*
+asar: true
+compression: maximum
+generateUpdatesFilesForAllChannels: true
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  artifactName: Interview-Coder-${arch}.${ext}
+  icon: assets/icons/mac/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  identity: Developer ID Application
+  notarize: true
+  protocols:
+    name: interview-coder-protocol
+    schemes:
+      - interview-coder
+win:
+  target:
+    - nsis
+  icon: assets/icons/win/icon.ico
+  artifactName: ${productName}-Windows-${version}.${ext}
+  protocols:
+    name: interview-coder-protocol
+    schemes:
+      - interview-coder
+linux:
+  target:
+    - AppImage
+  icon: assets/icons/png/icon-256x256.png
+  artifactName: ${productName}-Linux-${version}.${ext}
+  protocols:
+    name: interview-coder-protocol
+    schemes:
+      - interview-coder
+publish:
+  - provider: github
+    owner: ibttf
+    repo: interview-coder
+    private: false
+    releaseType: release
+extraResources:
+  - from: .env
+    to: .env
+    filter:
+      - '**/*'
+extraMetadata:
+  main: dist-electron/main.js
+electronVersion: 29.4.6
