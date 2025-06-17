@@ -7,6 +7,7 @@ import { ScreenshotHelper } from "./ScreenshotHelper"
 import { ShortcutsHelper } from "./shortcuts"
 import { initAutoUpdater } from "./autoUpdater"
 import { configHelper } from "./ConfigHelper"
+import { webAuthManager } from "./WebAuthManager"
 import * as dotenv from "dotenv"
 
 // Constants
@@ -109,6 +110,56 @@ export interface IIpcHandlerDeps {
   moveWindowDown: () => void
 }
 
+// Initialize Web Authentication
+async function initializeWebAuth() {
+  try {
+    // Set up Web authentication event listeners
+    webAuthManager.on('authenticated', (user) => {
+      console.log('User authenticated:', user.username)
+      // Notify renderer process
+      if (state.mainWindow) {
+        state.mainWindow.webContents.send('web-auth-status', { 
+          authenticated: true, 
+          user: user 
+        })
+      }
+    })
+
+    webAuthManager.on('authentication-cleared', () => {
+      console.log('User authentication cleared')
+      if (state.mainWindow) {
+        state.mainWindow.webContents.send('web-auth-status', { 
+          authenticated: false, 
+          user: null 
+        })
+      }
+    })
+
+    webAuthManager.on('config-synced', (config) => {
+      console.log('Configuration synced from web')
+      if (state.mainWindow) {
+        state.mainWindow.webContents.send('config-updated', config)
+      }
+    })
+
+    webAuthManager.on('auth-required', () => {
+      console.log('Authentication required - opening web login')
+      webAuthManager.openWebLogin()
+    })
+
+    // Check if user is already authenticated
+    const isAuth = await webAuthManager.isAuthenticated()
+    console.log('Initial auth check:', isAuth)
+    
+    if (isAuth) {
+      // Sync configuration on startup
+      await webAuthManager.syncUserConfig()
+    }
+  } catch (error) {
+    console.error('Failed to initialize web auth:', error)
+  }
+}
+
 // Initialize helpers
 function initializeHelpers() {
   state.screenshotHelper = new ScreenshotHelper(state.view)
@@ -156,7 +207,7 @@ function initializeHelpers() {
 
 // Auth callback handler
 
-// Register the interview-coder protocol
+// Register the interview-coder protocol for authentication callbacks
 if (process.platform === "darwin") {
   app.setAsDefaultProtocolClient("interview-coder")
 } else {
@@ -165,7 +216,7 @@ if (process.platform === "darwin") {
   ])
 }
 
-// Handle the protocol. In this case, we choose to show an Error Box.
+// Handle the protocol for authentication callbacks
 if (process.defaultApp && process.argv.length >= 2) {
   app.setAsDefaultProtocolClient("interview-coder", process.execPath, [
     path.resolve(process.argv[1])
@@ -184,7 +235,12 @@ if (!gotTheLock) {
       if (state.mainWindow.isMinimized()) state.mainWindow.restore()
       state.mainWindow.focus()
 
-      // Protocol handler removed - no longer using auth callbacks
+      // Handle authentication callback from protocol
+      const url = commandLine.find((arg) => arg.startsWith("interview-coder://"))
+      if (url) {
+        console.log("Received auth callback:", url)
+        webAuthManager.handleAuthCallback(url)
+      }
     }
   })
 }
@@ -612,6 +668,9 @@ async function initializeApp() {
     
     // Configuration file setup (API key is now built-in)
     console.log("Using built-in API configuration.")
+    
+    // Initialize Web authentication manager
+    await initializeWebAuth()
     
     initializeHelpers()
     initializeIpcHandlers({

@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeIpcHandlers = initializeIpcHandlers;
 const electron_1 = require("electron");
 const ConfigHelper_1 = require("./ConfigHelper");
+const WebAuthManager_1 = require("./WebAuthManager");
 function initializeIpcHandlers(deps) {
     console.log("Initializing IPC handlers");
     // Configuration handlers
@@ -139,7 +140,95 @@ function initializeIpcHandlers(deps) {
             return { error: "Failed to take screenshot" };
         }
     });
-    // Auth-related handlers removed
+    // Web Authentication handlers
+    electron_1.ipcMain.handle("web-auth-login", async () => {
+        try {
+            await WebAuthManager_1.webAuthManager.openWebLogin();
+            return { success: true };
+        }
+        catch (error) {
+            console.error("Failed to open web login:", error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("web-auth-logout", async () => {
+        try {
+            await WebAuthManager_1.webAuthManager.logout();
+            return { success: true };
+        }
+        catch (error) {
+            console.error("Failed to logout:", error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("web-auth-status", async () => {
+        try {
+            const isAuthenticated = await WebAuthManager_1.webAuthManager.isAuthenticated();
+            const user = WebAuthManager_1.webAuthManager.getCurrentUser();
+            return {
+                authenticated: isAuthenticated,
+                user: user
+            };
+        }
+        catch (error) {
+            console.error("Failed to check auth status:", error);
+            return {
+                authenticated: false,
+                user: null,
+                error: error.message
+            };
+        }
+    });
+    electron_1.ipcMain.handle("web-sync-config", async () => {
+        try {
+            const config = await WebAuthManager_1.webAuthManager.syncUserConfig();
+            return { success: true, config: config };
+        }
+        catch (error) {
+            console.error("Failed to sync config:", error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("web-update-config", async (_event, configUpdates) => {
+        try {
+            const config = await WebAuthManager_1.webAuthManager.updateWebConfig(configUpdates);
+            return { success: true, config: config };
+        }
+        catch (error) {
+            console.error("Failed to update web config:", error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("web-get-ai-models", async () => {
+        try {
+            const models = await WebAuthManager_1.webAuthManager.getAvailableAIModels();
+            return { success: true, models: models };
+        }
+        catch (error) {
+            console.error("Failed to get AI models:", error);
+            return { success: false, error: error.message, models: [] };
+        }
+    });
+    electron_1.ipcMain.handle("web-get-languages", async () => {
+        try {
+            const languages = await WebAuthManager_1.webAuthManager.getAvailableLanguages();
+            return { success: true, languages: languages };
+        }
+        catch (error) {
+            console.error("Failed to get languages:", error);
+            return { success: false, error: error.message, languages: [] };
+        }
+    });
+    electron_1.ipcMain.handle("web-check-connection", async () => {
+        try {
+            const connected = await WebAuthManager_1.webAuthManager.checkConnection();
+            return { connected: connected };
+        }
+        catch (error) {
+            console.error("Failed to check web connection:", error);
+            return { connected: false, error: error.message };
+        }
+    });
     electron_1.ipcMain.handle("open-external-url", (event, url) => {
         electron_1.shell.openExternal(url);
     });

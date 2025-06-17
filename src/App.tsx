@@ -15,7 +15,9 @@ import {
 import { ToastContext } from "./contexts/toast"
 import { WelcomeScreen } from "./components/WelcomeScreen"
 import SettingsDialog from "./components/Settings/SettingsDialog"
+import { WebAuthDialog } from "./components/WebAuth/WebAuthDialog"
 import ClickThroughManager from "./components/ClickThroughManager"
+import { useWebAuth } from "./hooks/useWebAuth"
 
 // Create a React Query client
 const queryClient = new QueryClient({
@@ -43,12 +45,18 @@ function App() {
   const [credits, setCredits] = useState<number>(999) // Unlimited credits
   const [currentLanguage, setCurrentLanguage] = useState<string>("python")
   const [isInitialized, setIsInitialized] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState(false)
-  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
-  // Note: Model selection is now handled via separate extraction/solution/debugging model settings
-
+  
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isWebAuthOpen, setIsWebAuthOpen] = useState(false)
   const [config, setConfig] = useState({})
+
+  // Web Authentication Hook
+  const { 
+    authenticated, 
+    user, 
+    loading: authLoading, 
+    connectionStatus 
+  } = useWebAuth()
 
   // Set unlimited credits
   const updateCredits = useCallback(() => {
@@ -85,28 +93,17 @@ function App() {
     []
   )
 
-  // Check for OpenAI API key and prompt if not found
+  // Check Web authentication status and prompt if not authenticated
   useEffect(() => {
-    const checkApiKey = async () => {
-      try {
-        const hasKey = await window.electronAPI.checkApiKey()
-        setHasApiKey(hasKey)
-        
-        // If no API key is found, show the settings dialog after a short delay
-        if (!hasKey) {
-          setTimeout(() => {
-            setIsSettingsOpen(true)
-          }, 1000)
-        }
-      } catch (error) {
-        // 减少终端输出
+    if (isInitialized && !authLoading) {
+      // If user is not authenticated, show Web auth dialog after a short delay
+      if (!authenticated) {
+        setTimeout(() => {
+          setIsWebAuthOpen(true)
+        }, 1000)
       }
     }
-    
-    if (isInitialized) {
-      checkApiKey()
-    }
-  }, [isInitialized])
+  }, [isInitialized, authenticated, authLoading])
 
   // Initialize dropdown handler
   useEffect(() => {
@@ -185,11 +182,11 @@ function App() {
     // Event listeners for process events
     const onApiKeyInvalid = () => {
       showToast(
-        "API Key Invalid",
-        "Your OpenAI API key appears to be invalid or has insufficient credits",
+        "认证失效",
+        "请重新登录Web配置中心",
         "error"
       )
-      setApiKeyDialogOpen(true)
+      setIsWebAuthOpen(true)
     }
 
     // Setup API key invalid listener
@@ -227,8 +224,7 @@ function App() {
     try {
       await window.electronAPI.updateConfig(newConfig)
       setConfig(newConfig)
-      setHasApiKey(true)
-      showToast("Success", "Settings saved successfully", "success")
+      showToast("成功", "设置已保存", "success")
       
       // Update language if changed
       if (newConfig.language) {
@@ -236,7 +232,7 @@ function App() {
       }
     } catch (error) {
       // 减少终端输出
-      showToast("Error", "Failed to save settings", "error")
+      showToast("错误", "保存设置失败", "error")
     }
   }, [showToast, updateLanguage])
 
@@ -246,7 +242,7 @@ function App() {
         <ToastContext.Provider value={{ showToast }}>
           <div className="relative">
             {isInitialized ? (
-              hasApiKey ? (
+              authenticated ? (
                 <ClickThroughManager
                   nonClickThroughSelectors={[
                     // 顶部区域
@@ -281,7 +277,51 @@ function App() {
                   />
                 </ClickThroughManager>
               ) : (
-                <WelcomeScreen onOpenSettings={handleOpenSettings} />
+                <div className="min-h-screen bg-black flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-6 p-8 bg-gray-900 rounded-lg border border-gray-700 max-w-md mx-4">
+                    <div className="text-center">
+                      <h1 className="text-2xl font-bold text-white mb-2">Interview Code Overlay</h1>
+                      <p className="text-gray-300 text-sm">需要登录Web配置中心才能使用</p>
+                    </div>
+                    
+                    {authLoading ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-6 h-6 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+                        <p className="text-gray-400 text-sm">检查认证状态...</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-4 w-full">
+                        <div className="text-center">
+                          <p className="text-gray-400 text-sm mb-2">
+                            {connectionStatus.connected 
+                              ? "请点击下方按钮登录" 
+                              : "请先启动Web配置中心"
+                            }
+                          </p>
+                          {user && (
+                            <p className="text-green-400 text-xs">
+                              上次登录: {user.username}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <button
+                          onClick={() => setIsWebAuthOpen(true)}
+                          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                        >
+                          {connectionStatus.connected ? "登录配置中心" : "检查连接状态"}
+                        </button>
+                        
+                        <button
+                          onClick={() => setIsSettingsOpen(true)}
+                          className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors text-sm"
+                        >
+                          本地设置
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )
             ) : (
               <div className="min-h-screen bg-black flex items-center justify-center">
@@ -302,6 +342,12 @@ function App() {
             onClose={() => setIsSettingsOpen(false)}
             onConfigUpdate={handleConfigUpdate}
             config={config}
+          />
+          
+          {/* Web Authentication Dialog */}
+          <WebAuthDialog 
+            open={isWebAuthOpen}
+            onOpenChange={setIsWebAuthOpen}
           />
           
           <Toast

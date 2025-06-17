@@ -227,6 +227,30 @@ const electronAPI = {
     showSettings: () => {
         return electron_1.ipcRenderer.send('show-settings-dialog');
     },
+    // Web Authentication methods
+    webAuthLogin: () => electron_1.ipcRenderer.invoke("web-auth-login"),
+    webAuthLogout: () => electron_1.ipcRenderer.invoke("web-auth-logout"),
+    webAuthStatus: () => electron_1.ipcRenderer.invoke("web-auth-status"),
+    webSyncConfig: () => electron_1.ipcRenderer.invoke("web-sync-config"),
+    webUpdateConfig: (config) => electron_1.ipcRenderer.invoke("web-update-config", config),
+    webGetAIModels: () => electron_1.ipcRenderer.invoke("web-get-ai-models"),
+    webGetLanguages: () => electron_1.ipcRenderer.invoke("web-get-languages"),
+    webCheckConnection: () => electron_1.ipcRenderer.invoke("web-check-connection"),
+    // Web Authentication event listeners
+    onWebAuthStatus: (callback) => {
+        const subscription = (_, data) => callback(data);
+        electron_1.ipcRenderer.on("web-auth-status", subscription);
+        return () => {
+            electron_1.ipcRenderer.removeListener("web-auth-status", subscription);
+        };
+    },
+    onConfigUpdated: (callback) => {
+        const subscription = (_, config) => callback(config);
+        electron_1.ipcRenderer.on("config-updated", subscription);
+        return () => {
+            electron_1.ipcRenderer.removeListener("config-updated", subscription);
+        };
+    },
 };
 // Before exposing the API
 console.log("About to expose electronAPI with methods:", Object.keys(electronAPI));

@@ -69,7 +69,7 @@ class ProcessingHelper {
             this.ismaqueClient = new openai_1.OpenAI({
                 apiKey: ISMAQUE_API_KEY,
                 baseURL: "https://ismaque.org/v1", // ismaque.org API endpoint
-                timeout: 60000, // 60 second timeout
+                // timeout: 60000, // 取消超时限制
                 maxRetries: 2 // Retry up to 2 times
             });
             console.log("Ismaque.org API client initialized successfully with built-in key");
@@ -679,7 +679,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
             const messages = [
                 {
                     role: "system",
-                    content: `你是一位编程面试助手，帮助调试和改进解决方案。分析这些包含错误信息、错误输出或测试用例的截图，并提供详细的调试帮助。
+                    content: `你是一位编程面试助手，帮助调试和改进解决方案。分析这些包含错误信息、错误输出或测试用例的截图，并提供详细的调试帮助，注意：截图中也可能只包含通过了多少用例，没有任何具体的测试用例，这种情况要考虑代码有哪些方面没考虑到，多考虑边界情况。
 
 请按照以下格式提供回复：
 1. 代码：修正后的完整ACM竞赛模式的${language}实现
@@ -843,7 +843,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
                 case "gemini":
                     return "gemini-2.0-flash";
                 case "anthropic":
-                    return "claude-3-7-sonnet-20250219";
+                    return "claude-sonnet-4-20250514-thinking";
                 default:
                     return "gpt-4o";
             }
@@ -865,7 +865,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
             case "anthropic":
                 // Claude模型在ismaque.org上的对应名称
                 if (configModel.includes('claude-3-7-sonnet')) {
-                    return 'claude-3-7-sonnet-20250219';
+                    return 'claude-sonnet-4-20250514-thinking';
                 }
                 else if (configModel.includes('claude-3-5-sonnet')) {
                     return 'claude-3-5-sonnet-20241022';
@@ -873,7 +873,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
                 else if (configModel.includes('claude-3-opus')) {
                     return 'claude-3-opus-20240229';
                 }
-                return 'claude-3-7-sonnet-20250219'; // 默认
+                return 'claude-sonnet-4-20250514-thinking'; // 默认
             default:
                 return configModel;
         }

@@ -12,6 +12,11 @@ interface Config {
   language: string;
   opacity: number;
   showCopyButton?: boolean; // 是否显示复制按钮
+  webAuthTokens?: {
+    accessToken: string;
+    refreshToken: string;
+  } | null; // Web认证tokens
+  webConfig?: any; // Web配置缓存
 }
 
 export class ConfigHelper extends EventEmitter {

@@ -68,6 +68,7 @@ const ScreenshotHelper_1 = require("./ScreenshotHelper");
 const shortcuts_1 = require("./shortcuts");
 const autoUpdater_1 = require("./autoUpdater");
 const ConfigHelper_1 = require("./ConfigHelper");
+const WebAuthManager_1 = require("./WebAuthManager");
 const dotenv = __importStar(require("dotenv"));
 // Constants
 const isDev = process.env.NODE_ENV === "development";
@@ -107,6 +108,51 @@ const state = {
     }
 };
 exports.state = state;
+// Initialize Web Authentication
+async function initializeWebAuth() {
+    try {
+        // Set up Web authentication event listeners
+        WebAuthManager_1.webAuthManager.on('authenticated', (user) => {
+            console.log('User authenticated:', user.username);
+            // Notify renderer process
+            if (state.mainWindow) {
+                state.mainWindow.webContents.send('web-auth-status', {
+                    authenticated: true,
+                    user: user
+                });
+            }
+        });
+        WebAuthManager_1.webAuthManager.on('authentication-cleared', () => {
+            console.log('User authentication cleared');
+            if (state.mainWindow) {
+                state.mainWindow.webContents.send('web-auth-status', {
+                    authenticated: false,
+                    user: null
+                });
+            }
+        });
+        WebAuthManager_1.webAuthManager.on('config-synced', (config) => {
+            console.log('Configuration synced from web');
+            if (state.mainWindow) {
+                state.mainWindow.webContents.send('config-updated', config);
+            }
+        });
+        WebAuthManager_1.webAuthManager.on('auth-required', () => {
+            console.log('Authentication required - opening web login');
+            WebAuthManager_1.webAuthManager.openWebLogin();
+        });
+        // Check if user is already authenticated
+        const isAuth = await WebAuthManager_1.webAuthManager.isAuthenticated();
+        console.log('Initial auth check:', isAuth);
+        if (isAuth) {
+            // Sync configuration on startup
+            await WebAuthManager_1.webAuthManager.syncUserConfig();
+        }
+    }
+    catch (error) {
+        console.error('Failed to initialize web auth:', error);
+    }
+}
 // Initialize helpers
 function initializeHelpers() {
     state.screenshotHelper = new ScreenshotHelper_1.ScreenshotHelper(state.view);
@@ -143,7 +189,7 @@ function initializeHelpers() {
     });
 }
 // Auth callback handler
-// Register the interview-coder protocol
+// Register the interview-coder protocol for authentication callbacks
 if (process.platform === "darwin") {
     electron_1.app.setAsDefaultProtocolClient("interview-coder");
 }
@@ -152,7 +198,7 @@ else {
         path_1.default.resolve(process.argv[1] || "")
     ]);
 }
-// Handle the protocol. In this case, we choose to show an Error Box.
+// Handle the protocol for authentication callbacks
 if (process.defaultApp && process.argv.length >= 2) {
     electron_1.app.setAsDefaultProtocolClient("interview-coder", process.execPath, [
         path_1.default.resolve(process.argv[1])
@@ -170,7 +216,12 @@ else {
             if (state.mainWindow.isMinimized())
                 state.mainWindow.restore();
             state.mainWindow.focus();
-            // Protocol handler removed - no longer using auth callbacks
+            // Handle authentication callback from protocol
+            const url = commandLine.find((arg) => arg.startsWith("interview-coder://"));
+            if (url) {
+                console.log("Received auth callback:", url);
+                WebAuthManager_1.webAuthManager.handleAuthCallback(url);
+            }
         }
     });
 }
@@ -552,6 +603,8 @@ async function initializeApp() {
         loadEnvVariables();
         // Configuration file setup (API key is now built-in)
         console.log("Using built-in API configuration.");
+        // Initialize Web authentication manager
+        await initializeWebAuth();
         initializeHelpers();
         (0, ipcHandlers_1.initializeIpcHandlers)({
             getMainWindow,

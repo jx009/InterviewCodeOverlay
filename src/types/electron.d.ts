@@ -61,6 +61,29 @@ export interface ElectronAPI {
   openLink: (url: string) => void
   onApiKeyInvalid: (callback: () => void) => () => void
   removeListener: (eventName: string, callback: (...args: any[]) => void) => void
+
+  // Web Authentication methods
+  webAuthLogin: () => Promise<{ success: boolean; error?: string }>
+  webAuthLogout: () => Promise<{ success: boolean; error?: string }>
+  webAuthStatus: () => Promise<{ 
+    authenticated: boolean; 
+    user: { 
+      id: string; 
+      username: string; 
+      email: string; 
+      createdAt: string 
+    } | null; 
+    error?: string 
+  }>
+  webSyncConfig: () => Promise<{ success: boolean; config?: any; error?: string }>
+  webUpdateConfig: (config: any) => Promise<{ success: boolean; config?: any; error?: string }>
+  webGetAIModels: () => Promise<{ success: boolean; models: any[]; error?: string }>
+  webGetLanguages: () => Promise<{ success: boolean; languages: string[]; error?: string }>
+  webCheckConnection: () => Promise<{ connected: boolean; error?: string }>
+  
+  // Web Authentication event listeners
+  onWebAuthStatus?: (callback: (data: { authenticated: boolean; user: any }) => void) => () => void
+  onConfigUpdated?: (callback: (config: any) => void) => () => void
 }
 
 declare global {

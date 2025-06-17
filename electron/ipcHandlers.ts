@@ -4,6 +4,7 @@ import { ipcMain, shell, dialog } from "electron"
 import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
+import { webAuthManager } from "./WebAuthManager"
 
 export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   console.log("Initializing IPC handlers")
@@ -169,7 +170,94 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
-  // Auth-related handlers removed
+  // Web Authentication handlers
+  ipcMain.handle("web-auth-login", async () => {
+    try {
+      await webAuthManager.openWebLogin()
+      return { success: true }
+    } catch (error) {
+      console.error("Failed to open web login:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("web-auth-logout", async () => {
+    try {
+      await webAuthManager.logout()
+      return { success: true }
+    } catch (error) {
+      console.error("Failed to logout:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("web-auth-status", async () => {
+    try {
+      const isAuthenticated = await webAuthManager.isAuthenticated()
+      const user = webAuthManager.getCurrentUser()
+      return { 
+        authenticated: isAuthenticated, 
+        user: user 
+      }
+    } catch (error) {
+      console.error("Failed to check auth status:", error)
+      return { 
+        authenticated: false, 
+        user: null, 
+        error: error.message 
+      }
+    }
+  })
+
+  ipcMain.handle("web-sync-config", async () => {
+    try {
+      const config = await webAuthManager.syncUserConfig()
+      return { success: true, config: config }
+    } catch (error) {
+      console.error("Failed to sync config:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("web-update-config", async (_event, configUpdates) => {
+    try {
+      const config = await webAuthManager.updateWebConfig(configUpdates)
+      return { success: true, config: config }
+    } catch (error) {
+      console.error("Failed to update web config:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("web-get-ai-models", async () => {
+    try {
+      const models = await webAuthManager.getAvailableAIModels()
+      return { success: true, models: models }
+    } catch (error) {
+      console.error("Failed to get AI models:", error)
+      return { success: false, error: error.message, models: [] }
+    }
+  })
+
+  ipcMain.handle("web-get-languages", async () => {
+    try {
+      const languages = await webAuthManager.getAvailableLanguages()
+      return { success: true, languages: languages }
+    } catch (error) {
+      console.error("Failed to get languages:", error)
+      return { success: false, error: error.message, languages: [] }
+    }
+  })
+
+  ipcMain.handle("web-check-connection", async () => {
+    try {
+      const connected = await webAuthManager.checkConnection()
+      return { connected: connected }
+    } catch (error) {
+      console.error("Failed to check web connection:", error)
+      return { connected: false, error: error.message }
+    }
+  })
 
   ipcMain.handle("open-external-url", (event, url: string) => {
     shell.openExternal(url)

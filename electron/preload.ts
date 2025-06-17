@@ -252,6 +252,32 @@ const electronAPI = {
   showSettings: () => {
     return ipcRenderer.send('show-settings-dialog');
   },
+
+  // Web Authentication methods
+  webAuthLogin: () => ipcRenderer.invoke("web-auth-login"),
+  webAuthLogout: () => ipcRenderer.invoke("web-auth-logout"),
+  webAuthStatus: () => ipcRenderer.invoke("web-auth-status"),
+  webSyncConfig: () => ipcRenderer.invoke("web-sync-config"),
+  webUpdateConfig: (config: any) => ipcRenderer.invoke("web-update-config", config),
+  webGetAIModels: () => ipcRenderer.invoke("web-get-ai-models"),
+  webGetLanguages: () => ipcRenderer.invoke("web-get-languages"),
+  webCheckConnection: () => ipcRenderer.invoke("web-check-connection"),
+  
+  // Web Authentication event listeners
+  onWebAuthStatus: (callback: (data: { authenticated: boolean; user: any }) => void) => {
+    const subscription = (_: any, data: { authenticated: boolean; user: any }) => callback(data)
+    ipcRenderer.on("web-auth-status", subscription)
+    return () => {
+      ipcRenderer.removeListener("web-auth-status", subscription)
+    }
+  },
+  onConfigUpdated: (callback: (config: any) => void) => {
+    const subscription = (_: any, config: any) => callback(config)
+    ipcRenderer.on("config-updated", subscription)
+    return () => {
+      ipcRenderer.removeListener("config-updated", subscription)
+    }
+  },
 }
 
 // Before exposing the API

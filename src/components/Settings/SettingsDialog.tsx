@@ -8,6 +8,8 @@ import {
 } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { useWebAuth } from '../../hooks/useWebAuth';
+import { ExternalLink, User, Settings } from 'lucide-react';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -22,6 +24,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onConfigUpdate,
   config
 }) => {
+  // Web Authentication Hook
+  const { 
+    authenticated, 
+    user, 
+    connectionStatus, 
+    login: webLogin,
+    logout: webLogout 
+  } = useWebAuth();
   const [formData, setFormData] = useState({
     apiProvider: config.apiProvider || 'openai',
     extractionModel: config.extractionModel || '',
@@ -151,6 +161,75 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
         </DialogHeader>
         
         <div className="space-y-6 py-4">
+          {/* Web认证状态 */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium block flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Web配置中心
+            </label>
+            
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              {authenticated ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                    <span className="text-sm font-medium text-green-800">
+                      已登录为: {user?.username}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    通过Web界面可以管理更多高级配置
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={webLogin}
+                      className="text-xs"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      打开Web界面
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={webLogout}
+                      className="text-xs"
+                    >
+                      登出
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-gray-400 rounded-full"></div>
+                    <span className="text-sm text-gray-600">
+                      未登录Web配置中心
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {connectionStatus.connected 
+                      ? "登录后可使用Web界面管理配置" 
+                      : "请先启动Web配置中心"
+                    }
+                  </p>
+                  <Button 
+                    size="sm" 
+                    onClick={webLogin}
+                    disabled={!connectionStatus.connected}
+                    className="text-xs"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    {connectionStatus.connected ? "登录Web界面" : "检查连接"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <hr className="border-gray-200" />
+
           {/* API服务商选择 */}
           <div className="space-y-3">
             <label className="text-sm font-medium block">AI 服务商</label>

@@ -66,7 +66,7 @@ const CodeSection = ({
               {copied ? "Copied!" : "Copy"}
             </button>
           )}
-          <div className="max-h-[500px] overflow-auto">
+          <div>
             <SyntaxHighlighter
               showLineNumbers
               language={currentLanguage == "golang" ? "go" : currentLanguage}
