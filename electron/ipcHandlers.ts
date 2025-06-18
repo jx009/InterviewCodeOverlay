@@ -4,7 +4,7 @@ import { ipcMain, shell, dialog } from "electron"
 import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
-import { webAuthManager } from "./WebAuthManager"
+import { simpleAuthManager } from "./SimpleAuthManager"
 
 export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   console.log("Initializing IPC handlers")
@@ -173,8 +173,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   // Web Authentication handlers
   ipcMain.handle("web-auth-login", async () => {
     try {
-      await webAuthManager.openWebLogin()
-      return { success: true }
+      const success = await simpleAuthManager.login()
+      return { success }
     } catch (error) {
       console.error("Failed to open web login:", error)
       return { success: false, error: error.message }
@@ -183,7 +183,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-auth-logout", async () => {
     try {
-      await webAuthManager.logout()
+      await simpleAuthManager.logout()
       return { success: true }
     } catch (error) {
       console.error("Failed to logout:", error)
@@ -193,8 +193,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-auth-status", async () => {
     try {
-      const isAuthenticated = await webAuthManager.isAuthenticated()
-      const user = webAuthManager.getCurrentUser()
+      const isAuthenticated = await simpleAuthManager.isAuthenticated()
+      const user = simpleAuthManager.getCurrentUser()
       return { 
         authenticated: isAuthenticated, 
         user: user 
@@ -211,7 +211,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-sync-config", async () => {
     try {
-      const config = await webAuthManager.syncUserConfig()
+      const config = await simpleAuthManager.refreshUserConfig()
       return { success: true, config: config }
     } catch (error) {
       console.error("Failed to sync config:", error)
@@ -221,7 +221,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-update-config", async (_event, configUpdates) => {
     try {
-      const config = await webAuthManager.updateWebConfig(configUpdates)
+      // 简化版：不支持更新Web配置，只返回当前配置
+      const config = simpleAuthManager.getUserConfig()
       return { success: true, config: config }
     } catch (error) {
       console.error("Failed to update web config:", error)
@@ -231,7 +232,12 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-get-ai-models", async () => {
     try {
-      const models = await webAuthManager.getAvailableAIModels()
+      // 简化版：返回固定的AI模型列表
+      const models = [
+        'claude-3-5-sonnet-20241022',
+        'gpt-4o',
+        'gemini-2.0-flash'
+      ]
       return { success: true, models: models }
     } catch (error) {
       console.error("Failed to get AI models:", error)
@@ -241,7 +247,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-get-languages", async () => {
     try {
-      const languages = await webAuthManager.getAvailableLanguages()
+      // 简化版：返回固定的语言列表
+      const languages = ['python', 'javascript', 'java', 'cpp', 'go', 'rust']
       return { success: true, languages: languages }
     } catch (error) {
       console.error("Failed to get languages:", error)
@@ -249,9 +256,37 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // Handle notification actions
+  ipcMain.handle("handle-notification-action", async (_event, action) => {
+    try {
+      console.log("Handling notification action:", action)
+      
+      switch (action) {
+        case 'open-web-login':
+          const success = await simpleAuthManager.login()
+          return { success }
+        
+
+        
+        case 'open-startup-guide':
+          // Open startup guide or documentation
+          await shell.openExternal('https://github.com/your-repo/startup-guide')
+          return { success: true }
+        
+        default:
+          console.log("Unknown notification action:", action)
+          return { success: false, error: "Unknown action" }
+      }
+    } catch (error) {
+      console.error("Failed to handle notification action:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle("web-check-connection", async () => {
     try {
-      const connected = await webAuthManager.checkConnection()
+      // 简化版：检查认证状态作为连接状态
+      const connected = await simpleAuthManager.isAuthenticated()
       return { connected: connected }
     } catch (error) {
       console.error("Failed to check web connection:", error)

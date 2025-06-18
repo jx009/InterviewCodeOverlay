@@ -83,10 +83,10 @@ const api = axios.create({
   },
 });
 
-// 请求拦截器 - 添加token
+// 请求拦截器 - 添加JWT token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -99,161 +99,105 @@ api.interceptors.request.use(
 
 // 响应拦截器 - 处理token过期
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    if (error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    if (error.response?.status === 401) {
+      // Token过期，尝试刷新
       const refreshToken = localStorage.getItem('refreshToken');
-      
       if (refreshToken) {
         try {
-          const response = await axios.post(`${BASE_URL}/auth/refresh`, {
+          const response = await axios.post('http://localhost:3001/api/auth/refresh', {
             refreshToken,
           });
+          const { accessToken } = response.data;
+          localStorage.setItem('accessToken', accessToken);
           
-          const { token } = response.data;
-          localStorage.setItem('token', token);
-          
-          // 更新请求的token
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        } catch (error) {
-          console.error('刷新token失败');
-          // 登出用户
-          localStorage.removeItem('token');
+          // 重试原请求
+          error.config.headers.Authorization = `Bearer ${accessToken}`;
+          return api.request(error.config);
+        } catch (refreshError) {
+          // 刷新失败，清除token并跳转到登录页
+          localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
-          return Promise.reject(error);
+          window.location.href = '/';
         }
+      } else {
+        // 没有刷新token，清除token并跳转到登录页
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/';
       }
     }
-    
     return Promise.reject(error);
   }
 );
 
 // 认证相关API
 export const authApi = {
-  login: async (credentials: LoginCredentials): Promise<UserResponse> => {
-    try {
-      console.log('登录请求：', credentials);
-      
-      // 判断是否为预设账号
-      if (credentials.username === '123456' && credentials.password === '123456') {
-        console.log('使用预设账号登录');
-        return {
-          id: 'demo-user',
-          username: 'Demo用户',
-          email: 'demo@example.com',
-          token: 'demo-token-12345'
-        };
-      }
-      
-      const response = await api.post<UserResponse>('/auth/login', credentials);
-      console.log('登录响应：', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('登录失败：', error);
-      throw error;
-    }
+  login: async (credentials: { username: string; password: string }) => {
+    const response = await api.post('/auth/login', credentials);
+    return response.data;
   },
-  
-  register: async (credentials: RegisterCredentials): Promise<UserResponse> => {
-    try {
-      const response = await api.post<UserResponse>('/auth/register', credentials);
-      return response.data;
-    } catch (error) {
-      console.error('注册失败：', error);
-      throw error;
-    }
+
+  register: async (userData: { email: string; password: string; username: string }) => {
+    const response = await api.post('/auth/register', userData);
+    return response.data;
   },
-  
-  getUser: async (): Promise<UserResponse> => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('未找到token');
-      }
-      
-      const response = await api.get<UserResponse>('/auth/user');
-      return response.data;
-    } catch (error) {
-      console.error('获取用户信息失败：', error);
-      throw error;
-    }
-  }
+
+  logout: async (): Promise<void> => {
+    await api.post('/auth/logout');
+  },
+
+  getCurrentUser: async () => {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  refreshToken: async (refreshToken: string) => {
+    const response = await api.post('/auth/refresh', {
+      refreshToken,
+    });
+    return response.data;
+  },
+
+  createSharedSession: async () => {
+    const response = await api.post('/auth/create-shared-session');
+    return response.data;
+  },
 };
 
 // 配置相关API
 export const configApi = {
-  getConfig: async (): Promise<Config> => {
-    try {
-      // 在实际应用中，这里应该从服务器获取配置
-      // const response = await axios.get(`${BASE_URL}/config`);
-      // return response.data;
-      
-      // 使用本地模拟配置
-      return localConfig;
-    } catch (error) {
-      console.error('获取配置失败：', error);
-      throw error;
-    }
-  },
-  
-  updateConfig: async (config: Partial<Config>): Promise<Config> => {
-    try {
-      // 在实际应用中，这里应该向服务器发送更新请求
-      // const response = await axios.put(`${BASE_URL}/config`, config);
-      // return response.data;
-      
-      // 使用本地模拟配置更新
-      localConfig = {
-        ...localConfig,
-        ...config,
-        display: {
-          ...localConfig.display,
-          ...config.display
-        },
-        shortcuts: {
-          ...localConfig.shortcuts,
-          ...config.shortcuts
-        }
-      };
-      
-      return localConfig;
-    } catch (error) {
-      console.error('更新配置失败：', error);
-      throw error;
-    }
-  },
-  
-  getAIModels: async (): Promise<AIModel[]> => {
-    try {
-      // 在实际应用中，这里应该从服务器获取AI模型列表
-      // const response = await axios.get(`${BASE_URL}/models`);
-      // return response.data;
-      
-      // 使用本地模拟数据
-      return mockAIModels;
-    } catch (error) {
-      console.error('获取AI模型失败：', error);
-      throw error;
-    }
+  getConfig: async () => {
+    const response = await api.get('/config');
+    return response.data;
   },
 
-  getLanguages: async (): Promise<string[]> => {
-    const response = await api.get<string[]>('/config/languages');
+  updateConfig: async (config: any) => {
+    const response = await api.put('/config', config);
     return response.data;
-  }
+  },
+
+  resetConfig: async () => {
+    const response = await api.post('/config/reset');
+    return response.data;
+  },
+
+  getAIModels: async () => {
+    const response = await api.get('/config/models');
+    return response.data;
+  },
+
+  getLanguages: async () => {
+    const response = await api.get('/config/languages');
+    return response.data;
+  },
 };
 
 // 系统API
 export const systemApi = {
-  healthCheck: async (): Promise<{ status: string; timestamp: string }> => {
-    const response = await api.get<{ status: string; timestamp: string }>('/health');
+  healthCheck: async () => {
+    const response = await api.get('/health');
     return response.data;
   },
 };

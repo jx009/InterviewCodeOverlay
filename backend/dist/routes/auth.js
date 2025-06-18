@@ -1,12 +1,17 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
-const database_1 = require("../config/database");
-const auth_1 = require("../utils/auth");
-const response_1 = require("../utils/response");
-const auth_2 = require("../middleware/auth");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const bcrypt_1 = __importDefault(require("bcrypt"));
+const client_1 = require("@prisma/client");
+const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
+const prismaClient = new client_1.PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const registerValidation = [
     (0, express_validator_1.body)('username')
         .isLength({ min: 3, max: 20 })
@@ -25,187 +30,182 @@ const loginValidation = [
     (0, express_validator_1.body)('username').notEmpty().withMessage('用户名不能为空'),
     (0, express_validator_1.body)('password').notEmpty().withMessage('密码不能为空')
 ];
-router.post('/register', registerValidation, async (req, res) => {
+router.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'InterviewCodeOverlay API'
+    });
+});
+router.post('/register', async (req, res) => {
     try {
-        const errors = (0, express_validator_1.validationResult)(req);
-        if (!errors.isEmpty()) {
-            return response_1.ResponseUtils.validationError(res, errors.array().map(err => err.msg));
-        }
-        const { username, password, email } = req.body;
-        const existingUser = await database_1.prisma.user.findUnique({
-            where: { username }
+        const { username, email, password } = req.body;
+        const existingUser = await prismaClient.user.findFirst({
+            where: {
+                OR: [
+                    { username },
+                    { email }
+                ]
+            }
         });
         if (existingUser) {
-            return response_1.ResponseUtils.error(res, '用户名已存在', 409);
+            res.status(400).json({ error: '用户名或邮箱已存在' });
+            return;
         }
-        if (email) {
-            const existingEmail = await database_1.prisma.user.findUnique({
-                where: { email }
-            });
-            if (existingEmail) {
-                return response_1.ResponseUtils.error(res, '邮箱已被使用', 409);
-            }
-        }
-        const hashedPassword = await auth_1.AuthUtils.hashPassword(password);
-        const user = await database_1.prisma.user.create({
+        const hashedPassword = await bcrypt_1.default.hash(password, 10);
+        const user = await prismaClient.user.create({
             data: {
                 username,
-                password: hashedPassword,
-                email: email || null
+                email,
+                password: hashedPassword
             }
         });
-        await database_1.prisma.userConfig.create({
+        await prismaClient.userConfig.create({
             data: {
                 userId: user.id,
-                selectedProvider: 'claude',
-                extractionModel: 'claude-3-7-sonnet-20250219',
-                solutionModel: 'claude-3-7-sonnet-20250219',
-                debuggingModel: 'claude-3-7-sonnet-20250219',
-                language: 'python'
+                aiModel: 'claude-3-5-sonnet-20241022',
+                language: 'python',
+                theme: 'system'
             }
         });
-        response_1.ResponseUtils.success(res, {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            createdAt: user.createdAt
-        }, '用户注册成功');
+        const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        res.status(201).json({
+            message: '注册成功',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                createdAt: user.createdAt
+            },
+            token
+        });
     }
     catch (error) {
         console.error('注册错误:', error);
-        response_1.ResponseUtils.internalError(res);
+        res.status(500).json({ error: '服务器错误' });
     }
 });
-router.post('/login', loginValidation, async (req, res) => {
+router.post('/login', async (req, res) => {
     try {
-        const errors = (0, express_validator_1.validationResult)(req);
-        if (!errors.isEmpty()) {
-            return response_1.ResponseUtils.validationError(res, errors.array().map(err => err.msg));
-        }
         const { username, password } = req.body;
-        const user = await database_1.prisma.user.findUnique({
-            where: { username }
-        });
-        if (!user || !user.isActive) {
-            return response_1.ResponseUtils.unauthorized(res, '用户名或密码错误');
-        }
-        const isValidPassword = await auth_1.AuthUtils.verifyPassword(password, user.password);
-        if (!isValidPassword) {
-            return response_1.ResponseUtils.unauthorized(res, '用户名或密码错误');
-        }
-        const userPayload = {
-            id: user.id,
-            username: user.username,
-            email: user.email
-        };
-        const accessToken = auth_1.AuthUtils.generateAccessToken(userPayload);
-        const refreshToken = auth_1.AuthUtils.generateRefreshToken(userPayload);
-        await database_1.prisma.userSession.create({
-            data: {
-                userId: user.id,
-                token: accessToken,
-                refreshToken,
-                expiresAt: auth_1.AuthUtils.getTokenExpirationDate()
+        const user = await prismaClient.user.findFirst({
+            where: {
+                OR: [
+                    { username },
+                    { email: username }
+                ]
             }
         });
-        response_1.ResponseUtils.success(res, {
-            token: accessToken,
-            refreshToken,
-            expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-            user: userPayload
-        }, '登录成功');
+        if (!user) {
+            res.status(401).json({ error: '用户名或密码错误' });
+            return;
+        }
+        const isPasswordValid = await bcrypt_1.default.compare(password, user.password);
+        if (!isPasswordValid) {
+            res.status(401).json({ error: '用户名或密码错误' });
+            return;
+        }
+        const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({
+            message: '登录成功',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                createdAt: user.createdAt
+            },
+            token
+        });
     }
     catch (error) {
         console.error('登录错误:', error);
-        response_1.ResponseUtils.internalError(res);
+        res.status(500).json({ error: '服务器错误' });
     }
 });
-router.post('/refresh', async (req, res) => {
+router.post('/oauth/callback', async (req, res) => {
     try {
-        const { refreshToken } = req.body;
-        if (!refreshToken) {
-            return response_1.ResponseUtils.error(res, '未提供刷新令牌', 400);
-        }
-        const decoded = auth_1.AuthUtils.verifyRefreshToken(refreshToken);
-        if (!decoded) {
-            return response_1.ResponseUtils.unauthorized(res, '刷新令牌无效');
-        }
-        const session = await database_1.prisma.userSession.findUnique({
-            where: { refreshToken },
-            include: { user: true }
+        const { code, provider = 'github' } = req.body;
+        let user = await prismaClient.user.findFirst({
+            where: { email: `demo@${provider}.com` }
         });
-        if (!session || !session.isActive || session.expiresAt < new Date()) {
-            return response_1.ResponseUtils.unauthorized(res, '刷新令牌已过期');
+        if (!user) {
+            user = await prismaClient.user.create({
+                data: {
+                    username: `demo_${provider}_user`,
+                    email: `demo@${provider}.com`,
+                    password: await bcrypt_1.default.hash('demo_password', 10)
+                }
+            });
+            await prismaClient.userConfig.create({
+                data: {
+                    userId: user.id,
+                    aiModel: 'claude-3-5-sonnet-20241022',
+                    language: 'python',
+                    theme: 'system'
+                }
+            });
         }
-        const userPayload = {
-            id: session.user.id,
-            username: session.user.username,
-            email: session.user.email
-        };
-        const newAccessToken = auth_1.AuthUtils.generateAccessToken(userPayload);
-        const newRefreshToken = auth_1.AuthUtils.generateRefreshToken(userPayload);
-        await database_1.prisma.userSession.update({
-            where: { id: session.id },
-            data: {
-                token: newAccessToken,
-                refreshToken: newRefreshToken,
-                expiresAt: auth_1.AuthUtils.getTokenExpirationDate()
-            }
-        });
-        response_1.ResponseUtils.success(res, {
-            token: newAccessToken,
-            refreshToken: newRefreshToken,
-            expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-            user: userPayload
+        const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({
+            message: 'OAuth登录成功',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                createdAt: user.createdAt
+            },
+            token
         });
     }
     catch (error) {
-        console.error('刷新token错误:', error);
-        response_1.ResponseUtils.internalError(res);
+        console.error('OAuth登录错误:', error);
+        res.status(500).json({ error: 'OAuth登录失败' });
     }
 });
-router.get('/me', auth_2.authenticateToken, async (req, res) => {
+router.get('/me', auth_1.authMiddleware, async (req, res) => {
     try {
-        const user = await database_1.prisma.user.findUnique({
-            where: { id: req.user.id },
+        if (!req.user) {
+            res.status(401).json({ error: '用户未认证' });
+            return;
+        }
+        const user = await prismaClient.user.findUnique({
+            where: { id: req.user.userId },
             select: {
                 id: true,
                 username: true,
                 email: true,
-                createdAt: true,
-                updatedAt: true
+                createdAt: true
             }
         });
         if (!user) {
-            return response_1.ResponseUtils.notFound(res, '用户不存在');
+            res.status(404).json({ error: '用户不存在' });
+            return;
         }
-        response_1.ResponseUtils.success(res, user);
+        res.json(user);
     }
     catch (error) {
         console.error('获取用户信息错误:', error);
-        response_1.ResponseUtils.internalError(res);
+        res.status(500).json({ error: '服务器错误' });
     }
 });
-router.post('/logout', auth_2.authenticateToken, async (req, res) => {
+router.post('/logout', auth_1.authMiddleware, (req, res) => {
+    res.json({ message: '登出成功' });
+});
+router.post('/refresh', auth_1.authMiddleware, async (req, res) => {
     try {
-        const authHeader = req.headers.authorization;
-        const token = auth_1.AuthUtils.extractBearerToken(authHeader);
-        if (token) {
-            await database_1.prisma.userSession.updateMany({
-                where: {
-                    userId: req.user.id,
-                    token: token
-                },
-                data: {
-                    isActive: false
-                }
-            });
+        if (!req.user) {
+            res.status(401).json({ error: '用户未认证' });
+            return;
         }
-        response_1.ResponseUtils.success(res, null, '登出成功');
+        const newToken = jsonwebtoken_1.default.sign({ userId: req.user.userId }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({
+            message: 'Token刷新成功',
+            token: newToken
+        });
     }
     catch (error) {
-        console.error('登出错误:', error);
-        response_1.ResponseUtils.internalError(res);
+        console.error('Token刷新错误:', error);
+        res.status(500).json({ error: '服务器错误' });
     }
 });
 exports.default = router;

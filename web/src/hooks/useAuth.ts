@@ -1,214 +1,210 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { authApi } from '../services/api';
-import type { User, LoginRequest, RegisterRequest } from '../types';
 
-// 预设账号信息
-const DEMO_ACCOUNT = {
-  username: '123456',
-  password: '123456'
-};
+interface User {
+  id: string;
+  username: string;
+  email: string;
+}
 
-// 模拟用户数据
-const DEMO_USER: User = {
-  id: 'demo-user-id',
-  username: '123456',
-  email: 'demo@example.com',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
-};
+interface LoginParams {
+  username: string;
+  password: string;
+}
 
-interface AuthState {
-  user: User | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
+interface RegisterParams {
+  email: string;
+  password: string;
+  username?: string;
+}
+
+interface AuthResponse {
+  success: boolean;
+  error?: string;
+  user?: User;
 }
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    isLoading: true,
-    isAuthenticated: false,
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // 检查用户认证状态
-  const checkAuth = useCallback(async () => {
-    try {
-      console.log('检查认证状态...');
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        console.log('未找到token, 未认证状态');
-        setState({ user: null, isLoading: false, isAuthenticated: false });
-        return;
-      }
-
-      console.log('找到token, 尝试获取用户信息');
-      
-      // 判断是否为Demo用户
-      if (token.startsWith('demo-token-')) {
-        console.log('检测到Demo用户，直接设置认证状态');
-        setState({ 
-          user: DEMO_USER, 
-          isLoading: false, 
-          isAuthenticated: true 
-        });
-        return;
-      }
-
-      try {
-        const user = await authApi.getCurrentUser();
-        console.log('成功获取用户信息:', user);
-        setState({ user, isLoading: false, isAuthenticated: true });
-      } catch (err) {
-        console.log('获取用户信息失败，清除token');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setState({ user: null, isLoading: false, isAuthenticated: false });
-      }
-    } catch (error) {
-      console.error('认证状态检查失败:', error);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setState({ user: null, isLoading: false, isAuthenticated: false });
-    }
-  }, []);
-
-  // 登录
-  const login = useCallback(async (credentials: LoginRequest) => {
-    try {
-      console.log('尝试登录...', credentials.username);
-      setState(prev => ({ ...prev, isLoading: true }));
-      
-      // 检查是否使用了预设账号
-      if (credentials.username === DEMO_ACCOUNT.username && 
-          credentials.password === DEMO_ACCOUNT.password) {
-        console.log('使用预设账号登录');
-        // 使用预设账号，直接模拟登录成功
-        const fakeToken = 'demo-token-' + Date.now();
-        localStorage.setItem('accessToken', fakeToken);
-        localStorage.setItem('refreshToken', 'demo-refresh-token');
-        
-        setState({
-          user: DEMO_USER,
-          isLoading: false,
-          isAuthenticated: true,
-        });
-        
-        console.log('预设账号登录成功');
-        return { success: true };
-      }
-      
-      // 正常登录流程
-      console.log('尝试API登录');
-      const response = await authApi.login(credentials);
-      console.log('API登录成功:', response);
-      
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      
-      setState({
-        user: response.user,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-      
-      return { success: true };
-    } catch (error: any) {
-      console.error('登录失败:', error);
-      setState(prev => ({ ...prev, isLoading: false }));
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message || '登录失败',
-      };
-    }
-  }, []);
-
-  // 注册
-  const register = useCallback(async (userData: RegisterRequest) => {
-    try {
-      console.log('尝试注册...', userData.email);
-      setState(prev => ({ ...prev, isLoading: true }));
-      
-      // 添加预设账号的特殊处理
-      if (userData.username === DEMO_ACCOUNT.username || userData.email === DEMO_USER.email) {
-        console.log('使用预设账号注册');
-        // 使用预设账号直接模拟注册成功并登录
-        const fakeToken = 'demo-token-' + Date.now();
-        localStorage.setItem('accessToken', fakeToken);
-        localStorage.setItem('refreshToken', 'demo-refresh-token');
-        
-        setState({
-          user: DEMO_USER,
-          isLoading: false,
-          isAuthenticated: true,
-        });
-        
-        console.log('预设账号注册成功');
-        return { success: true };
-      }
-      
-      console.log('尝试API注册');
-      const response = await authApi.register(userData);
-      console.log('API注册成功:', response);
-      
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      
-      setState({
-        user: response.user,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-      
-      return { success: true };
-    } catch (error: any) {
-      console.error('注册失败:', error);
-      setState(prev => ({ ...prev, isLoading: false }));
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message || '注册失败',
-      };
-    }
-  }, []);
-
-  // 登出
-  const logout = useCallback(async () => {
-    try {
-      console.log('尝试登出...');
-      // 检查是否是演示账号
-      if (state.user?.id === DEMO_USER.id) {
-        console.log('演示账号登出，不调用API');
-        // 演示账号不需要调用登出API
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setState({ user: null, isLoading: false, isAuthenticated: false });
-        return;
-      }
-      
-      console.log('调用API登出');
-      await authApi.logout();
-      console.log('API登出成功');
-    } catch (error) {
-      // 即使API调用失败，也要清除本地状态
-      console.error('登出失败:', error);
-    } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setState({ user: null, isLoading: false, isAuthenticated: false });
-      console.log('已清除登录状态');
-    }
-  }, [state.user?.id]);
-
-  // 初始化时检查认证状态
+  // 检查是否已登录
   useEffect(() => {
-    console.log('初始化认证检查');
-    checkAuth();
-  }, [checkAuth]);
+    const initializeAuth = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        try {
+          const userData = await authApi.getCurrentUser();
+          setUser(userData);
+          console.log('自动登录成功:', userData);
+        } catch (error) {
+          console.error('获取用户信息失败:', error);
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+        }
+      }
+      setLoading(false);
+    };
+
+    initializeAuth();
+  }, []);
+
+  const login = async (params: LoginParams): Promise<AuthResponse> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('开始登录流程:', params.username);
+      
+      // 基本验证
+      if (!params.username.trim()) {
+        throw new Error('请输入用户名');
+      }
+      if (!params.password.trim()) {
+        throw new Error('请输入密码');
+      }
+      if (params.password.length < 2) {
+        throw new Error('密码长度至少2位');
+      }
+      
+      const response = await authApi.login(params);
+      console.log('登录API响应:', response);
+      
+      if (response.success && response.accessToken && response.user) {
+        localStorage.setItem('accessToken', response.accessToken);
+        localStorage.setItem('refreshToken', response.refreshToken);
+        setUser(response.user);
+        console.log('登录成功，用户信息:', response.user);
+        
+        // 创建共享会话供Electron客户端使用
+        try {
+          await authApi.createSharedSession();
+          console.log('✅ 共享会话已创建，Electron客户端可以同步登录状态');
+        } catch (error) {
+          console.warn('⚠️ 创建共享会话失败，但不影响Web端登录:', error);
+        }
+        
+        return { success: true, user: response.user };
+      } else {
+        const errorMsg = response.error || '登录失败，请检查用户名和密码';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    } catch (error: any) {
+      console.error('登录错误:', error);
+      let errorMessage = '登录失败';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.status === 401) {
+        errorMessage = '用户名或密码错误';
+      } else if (error.response?.status === 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      } else if (error.code === 'NETWORK_ERROR') {
+        errorMessage = '网络错误，请检查后端服务是否启动';
+      }
+      
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async (params: RegisterParams): Promise<AuthResponse> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('开始注册流程:', params.email);
+      
+      // 基本验证
+      if (!params.email.trim()) {
+        throw new Error('请输入邮箱');
+      }
+      if (!params.password.trim()) {
+        throw new Error('请输入密码');
+      }
+      if (params.password.length < 2) {
+        throw new Error('密码长度至少2位');
+      }
+      
+      // 邮箱格式验证（简单版本）
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(params.email)) {
+        throw new Error('请输入有效的邮箱地址');
+      }
+      
+      const registerData = {
+        email: params.email,
+        password: params.password,
+        username: params.username || params.email.split('@')[0]
+      };
+      
+      const response = await authApi.register(registerData);
+      console.log('注册API响应:', response);
+      
+      if (response.success && response.accessToken && response.user) {
+        localStorage.setItem('accessToken', response.accessToken);
+        localStorage.setItem('refreshToken', response.refreshToken);
+        setUser(response.user);
+        console.log('注册成功，用户信息:', response.user);
+        return { success: true, user: response.user };
+      } else {
+        const errorMsg = response.error || '注册失败';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    } catch (error: any) {
+      console.error('注册错误:', error);
+      let errorMessage = '注册失败';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.status === 409) {
+        errorMessage = '用户已存在，请使用其他邮箱或直接登录';
+      } else if (error.response?.status === 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      } else if (error.code === 'NETWORK_ERROR') {
+        errorMessage = '网络错误，请检查后端服务是否启动';
+      }
+      
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = (): void => {
+    console.log('用户登出');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    setUser(null);
+    setError(null);
+  };
+
+  const clearError = (): void => {
+    setError(null);
+  };
 
   return {
-    ...state,
+    user,
+    loading,
+    error,
+    isAuthenticated: !!user,
     login,
     register,
     logout,
-    checkAuth,
+    clearError,
   };
 } 

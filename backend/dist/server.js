@@ -10,6 +10,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const compression_1 = __importDefault(require("compression"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 const database_1 = require("./config/database");
 const response_1 = require("./utils/response");
 const auth_1 = __importDefault(require("./routes/auth"));
@@ -17,20 +18,25 @@ const config_1 = __importDefault(require("./routes/config"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
+const WEB_PORT = process.env.WEB_PORT || 3000;
 app.use((0, helmet_1.default)({
     crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
         },
     },
 }));
 app.use((0, compression_1.default)());
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:54321'],
+    origin: process.env.CORS_ORIGIN?.split(',') || [
+        'http://localhost:3000',
+        'http://localhost:54321',
+        `http://localhost:${WEB_PORT}`
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -44,6 +50,7 @@ else {
 }
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
 const limiter = (0, express_rate_limit_1.default)({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
@@ -61,6 +68,18 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || 'development'
+    });
+});
+app.get('/login', (req, res) => {
+    res.sendFile(path_1.default.join(__dirname, '../public/login.html'));
+});
+app.get('/auth/success', (req, res) => {
+    res.sendFile(path_1.default.join(__dirname, '../public/auth-success.html'));
+});
+app.get('/auth/error', (req, res) => {
+    res.status(400).json({
+        error: '认证失败',
+        message: '登录过程中发生错误，请重试'
     });
 });
 app.use('/api/auth', auth_1.default);

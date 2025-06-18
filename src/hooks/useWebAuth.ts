@@ -182,6 +182,48 @@ export function useWebAuth() {
     }
   }, [])
 
+  // 只在初始化时检查一次认证状态和连接状态
+  useEffect(() => {
+    console.log('🔍 Initializing Web auth check...')
+    
+    // 同时检查认证状态和连接状态
+    const initializeAuth = async () => {
+      await Promise.all([
+        checkAuthStatus(),
+        checkConnection()
+      ])
+    }
+    
+    initializeAuth()
+    
+    // 监听认证状态变化事件（如果有的话）
+    const handleAuthStatus = (event: any, status: any) => {
+      console.log('🔄 Auth status changed:', status)
+      setAuthStatus({
+        authenticated: status.authenticated,
+        user: status.user,
+        loading: false,
+        error: null,
+      })
+      
+      // 如果已认证，同步配置
+      if (status.authenticated) {
+        syncConfig()
+      }
+    }
+    
+    if (window.electronAPI?.onAuthStatusChanged) {
+      window.electronAPI.onAuthStatusChanged(handleAuthStatus)
+    }
+    
+    // 清理函数
+    return () => {
+      if (window.electronAPI?.removeAuthStatusListener) {
+        window.electronAPI.removeAuthStatusListener(handleAuthStatus)
+      }
+    }
+  }, [checkAuthStatus, checkConnection, syncConfig])
+
   return {
     // 认证状态
     ...authStatus,

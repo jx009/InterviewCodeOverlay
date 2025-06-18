@@ -1,0 +1,11 @@
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoiMTIzNDU2QHRlc3QuY29tIiwiaWF0IjoxNzUwMjM0MjkyLCJleHAiOjE3NTAyMzUxOTJ9.AcAisdqjo8JhBP7kqxty2nP-_lG1yvfgsg1PGVlk63g",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc1MDIzNDI5MiwiZXhwIjoxNzUwODM5MDkyfQ.mqNl3XfL7SnWopb1Bj_NdiA0vM1oAtHbrn6IecMMlqk",
+  "user": {
+    "id": 1,
+    "email": "123456@test.com",
+    "username": "123456"
+  },
+  "createdAt": "2025-06-18T08:11:32.763Z",
+  "expiresAt": "2025-06-25T08:11:32.753Z"
+}

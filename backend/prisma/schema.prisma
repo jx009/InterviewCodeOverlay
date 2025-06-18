@@ -32,7 +32,10 @@ model UserConfig {
   userId           String   @unique
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // AI Model Settings
+  // 简化的AI模型设置（Cursor式）
+  aiModel          String   @default("claude-3-5-sonnet-20241022") // 统一AI模型
+  
+  // 原有的AI Model Settings（保持兼容性）
   selectedProvider String   @default("claude") // claude, gemini, openai
   extractionModel  String   @default("claude-3-7-sonnet-20250219")
   solutionModel    String   @default("claude-3-7-sonnet-20250219")
@@ -42,8 +45,18 @@ model UserConfig {
   language         String   @default("python")
   
   // UI Settings
+  theme            String   @default("system") // light, dark, system
   opacity          Float    @default(1.0)
   showCopyButton   Boolean  @default(true)
+  
+  // 快捷键设置（JSON字符串）
+  shortcuts        String?  @default("{\"takeScreenshot\":\"Ctrl+Shift+S\",\"openQueue\":\"Ctrl+Shift+Q\",\"openSettings\":\"Ctrl+Shift+,\"}")
+  
+  // 显示设置（JSON字符串）
+  display          String?  @default("{\"opacity\":1.0,\"position\":\"top-right\",\"autoHide\":false,\"hideDelay\":3000}")
+  
+  // 处理设置（JSON字符串）
+  processing       String?  @default("{\"autoProcess\":false,\"saveScreenshots\":true,\"compressionLevel\":80}")
   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

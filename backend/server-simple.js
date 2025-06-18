@@ -2,12 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const db = require('./database');
 
 const app = express();
 const PORT = 3001;
 
-// 内存数据库（临时用于测试）
-const users = [];
 const JWT_SECRET = 'interview-coder-secret-key';
 const REFRESH_SECRET = 'interview-coder-refresh-secret';
 
@@ -29,6 +28,26 @@ const aiModels = [
 // 中间件
 app.use(cors());
 app.use(express.json());
+
+// 静态文件服务
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
+// OAuth登录页面路由
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/auth/success', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'auth-success.html'));
+});
+
+app.get('/auth/error', (req, res) => {
+  res.status(400).json({ 
+    error: '认证失败',
+    message: '登录过程中发生错误，请重试'
+  });
+});
 
 // 身份验证中间件
 const authenticateToken = (req, res, next) => {
@@ -66,7 +85,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // 检查用户是否已存在
-    const existingUser = users.find(u => u.email === email);
+    const existingUser = await db.getUserByEmail(email);
     if (existingUser) {
       console.log('User already exists:', email);
       return res.status(400).json({ error: '用户已存在' });
@@ -74,15 +93,12 @@ app.post('/api/auth/register', async (req, res) => {
 
     // 创建新用户
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = {
-      id: users.length + 1,
-      email,
+    const newUser = await db.createUser({
       username: username || email.split('@')[0],
-      password: hashedPassword,
-      createdAt: new Date()
-    };
+      email,
+      password: hashedPassword
+    });
 
-    users.push(newUser);
     console.log('User registered successfully:', newUser.email);
 
     // 生成tokens
@@ -97,6 +113,10 @@ app.post('/api/auth/register', async (req, res) => {
       REFRESH_SECRET,
       { expiresIn: '7d' }
     );
+
+    // 存储刷新令牌到数据库
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7天
+    await db.storeRefreshToken(newUser.id, refreshToken, expiresAt.toISOString());
 
     const response = {
       success: true,
@@ -123,7 +143,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
 
     // 查找用户（可以用email或username）
-    const user = users.find(u => u.email === username || u.username === username);
+    const user = await db.getUserByUsernameOrEmail(username);
     if (!user) {
       return res.status(400).json({ error: '用户不存在' });
     }
@@ -147,6 +167,12 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    // 存储刷新令牌到数据库
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7天
+    await db.storeRefreshToken(user.id, refreshToken, expiresAt.toISOString());
+
+    console.log(`✅ 用户 ${user.username} 登录成功`);
+
     res.json({
       success: true,
       user: {
@@ -163,18 +189,235 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// 获取当前用户
-app.get('/api/auth/me', authenticateToken, (req, res) => {
-  const user = users.find(u => u.id === req.user.userId);
-  if (!user) {
-    return res.status(404).json({ error: '用户不存在' });
-  }
+// OAuth回调接口（用于Electron客户端登录）
+app.post('/api/auth/oauth/callback', async (req, res) => {
+  try {
+    console.log('🔐 收到OAuth回调请求:', req.body);
+    const { code, provider } = req.body;
 
-  res.json({
-    id: user.id,
-    email: user.email,
-    username: user.username
-  });
+    // 简化的OAuth处理 - 在真实应用中这里会验证code
+    // 这里我们创建一个演示用户或使用现有用户
+    let user = await db.getUserByEmail('demo@example.com');
+    
+    if (!user) {
+      // 创建演示用户
+      const hashedPassword = await bcrypt.hash('demo123', 10);
+      user = await db.createUser({
+        username: `${provider}_demo_user`,
+        email: 'demo@example.com',
+        password: hashedPassword
+      });
+      console.log('✅ 创建了演示用户:', user.username);
+    }
+
+    // 生成tokens
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user.id },
+      REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // 存储刷新令牌到数据库
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7天
+    await db.storeRefreshToken(user.id, refreshToken, expiresAt.toISOString());
+
+    console.log(`✅ OAuth登录成功，用户: ${user.username}`);
+
+    res.json({
+      success: true,
+      token: accessToken, // 注意这里返回的字段名是 token，不是 accessToken
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username
+      },
+      refreshToken
+    });
+  } catch (error) {
+    console.error('OAuth回调处理失败:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'OAuth登录失败，请重试' 
+    });
+  }
+});
+
+// 获取当前用户
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await db.getUserById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      username: user.username
+    });
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+// 检查Web端会话状态（不需要认证，用于Electron客户端检查）
+app.get('/api/auth/web-session-status', async (req, res) => {
+  try {
+    // 检查是否有活跃的共享会话文件
+    const fs = require('fs');
+    const path = require('path');
+    const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
+    
+    if (!fs.existsSync(sharedSessionPath)) {
+      return res.json({ 
+        hasActiveSession: false,
+        message: 'No active web session found'
+      });
+    }
+    
+    const sharedSession = JSON.parse(fs.readFileSync(sharedSessionPath, 'utf8'));
+    
+    // 检查会话是否过期
+    const now = new Date();
+    const expiresAt = new Date(sharedSession.expiresAt);
+    
+    if (now > expiresAt) {
+      // 删除过期的会话文件
+      fs.unlinkSync(sharedSessionPath);
+      return res.json({ 
+        hasActiveSession: false,
+        message: 'Web session expired'
+      });
+    }
+    
+    console.log(`✅ 检测到活跃的Web会话，用户: ${sharedSession.user.username}`);
+    
+    res.json({
+      hasActiveSession: true,
+      user: sharedSession.user,
+      message: `Active web session for ${sharedSession.user.username}`
+    });
+  } catch (error) {
+    console.error('检查Web会话状态失败:', error);
+    res.json({ 
+      hasActiveSession: false,
+      message: 'Error checking web session'
+    });
+  }
+});
+
+// Web端登录时创建共享token文件
+app.post('/api/auth/create-shared-session', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔄 创建共享会话文件供Electron客户端使用');
+    
+    const userId = req.user.userId;
+    const user = await db.getUserById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    
+    // 生成新的token给Electron客户端使用
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user.id },
+      REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // 存储刷新令牌到数据库
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7天
+    await db.storeRefreshToken(user.id, refreshToken, expiresAt.toISOString());
+    
+    // 创建共享会话文件
+    const sharedSession = {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username
+      },
+      createdAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString()
+    };
+    
+    const fs = require('fs');
+    const path = require('path');
+    const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
+    
+    fs.writeFileSync(sharedSessionPath, JSON.stringify(sharedSession, null, 2));
+    
+    console.log(`✅ 共享会话文件已创建，用户: ${user.username}`);
+    
+    res.json({
+      success: true,
+      message: '共享会话已创建'
+    });
+  } catch (error) {
+    console.error('创建共享会话失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: '服务器内部错误' 
+    });
+  }
+});
+
+// 获取共享会话（供Electron客户端使用）
+app.get('/api/auth/shared-session', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
+    
+    if (!fs.existsSync(sharedSessionPath)) {
+      return res.status(404).json({ 
+        success: false, 
+        error: '未找到共享会话' 
+      });
+    }
+    
+    const sharedSession = JSON.parse(fs.readFileSync(sharedSessionPath, 'utf8'));
+    
+    // 检查会话是否过期
+    const now = new Date();
+    const expiresAt = new Date(sharedSession.expiresAt);
+    
+    if (now > expiresAt) {
+      // 删除过期的会话文件
+      fs.unlinkSync(sharedSessionPath);
+      return res.status(404).json({ 
+        success: false, 
+        error: '共享会话已过期' 
+      });
+    }
+    
+    console.log(`✅ Electron客户端获取共享会话，用户: ${sharedSession.user.username}`);
+    
+    res.json({
+      success: true,
+      ...sharedSession
+    });
+  } catch (error) {
+    console.error('获取共享会话失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: '服务器内部错误' 
+    });
+  }
 });
 
 // 获取AI模型列表
@@ -192,21 +435,62 @@ app.get('/api/config/languages', authenticateToken, (req, res) => {
 });
 
 // 获取用户配置
-app.get('/api/config', authenticateToken, (req, res) => {
-  // 返回默认配置
-  res.json({
-    selectedModel: 'claude-sonnet-4-20250514',
-    preferredLanguages: ['JavaScript', 'TypeScript'],
-    theme: 'dark',
-    showLineNumbers: true,
-    autoSave: true
-  });
+app.get('/api/config', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const config = await db.getUserConfig(userId);
+    
+    console.log(`📋 获取用户 ${userId} 的配置:`, config.aiModel);
+    res.json(config);
+  } catch (error) {
+    console.error('获取配置失败:', error);
+    res.status(500).json({ error: '获取配置失败' });
+  }
 });
 
 // 更新用户配置
-app.put('/api/config', authenticateToken, (req, res) => {
-  // 简单返回更新后的配置
-  res.json(req.body);
+app.put('/api/config', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const updatedConfig = await db.updateUserConfig(userId, req.body);
+    
+    console.log(`✅ 用户 ${userId} 配置已更新:`, updatedConfig.aiModel);
+    res.json(updatedConfig);
+  } catch (error) {
+    console.error('更新配置失败:', error);
+    res.status(500).json({ error: '更新配置失败' });
+  }
+});
+
+// 刷新token端点
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(401).json({ error: '刷新令牌缺失' });
+    }
+    
+    // 验证刷新token（包括数据库验证）
+    const tokenData = await db.validateRefreshToken(refreshToken);
+    
+    if (!tokenData) {
+      return res.status(401).json({ error: '刷新令牌无效或已过期' });
+    }
+    
+    // 生成新的访问token
+    const accessToken = jwt.sign(
+      { userId: tokenData.userId, email: tokenData.email },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    
+    console.log(`🔄 用户 ${tokenData.username} 刷新访问令牌`);
+    res.json({ accessToken });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(401).json({ error: '刷新令牌无效' });
+  }
 });
 
 // 启动服务器

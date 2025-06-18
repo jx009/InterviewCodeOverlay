@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
 
-type ToastVariant = "neutral" | "success" | "error"
+type ToastVariant = "neutral" | "success" | "error" | "info" | "warning" | "loading"
 
 interface ToastContextType {
   showToast: (title: string, description: string, variant: ToastVariant) => void

@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 import { connectDatabase } from './config/database';
 import { ResponseUtils } from './utils/response';
 
@@ -17,6 +18,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const WEB_PORT = process.env.WEB_PORT || 3000;
 
 // 基础中间件
 app.use(helmet({
@@ -25,7 +27,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
     },
   },
@@ -35,7 +37,11 @@ app.use(compression());
 
 // CORS配置
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:54321'],
+  origin: process.env.CORS_ORIGIN?.split(',') || [
+    'http://localhost:3000', 
+    'http://localhost:54321',
+    `http://localhost:${WEB_PORT}`
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -52,6 +58,9 @@ if (process.env.NODE_ENV === 'development') {
 // 请求体解析
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 静态文件服务
+app.use(express.static(path.join(__dirname, '../public')));
 
 // 速率限制
 const limiter = rateLimit({
@@ -73,6 +82,22 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// OAuth路由（用于客户端认证）
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/login.html'));
+});
+
+app.get('/auth/success', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/auth-success.html'));
+});
+
+app.get('/auth/error', (req, res) => {
+  res.status(400).json({ 
+    error: '认证失败',
+    message: '登录过程中发生错误，请重试'
   });
 });
 

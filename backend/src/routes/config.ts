@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { prisma } from '../config/database';
 import { ResponseUtils } from '../utils/response';
 import { AuthenticatedRequest, UserConfigData } from '../types';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, authMiddleware } from '../middleware/auth';
 import { SUPPORTED_MODELS, PROGRAMMING_LANGUAGES } from '../types';
 
 const router = Router();
@@ -44,14 +44,14 @@ const configValidation = [
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const config = await prisma.userConfig.findUnique({
-      where: { userId: req.user!.id }
+      where: { userId: req.user!.userId }
     });
 
     if (!config) {
       // 如果用户没有配置，创建默认配置
       const defaultConfig = await prisma.userConfig.create({
         data: {
-          userId: req.user!.id,
+          userId: req.user!.userId,
           selectedProvider: 'claude',
           extractionModel: 'claude-3-7-sonnet-20250219',
           solutionModel: 'claude-3-7-sonnet-20250219',
@@ -121,10 +121,10 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
     }
 
     const updatedConfig = await prisma.userConfig.upsert({
-      where: { userId: req.user!.id },
+      where: { userId: req.user!.userId },
       update: updateData,
       create: {
-        userId: req.user!.id,
+        userId: req.user!.userId,
         selectedProvider: updateData.selectedProvider || 'claude',
         extractionModel: updateData.extractionModel || 'claude-3-7-sonnet-20250219',
         solutionModel: updateData.solutionModel || 'claude-3-7-sonnet-20250219',
@@ -232,10 +232,10 @@ router.post('/reset', authenticateToken, async (req: AuthenticatedRequest, res: 
     };
 
     const updatedConfig = await prisma.userConfig.upsert({
-      where: { userId: req.user!.id },
+      where: { userId: req.user!.userId },
       update: defaultConfig,
       create: {
-        userId: req.user!.id,
+        userId: req.user!.userId,
         ...defaultConfig
       }
     });
@@ -253,6 +253,184 @@ router.post('/reset', authenticateToken, async (req: AuthenticatedRequest, res: 
   } catch (error) {
     console.error('重置配置错误:', error);
     ResponseUtils.internalError(res);
+  }
+});
+
+// 获取指定用户的配置（新增：Cursor式）
+router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    
+    if (!req.user) {
+      res.status(401).json({ error: '用户未认证' });
+      return;
+    }
+    
+    // 确保用户只能访问自己的配置
+    if (req.user.userId !== userId) {
+      res.status(403).json({ error: '无权访问此用户配置' });
+      return;
+    }
+
+    const config = await prisma.userConfig.findUnique({
+      where: { userId }
+    });
+
+    if (!config) {
+      // 如果用户没有配置，创建默认配置
+      const defaultConfig = await prisma.userConfig.create({
+        data: {
+          userId,
+          aiModel: 'claude-3-5-sonnet-20241022',
+          selectedProvider: 'claude',
+          extractionModel: 'claude-3-7-sonnet-20250219',
+          solutionModel: 'claude-3-7-sonnet-20250219',
+          debuggingModel: 'claude-3-7-sonnet-20250219',
+          language: 'python',
+          theme: 'system'
+        }
+      });
+
+      res.json({
+        aiModel: defaultConfig.aiModel,
+        language: defaultConfig.language,
+        theme: defaultConfig.theme,
+        shortcuts: JSON.parse(defaultConfig.shortcuts || '{}'),
+        display: JSON.parse(defaultConfig.display || '{}'),
+        processing: JSON.parse(defaultConfig.processing || '{}'),
+        // 保持向后兼容
+        selectedProvider: defaultConfig.selectedProvider,
+        extractionModel: defaultConfig.extractionModel,
+        solutionModel: defaultConfig.solutionModel,
+        debuggingModel: defaultConfig.debuggingModel,
+        opacity: defaultConfig.opacity,
+        showCopyButton: defaultConfig.showCopyButton
+      });
+    }
+
+    // 解析JSON字段
+    let shortcuts = {};
+    let display = {};
+    let processing = {};
+    
+    try {
+      shortcuts = JSON.parse(config!.shortcuts || '{}');
+      display = JSON.parse(config!.display || '{}');
+      processing = JSON.parse(config!.processing || '{}');
+    } catch (error) {
+      console.warn('解析配置JSON字段失败:', error);
+    }
+
+    res.json({
+      aiModel: config!.aiModel,
+      language: config!.language,
+      theme: config!.theme,
+      shortcuts,
+      display,
+      processing,
+      // 保持向后兼容
+      selectedProvider: config!.selectedProvider,
+      extractionModel: config!.extractionModel,
+      solutionModel: config!.solutionModel,
+      debuggingModel: config!.debuggingModel,
+      opacity: config!.opacity,
+      showCopyButton: config!.showCopyButton
+    });
+
+  } catch (error) {
+    console.error('获取用户配置错误:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 更新指定用户的配置（新增：Cursor式）
+router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, res): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    
+    // 确保用户只能更新自己的配置
+    if (!req.user || req.user.userId !== userId) {
+      res.status(403).json({ error: '无权修改此用户配置' });
+      return;
+    }
+
+    const updateData: any = {};
+    
+    // 简化配置字段
+    if (req.body.aiModel !== undefined) {
+      updateData.aiModel = req.body.aiModel;
+    }
+    if (req.body.language !== undefined) {
+      updateData.language = req.body.language;
+    }
+    if (req.body.theme !== undefined) {
+      updateData.theme = req.body.theme;
+    }
+    if (req.body.shortcuts !== undefined) {
+      updateData.shortcuts = JSON.stringify(req.body.shortcuts);
+    }
+    if (req.body.display !== undefined) {
+      updateData.display = JSON.stringify(req.body.display);
+    }
+    if (req.body.processing !== undefined) {
+      updateData.processing = JSON.stringify(req.body.processing);
+    }
+    
+    // 向后兼容字段
+    if (req.body.selectedProvider !== undefined) {
+      updateData.selectedProvider = req.body.selectedProvider;
+    }
+    if (req.body.extractionModel !== undefined) {
+      updateData.extractionModel = req.body.extractionModel;
+    }
+    if (req.body.solutionModel !== undefined) {
+      updateData.solutionModel = req.body.solutionModel;
+    }
+    if (req.body.debuggingModel !== undefined) {
+      updateData.debuggingModel = req.body.debuggingModel;
+    }
+    if (req.body.opacity !== undefined) {
+      updateData.opacity = req.body.opacity;
+    }
+    if (req.body.showCopyButton !== undefined) {
+      updateData.showCopyButton = req.body.showCopyButton;
+    }
+
+    const updatedConfig = await prisma.userConfig.upsert({
+      where: { userId },
+      update: updateData,
+      create: {
+        userId,
+        aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',
+        language: updateData.language || 'python',
+        theme: updateData.theme || 'system',
+        shortcuts: updateData.shortcuts || JSON.stringify({}),
+        display: updateData.display || JSON.stringify({}),
+        processing: updateData.processing || JSON.stringify({}),
+        selectedProvider: updateData.selectedProvider || 'claude',
+        extractionModel: updateData.extractionModel || 'claude-3-7-sonnet-20250219',
+        solutionModel: updateData.solutionModel || 'claude-3-7-sonnet-20250219',
+        debuggingModel: updateData.debuggingModel || 'claude-3-7-sonnet-20250219',
+        opacity: updateData.opacity || 1.0,
+        showCopyButton: updateData.showCopyButton !== undefined ? updateData.showCopyButton : true
+      }
+    });
+
+    res.json({
+      message: '配置更新成功',
+      config: {
+        aiModel: updatedConfig.aiModel,
+        language: updatedConfig.language,
+        theme: updatedConfig.theme,
+        shortcuts: JSON.parse(updatedConfig.shortcuts || '{}'),
+        display: JSON.parse(updatedConfig.display || '{}'),
+        processing: JSON.parse(updatedConfig.processing || '{}')
+      }
+    });
+
+  } catch (error) {
+    console.error('更新用户配置错误:', error);
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 

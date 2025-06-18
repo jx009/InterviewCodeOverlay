@@ -18,7 +18,7 @@ class ShortcutsHelper {
         // Save the opacity setting to config without re-initializing the client
         try {
             const config = ConfigHelper_1.configHelper.loadConfig();
-            config.opacity = newOpacity;
+            ConfigHelper_1.configHelper.updateClientSettings({ opacity: newOpacity });
             ConfigHelper_1.configHelper.saveConfig(config);
         }
         catch (error) {

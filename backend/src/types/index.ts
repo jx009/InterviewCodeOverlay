@@ -7,8 +7,14 @@ export interface UserPayload {
   email?: string | null;
 }
 
+// 简化的用户认证信息（Cursor风格）
+export interface SimpleUserPayload {
+  userId: string;
+}
+
+// 更新AuthenticatedRequest以匹配新的认证中间件
 export interface AuthenticatedRequest extends Request {
-  user?: UserPayload;
+  user?: { userId: string };
 }
 
 // AI模型相关类型

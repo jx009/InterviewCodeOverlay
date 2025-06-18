@@ -28,16 +28,12 @@ class ConfigHelper extends require$$0$1.EventEmitter {
   constructor() {
     super();
     this.defaultConfig = {
-      apiProvider: "openai",
-      // 默认使用OpenAI
-      extractionModel: "gpt-4o",
-      // 默认使用GPT-4o
-      solutionModel: "gpt-4o",
-      debuggingModel: "gpt-4o",
-      language: "python",
-      opacity: 1,
-      showCopyButton: true
-      // 默认显示复制按钮
+      authToken: null,
+      clientSettings: {
+        windowPosition: void 0,
+        windowSize: void 0,
+        lastLanguage: "python"
+      }
     };
     try {
       this.configPath = path.join(require$$1$1.app.getPath("userData"), "config.json");
@@ -61,50 +57,13 @@ class ConfigHelper extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * Validate and sanitize model selection to ensure only allowed models are used
+   * 加载配置（简化版）
    */
-  sanitizeModelSelection(model, provider) {
-    if (provider === "openai") {
-      const allowedModels = ["o4-mini-high", "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"];
-      if (!allowedModels.includes(model)) {
-        console.warn(`Invalid OpenAI model specified: ${model}. Using default model: gpt-4o`);
-        return "gpt-4o";
-      }
-      return model;
-    } else if (provider === "gemini") {
-      const allowedModels = ["gemini-1.5-pro", "gemini-2.0-flash", "gemini-pro"];
-      if (!allowedModels.includes(model)) {
-        console.warn(`Invalid Gemini model specified: ${model}. Using default model: gemini-2.0-flash`);
-        return "gemini-2.0-flash";
-      }
-      return model;
-    } else if (provider === "anthropic") {
-      const allowedModels = ["claude-3-7-sonnet-thinking", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"];
-      if (!allowedModels.includes(model)) {
-        console.warn(`Invalid Anthropic model specified: ${model}. Using default model: claude-3-7-sonnet-20250219`);
-        return "claude-3-7-sonnet-thinking";
-      }
-      return model;
-    }
-    return model;
-  }
   loadConfig() {
     try {
       if (fs$1.existsSync(this.configPath)) {
         const configData = fs$1.readFileSync(this.configPath, "utf8");
         const config = JSON.parse(configData);
-        if (config.apiProvider !== "openai" && config.apiProvider !== "gemini" && config.apiProvider !== "anthropic") {
-          config.apiProvider = "openai";
-        }
-        if (config.extractionModel) {
-          config.extractionModel = this.sanitizeModelSelection(config.extractionModel, config.apiProvider);
-        }
-        if (config.solutionModel) {
-          config.solutionModel = this.sanitizeModelSelection(config.solutionModel, config.apiProvider);
-        }
-        if (config.debuggingModel) {
-          config.debuggingModel = this.sanitizeModelSelection(config.debuggingModel, config.apiProvider);
-        }
         return {
           ...this.defaultConfig,
           ...config
@@ -118,7 +77,7 @@ class ConfigHelper extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * Save configuration to disk
+   * 保存配置
    */
   saveConfig(config) {
     try {
@@ -129,41 +88,14 @@ class ConfigHelper extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * Update specific configuration values
+   * 更新配置
    */
   updateConfig(updates) {
     try {
       const currentConfig = this.loadConfig();
-      let provider = updates.apiProvider || currentConfig.apiProvider;
-      if (updates.apiProvider && updates.apiProvider !== currentConfig.apiProvider) {
-        if (updates.apiProvider === "openai") {
-          updates.extractionModel = "gpt-4o";
-          updates.solutionModel = "gpt-4o";
-          updates.debuggingModel = "gpt-4o";
-        } else if (updates.apiProvider === "anthropic") {
-          updates.extractionModel = "claude-3-7-sonnet-20250219";
-          updates.solutionModel = "claude-3-7-sonnet-20250219";
-          updates.debuggingModel = "claude-3-7-sonnet-20250219";
-        } else {
-          updates.extractionModel = "gemini-2.0-flash";
-          updates.solutionModel = "gemini-2.0-flash";
-          updates.debuggingModel = "gemini-2.0-flash";
-        }
-      }
-      if (updates.extractionModel) {
-        updates.extractionModel = this.sanitizeModelSelection(updates.extractionModel, provider);
-      }
-      if (updates.solutionModel) {
-        updates.solutionModel = this.sanitizeModelSelection(updates.solutionModel, provider);
-      }
-      if (updates.debuggingModel) {
-        updates.debuggingModel = this.sanitizeModelSelection(updates.debuggingModel, provider);
-      }
       const newConfig = { ...currentConfig, ...updates };
       this.saveConfig(newConfig);
-      if (updates.apiProvider !== void 0 || updates.extractionModel !== void 0 || updates.solutionModel !== void 0 || updates.debuggingModel !== void 0 || updates.language !== void 0) {
-        this.emit("config-updated", newConfig);
-      }
+      this.emit("config-updated", newConfig);
       return newConfig;
     } catch (error2) {
       console.error("Error updating config:", error2);
@@ -171,59 +103,36 @@ class ConfigHelper extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * Get the API provider
+   * 获取认证token
    */
-  getApiProvider() {
+  getAuthToken() {
     const config = this.loadConfig();
-    return config.apiProvider;
+    return config.authToken || null;
   }
   /**
-   * Set the API provider
+   * 设置认证token
    */
-  setApiProvider(provider) {
-    this.updateConfig({ apiProvider: provider });
+  setAuthToken(token) {
+    this.updateConfig({ authToken: token });
   }
   /**
-   * Get the preferred programming language
+   * 获取客户端设置
    */
-  getLanguage() {
+  getClientSettings() {
     const config = this.loadConfig();
-    return config.language || "python";
+    return config.clientSettings || {};
   }
   /**
-   * Set the programming language
+   * 更新客户端设置
    */
-  setLanguage(language) {
-    this.updateConfig({ language });
-  }
-  /**
-   * Get available models for the current provider
-   */
-  getAvailableModels(provider) {
-    switch (provider) {
-      case "openai":
-        return ["gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo"];
-      case "gemini":
-        return ["gemini-1.5-pro", "gemini-2.0-flash", "gemini-pro"];
-      case "anthropic":
-        return ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"];
-      default:
-        return ["gpt-4o"];
-    }
-  }
-  /**
-   * Get the stored opacity value
-   */
-  getOpacity() {
+  updateClientSettings(settings) {
     const config = this.loadConfig();
-    return config.opacity !== void 0 ? config.opacity : 1;
-  }
-  /**
-   * Set the window opacity value
-   */
-  setOpacity(opacity) {
-    const validOpacity = Math.min(1, Math.max(0.1, opacity));
-    this.updateConfig({ opacity: validOpacity });
+    this.updateConfig({
+      clientSettings: {
+        ...config.clientSettings,
+        ...settings
+      }
+    });
   }
 }
 const configHelper = new ConfigHelper();
@@ -234,6 +143,7 @@ function bind(fn, thisArg) {
 }
 const { toString } = Object.prototype;
 const { getPrototypeOf } = Object;
+const { iterator, toStringTag } = Symbol;
 const kindOf = /* @__PURE__ */ ((cache) => (thing) => {
   const str2 = toString.call(thing);
   return cache[str2] || (cache[str2] = str2.slice(8, -1).toLowerCase());
@@ -268,7 +178,7 @@ const isPlainObject$1 = (val) => {
     return false;
   }
   const prototype2 = getPrototypeOf(val);
-  return (prototype2 === null || prototype2 === Object.prototype || Object.getPrototypeOf(prototype2) === null) && !(Symbol.toStringTag in val) && !(Symbol.iterator in val);
+  return (prototype2 === null || prototype2 === Object.prototype || Object.getPrototypeOf(prototype2) === null) && !(toStringTag in val) && !(iterator in val);
 };
 const isDate = kindOfTest("Date");
 const isFile$1 = kindOfTest("File");
@@ -415,10 +325,10 @@ const isTypedArray = /* @__PURE__ */ ((TypedArray) => {
   };
 })(typeof Uint8Array !== "undefined" && getPrototypeOf(Uint8Array));
 const forEachEntry = (obj, fn) => {
-  const generator = obj && obj[Symbol.iterator];
-  const iterator = generator.call(obj);
+  const generator = obj && obj[iterator];
+  const _iterator = generator.call(obj);
   let result;
-  while ((result = iterator.next()) && !result.done) {
+  while ((result = _iterator.next()) && !result.done) {
     const pair = result.value;
     fn.call(obj, pair[0], pair[1]);
   }
@@ -488,7 +398,7 @@ const toFiniteNumber = (value, defaultValue) => {
   return value != null && Number.isFinite(value = +value) ? value : defaultValue;
 };
 function isSpecCompliantForm(thing) {
-  return !!(thing && isFunction$2(thing.append) && thing[Symbol.toStringTag] === "FormData" && thing[Symbol.iterator]);
+  return !!(thing && isFunction$2(thing.append) && thing[toStringTag] === "FormData" && thing[iterator]);
 }
 const toJSONObject = (obj) => {
   const stack = new Array(10);
@@ -534,6 +444,7 @@ const _setImmediate = ((setImmediateSupported, postMessageSupported) => {
   isFunction$2(_global.postMessage)
 );
 const asap = typeof queueMicrotask !== "undefined" ? queueMicrotask.bind(_global) : typeof process !== "undefined" && process.nextTick || _setImmediate;
+const isIterable = (thing) => thing != null && isFunction$2(thing[iterator]);
 const utils$5 = {
   isArray,
   isArrayBuffer,
@@ -590,7 +501,8 @@ const utils$5 = {
   isAsyncFn,
   isThenable,
   setImmediate: _setImmediate,
-  asap
+  asap,
+  isIterable
 };
 function AxiosError$1(message, code, config, request, response) {
   Error.call(this);
@@ -3387,9 +3299,9 @@ function requireIterate() {
   hasRequiredIterate = 1;
   var async = requireAsync(), abort = requireAbort();
   iterate_1 = iterate;
-  function iterate(list, iterator, state2, callback) {
+  function iterate(list, iterator2, state2, callback) {
     var key = state2["keyedList"] ? state2["keyedList"][state2.index] : state2.index;
-    state2.jobs[key] = runJob(iterator, key, list[key], function(error2, output) {
+    state2.jobs[key] = runJob(iterator2, key, list[key], function(error2, output) {
       if (!(key in state2.jobs)) {
         return;
       }
@@ -3402,12 +3314,12 @@ function requireIterate() {
       callback(error2, state2.results);
     });
   }
-  function runJob(iterator, key, item, callback) {
+  function runJob(iterator2, key, item, callback) {
     var aborter;
-    if (iterator.length == 2) {
-      aborter = iterator(item, async(callback));
+    if (iterator2.length == 2) {
+      aborter = iterator2(item, async(callback));
     } else {
-      aborter = iterator(item, key, async(callback));
+      aborter = iterator2(item, key, async(callback));
     }
     return aborter;
   }
@@ -3460,10 +3372,10 @@ function requireParallel() {
   hasRequiredParallel = 1;
   var iterate = requireIterate(), initState = requireState(), terminator = requireTerminator();
   parallel_1 = parallel;
-  function parallel(list, iterator, callback) {
+  function parallel(list, iterator2, callback) {
     var state2 = initState(list);
     while (state2.index < (state2["keyedList"] || list).length) {
-      iterate(list, iterator, state2, function(error2, result) {
+      iterate(list, iterator2, state2, function(error2, result) {
         if (error2) {
           callback(error2, result);
           return;
@@ -3488,16 +3400,16 @@ function requireSerialOrdered() {
   serialOrdered.exports = serialOrdered$1;
   serialOrdered.exports.ascending = ascending;
   serialOrdered.exports.descending = descending;
-  function serialOrdered$1(list, iterator, sortMethod, callback) {
+  function serialOrdered$1(list, iterator2, sortMethod, callback) {
     var state2 = initState(list, sortMethod);
-    iterate(list, iterator, state2, function iteratorHandler(error2, result) {
+    iterate(list, iterator2, state2, function iteratorHandler(error2, result) {
       if (error2) {
         callback(error2, result);
         return;
       }
       state2.index++;
       if (state2.index < (state2["keyedList"] || list).length) {
-        iterate(list, iterator, state2, iteratorHandler);
+        iterate(list, iterator2, state2, iteratorHandler);
         return;
       }
       callback(null, state2.results);
@@ -3519,8 +3431,8 @@ function requireSerial() {
   hasRequiredSerial = 1;
   var serialOrdered2 = requireSerialOrdered();
   serial_1 = serial;
-  function serial(list, iterator, callback) {
-    return serialOrdered2(list, iterator, null, callback);
+  function serial(list, iterator2, callback) {
+    return serialOrdered2(list, iterator2, null, callback);
   }
   return serial_1;
 }
@@ -4359,23 +4271,23 @@ function requireEsSetTostringtag() {
   var hasToStringTag = requireShams()();
   var hasOwn2 = /* @__PURE__ */ requireHasown();
   var $TypeError = /* @__PURE__ */ requireType$1();
-  var toStringTag = hasToStringTag ? Symbol.toStringTag : null;
+  var toStringTag2 = hasToStringTag ? Symbol.toStringTag : null;
   esSetTostringtag = function setToStringTag(object2, value) {
     var overrideIfSet = arguments.length > 2 && !!arguments[2] && arguments[2].force;
     var nonConfigurable = arguments.length > 2 && !!arguments[2] && arguments[2].nonConfigurable;
     if (typeof overrideIfSet !== "undefined" && typeof overrideIfSet !== "boolean" || typeof nonConfigurable !== "undefined" && typeof nonConfigurable !== "boolean") {
       throw new $TypeError("if provided, the `overrideIfSet` and `nonConfigurable` options must be booleans");
     }
-    if (toStringTag && (overrideIfSet || !hasOwn2(object2, toStringTag))) {
+    if (toStringTag2 && (overrideIfSet || !hasOwn2(object2, toStringTag2))) {
       if ($defineProperty) {
-        $defineProperty(object2, toStringTag, {
+        $defineProperty(object2, toStringTag2, {
           configurable: !nonConfigurable,
           enumerable: false,
           value,
           writable: false
         });
       } else {
-        object2[toStringTag] = value;
+        object2[toStringTag2] = value;
       }
     }
   };
@@ -4758,6 +4670,9 @@ function toFormData$1(obj, formData, options) {
     if (value === null) return "";
     if (utils$5.isDate(value)) {
       return value.toISOString();
+    }
+    if (utils$5.isBoolean(value)) {
+      return value.toString();
     }
     if (!useBlob && utils$5.isBlob(value)) {
       throw new AxiosError$1("Blob is not supported. Use a Buffer instead.");
@@ -5279,10 +5194,15 @@ let AxiosHeaders$1 = class AxiosHeaders {
       setHeaders(header, valueOrRewrite);
     } else if (utils$5.isString(header) && (header = header.trim()) && !isValidHeaderName(header)) {
       setHeaders(parseHeaders(header), valueOrRewrite);
-    } else if (utils$5.isHeaders(header)) {
-      for (const [key, value] of header.entries()) {
-        setHeader(value, key, rewrite);
+    } else if (utils$5.isObject(header) && utils$5.isIterable(header)) {
+      let obj = {}, dest, key;
+      for (const entry of header) {
+        if (!utils$5.isArray(entry)) {
+          throw TypeError("Object iterator must return a key-value pair");
+        }
+        obj[key = entry[0]] = (dest = obj[key]) ? utils$5.isArray(dest) ? [...dest, entry[1]] : [dest, entry[1]] : entry[1];
       }
+      setHeaders(obj, valueOrRewrite);
     } else {
       header != null && setHeader(valueOrRewrite, header, rewrite);
     }
@@ -5385,6 +5305,9 @@ let AxiosHeaders$1 = class AxiosHeaders {
   }
   toString() {
     return Object.entries(this.toJSON()).map(([header, value]) => header + ": " + value).join("\n");
+  }
+  getSetCookie() {
+    return this.get("set-cookie") || [];
   }
   get [Symbol.toStringTag]() {
     return "AxiosHeaders";
@@ -6831,7 +6754,7 @@ function requireFollowRedirects() {
 }
 var followRedirectsExports = requireFollowRedirects();
 const followRedirects = /* @__PURE__ */ getDefaultExportFromCjs(followRedirectsExports);
-const VERSION$2 = "1.8.4";
+const VERSION$2 = "1.10.0";
 function parseProtocol(url) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
   return match && match[1] || "";
@@ -7038,7 +6961,7 @@ const formDataToStream = (form, headersHandler, options) => {
     throw Error("boundary must be 10-70 characters long");
   }
   const boundaryBytes = textEncoder.encode("--" + boundary + CRLF);
-  const footerBytes = textEncoder.encode("--" + boundary + "--" + CRLF + CRLF);
+  const footerBytes = textEncoder.encode("--" + boundary + "--" + CRLF);
   let contentLength = footerBytes.byteLength;
   const parts = Array.from(form.entries()).map(([name, value]) => {
     const part = new FormDataPart(name, value);
@@ -8032,7 +7955,7 @@ const readStream = async function* (stream) {
   }
 };
 const trackStream = (stream, chunkSize, onProgress, onFinish) => {
-  const iterator = readBytes(stream, chunkSize);
+  const iterator2 = readBytes(stream, chunkSize);
   let bytes = 0;
   let done;
   let _onFinish = (e2) => {
@@ -8044,7 +7967,7 @@ const trackStream = (stream, chunkSize, onProgress, onFinish) => {
   return new ReadableStream({
     async pull(controller) {
       try {
-        const { done: done2, value } = await iterator.next();
+        const { done: done2, value } = await iterator2.next();
         if (done2) {
           _onFinish();
           controller.close();
@@ -8063,7 +7986,7 @@ const trackStream = (stream, chunkSize, onProgress, onFinish) => {
     },
     cancel(reason) {
       _onFinish(reason);
-      return iterator.return();
+      return iterator2.return();
     }
   }, {
     highWaterMark: 2
@@ -8185,7 +8108,7 @@ const fetchAdapter = isFetchSupported && (async (config) => {
       duplex: "half",
       credentials: isCredentialsSupported ? withCredentials : void 0
     });
-    let response = await fetch(request);
+    let response = await fetch(request, fetchOptions);
     const isStreamResponse = supportsResponseStream && (responseType === "stream" || responseType === "response");
     if (supportsResponseStream && (onDownloadProgress || isStreamResponse && unsubscribe)) {
       const options = {};
@@ -8220,7 +8143,7 @@ const fetchAdapter = isFetchSupported && (async (config) => {
     });
   } catch (err) {
     unsubscribe && unsubscribe();
-    if (err && err.name === "TypeError" && /fetch/i.test(err.message)) {
+    if (err && err.name === "TypeError" && /Load failed|fetch/i.test(err.message)) {
       throw Object.assign(
         new AxiosError$1("Network Error", AxiosError$1.ERR_NETWORK, config, request),
         {
@@ -8391,7 +8314,7 @@ const validator = {
 const validators = validator.validators;
 let Axios$1 = class Axios {
   constructor(instanceConfig) {
-    this.defaults = instanceConfig;
+    this.defaults = instanceConfig || {};
     this.interceptors = {
       request: new InterceptorManager(),
       response: new InterceptorManager()
@@ -8777,328 +8700,560 @@ const {
   getAdapter,
   mergeConfig
 } = axios;
-class WebAuthManager extends require$$0$1.EventEmitter {
+class SimpleAuthManager extends require$$0$1.EventEmitter {
+  // 配置缓存过期时间
   constructor(apiBaseUrl = "http://localhost:3001") {
     super();
-    this.tokens = null;
+    this.token = null;
     this.user = null;
     this.userConfig = null;
-    this.authWindow = null;
+    this.configCacheExpiry = 0;
     this.apiBaseUrl = apiBaseUrl;
-    this.setupApiClient();
-    this.loadStoredTokens();
-  }
-  /**
-   * 设置API客户端
-   */
-  setupApiClient() {
     this.apiClient = axios.create({
-      baseURL: `${this.apiBaseUrl}/api`,
+      baseURL: this.apiBaseUrl,
       timeout: 1e4,
       headers: {
         "Content-Type": "application/json"
       }
     });
-    this.apiClient.interceptors.request.use(
-      (config) => {
-        var _a2;
-        if ((_a2 = this.tokens) == null ? void 0 : _a2.accessToken) {
-          config.headers.Authorization = `Bearer ${this.tokens.accessToken}`;
-        }
-        return config;
-      },
-      (error2) => Promise.reject(error2)
-    );
-    this.apiClient.interceptors.response.use(
-      (response) => response,
-      async (error2) => {
-        var _a2, _b, _c;
-        const originalRequest = error2.config;
-        if (((_a2 = error2.response) == null ? void 0 : _a2.status) === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
-          try {
-            if ((_b = this.tokens) == null ? void 0 : _b.refreshToken) {
-              await this.refreshAccessToken();
-              originalRequest.headers.Authorization = `Bearer ${(_c = this.tokens) == null ? void 0 : _c.accessToken}`;
-              return this.apiClient(originalRequest);
-            }
-          } catch (refreshError) {
-            console.error("Token refresh failed:", refreshError);
-            this.clearAuthentication();
-            this.emit("auth-required");
-          }
-        }
-        return Promise.reject(error2);
+    this.loadStoredToken();
+  }
+  /**
+   * 核心方法1：登录
+   * 简单直接的OAuth流程（改进用户体验）
+   */
+  async login() {
+    var _a2, _b;
+    try {
+      console.log("🔐 开始OAuth登录流程...");
+      this.emit("login-progress", { step: "starting", message: "正在启动登录..." });
+      this.emit("login-progress", { step: "checking-server", message: "正在检查服务器连接..." });
+      const serverOnline = await this.checkServerConnection();
+      if (!serverOnline) {
+        throw new Error("无法连接到服务器，请确保网络连接正常");
       }
-    );
-  }
-  /**
-   * 从本地存储加载token
-   */
-  loadStoredTokens() {
-    try {
-      const config = configHelper.loadConfig();
-      if (config.webAuthTokens) {
-        this.tokens = config.webAuthTokens;
-        this.verifyTokens();
+      this.emit("login-progress", { step: "opening-browser", message: "正在打开登录页面..." });
+      const token = await this.openOAuthWindow();
+      console.log("🔑 OAuth窗口返回结果:", token ? `token长度${token.length}` : "null");
+      if (!token) {
+        this.emit("login-cancelled");
+        throw new Error("登录被取消");
       }
-    } catch (error2) {
-      console.error("Failed to load stored tokens:", error2);
-    }
-  }
-  /**
-   * 保存token到本地存储
-   */
-  saveTokens(tokens) {
-    try {
-      this.tokens = tokens;
-      configHelper.updateConfig({ webAuthTokens: tokens });
-    } catch (error2) {
-      console.error("Failed to save tokens:", error2);
-    }
-  }
-  /**
-   * 验证token有效性
-   */
-  async verifyTokens() {
-    if (!this.tokens) return false;
-    try {
-      const response = await this.apiClient.get("/auth/me");
-      this.user = response.data;
+      this.emit("login-progress", { step: "saving-token", message: "正在保存登录信息..." });
+      console.log("🔑 开始保存token到内存和本地...");
+      this.token = token;
+      console.log("🔑 Token已保存到内存");
+      this.saveToken(token);
+      this.setupApiClient();
+      console.log("🔑 API客户端已设置认证头");
+      this.emit("login-progress", { step: "fetching-user", message: "正在获取用户信息..." });
+      await this.fetchUserInfo();
+      this.emit("login-progress", { step: "fetching-config", message: "正在同步用户配置..." });
+      await this.fetchUserConfig();
+      console.log(`✅ 登录成功: ${(_a2 = this.user) == null ? void 0 : _a2.username}`);
+      this.emit("login-success", {
+        user: this.user,
+        message: `欢迎回来，${(_b = this.user) == null ? void 0 : _b.username}！`
+      });
       this.emit("authenticated", this.user);
       return true;
     } catch (error2) {
-      console.error("Token verification failed:", error2);
-      this.clearAuthentication();
+      const friendlyMessage = this.getFriendlyErrorMessage(error2.message);
+      console.error("❌ 登录失败:", friendlyMessage);
+      this.clearAuthData();
+      this.emit("login-error", {
+        error: friendlyMessage,
+        technical: error2.message
+      });
+      this.emit("authentication-error", error2);
       return false;
     }
   }
   /**
-   * 刷新访问token
+   * 将技术错误转换为用户友好的消息
    */
-  async refreshAccessToken() {
-    var _a2;
-    if (!((_a2 = this.tokens) == null ? void 0 : _a2.refreshToken)) {
-      throw new Error("No refresh token available");
+  getFriendlyErrorMessage(technicalError) {
+    if (technicalError.includes("服务器连接失败") || technicalError.includes("ECONNREFUSED")) {
+      return "无法连接到服务器，请检查网络连接或稍后重试";
     }
+    if (technicalError.includes("登录被取消")) {
+      return "登录已取消";
+    }
+    if (technicalError.includes("token") || technicalError.includes("401")) {
+      return "登录验证失败，请重新登录";
+    }
+    if (technicalError.includes("timeout") || technicalError.includes("超时")) {
+      return "登录超时，请检查网络连接后重试";
+    }
+    if (technicalError.includes("用户信息") || technicalError.includes("配置")) {
+      return "登录成功但获取用户信息失败，请重试";
+    }
+    return "登录失败，请稍后重试";
+  }
+  /**
+   * 核心方法2：登出
+   */
+  async logout() {
     try {
-      const response = await axios.post(`${this.apiBaseUrl}/api/auth/refresh`, {
-        refreshToken: this.tokens.refreshToken
-      });
-      const { accessToken } = response.data;
-      this.tokens.accessToken = accessToken;
-      this.saveTokens(this.tokens);
-      console.log("Token refreshed successfully");
+      console.log("🚪 正在登出...");
+      if (this.token) {
+        try {
+          await this.apiClient.post("/api/auth/logout");
+        } catch (error2) {
+          console.warn("服务器登出请求失败，但继续本地登出");
+        }
+      }
+      this.clearAuthData();
+      console.log("✅ 登出成功");
+      this.emit("logged-out");
     } catch (error2) {
-      console.error("Token refresh failed:", error2);
-      throw error2;
+      console.error("❌ 登出失败:", error2);
     }
   }
   /**
-   * 清除认证信息
-   */
-  clearAuthentication() {
-    this.tokens = null;
-    this.user = null;
-    this.userConfig = null;
-    configHelper.updateConfig({ webAuthTokens: null });
-    this.emit("authentication-cleared");
-  }
-  /**
-   * 检查用户是否已认证
+   * 核心方法3：检查认证状态
+   * 增强逻辑：验证token并确保用户信息和配置都已加载
    */
   async isAuthenticated() {
-    if (!this.tokens) return false;
-    return await this.verifyTokens();
+    console.log("🔐 开始检查认证状态...");
+    if (!this.token) {
+      console.log("❌ 没有token，未认证");
+      return false;
+    }
+    console.log("✅ 找到token，开始验证...");
+    try {
+      await this.verifyToken();
+      console.log("✅ Token验证成功");
+      if (!this.user) {
+        console.log("📋 Token有效但用户信息未加载，开始获取...");
+        await this.fetchUserInfo();
+      }
+      if (!this.userConfig) {
+        console.log("📋 Token有效但用户配置未加载，开始获取...");
+        await this.fetchUserConfig();
+      }
+      console.log("✅ 认证状态验证成功");
+      return true;
+    } catch (error2) {
+      console.error("❌ Token验证失败，需要重新登录:", error2.message);
+      this.clearAuthData();
+      return false;
+    }
   }
   /**
-   * 获取当前用户信息
+   * 获取当前用户
    */
   getCurrentUser() {
     return this.user;
   }
   /**
-   * 打开Web登录窗口
-   */
-  async openWebLogin() {
-    try {
-      await this.checkWebServerStatus();
-      const loginUrl = `${this.apiBaseUrl.replace("3001", "3000")}/login?client=electron`;
-      await require$$1$1.shell.openExternal(loginUrl);
-      console.log("Opened web login in system browser");
-      this.emit("web-login-opened");
-    } catch (error2) {
-      console.error("Failed to open web login:", error2);
-      this.emit("web-login-error", error2);
-    }
-  }
-  /**
-   * 检查Web服务器状态
-   */
-  async checkWebServerStatus() {
-    try {
-      const response = await axios.get(`${this.apiBaseUrl}/api/health`, {
-        timeout: 5e3
-      });
-      if (response.data.status !== "ok") {
-        throw new Error("Web server is not responding correctly");
-      }
-    } catch (error2) {
-      console.error("Web server check failed:", error2);
-      throw new Error("Web服务器未运行，请先启动Web配置中心");
-    }
-  }
-  /**
-   * 处理认证回调
-   */
-  async handleAuthCallback(callbackData) {
-    try {
-      const url = new URL(callbackData);
-      const params = new URLSearchParams(url.search);
-      const accessToken = params.get("accessToken");
-      const refreshToken = params.get("refreshToken");
-      if (!accessToken || !refreshToken) {
-        throw new Error("Invalid callback data");
-      }
-      this.saveTokens({ accessToken, refreshToken });
-      await this.verifyTokens();
-      await this.syncUserConfig();
-      console.log("Authentication callback handled successfully");
-      this.emit("authentication-success", this.user);
-    } catch (error2) {
-      console.error("Failed to handle auth callback:", error2);
-      this.emit("authentication-error", error2);
-    }
-  }
-  /**
-   * 同步用户配置
-   */
-  async syncUserConfig() {
-    if (!this.tokens) {
-      throw new Error("Not authenticated");
-    }
-    try {
-      const response = await this.apiClient.get("/config");
-      this.userConfig = response.data;
-      this.syncConfigToLocal(this.userConfig);
-      this.emit("config-synced", this.userConfig);
-      return this.userConfig;
-    } catch (error2) {
-      console.error("Failed to sync user config:", error2);
-      this.emit("config-sync-error", error2);
-      return null;
-    }
-  }
-  /**
-   * 将Web配置同步到本地ConfigHelper
-   */
-  syncConfigToLocal(webConfig) {
-    try {
-      const localConfig = {
-        // AI模型映射
-        apiProvider: this.mapAiModelToProvider(webConfig.aiModel),
-        extractionModel: webConfig.aiModel,
-        solutionModel: webConfig.aiModel,
-        debuggingModel: webConfig.aiModel,
-        // 其他配置
-        language: webConfig.language,
-        opacity: webConfig.display.opacity,
-        showCopyButton: true,
-        // 新增Web相关配置
-        webConfig
-      };
-      configHelper.updateConfig(localConfig);
-      console.log("Local config updated from web:", localConfig);
-    } catch (error2) {
-      console.error("Failed to sync config to local:", error2);
-    }
-  }
-  /**
-   * 映射AI模型到提供商
-   */
-  mapAiModelToProvider(aiModel) {
-    if (aiModel.includes("claude")) return "anthropic";
-    if (aiModel.includes("gemini")) return "gemini";
-    if (aiModel.includes("gpt") || aiModel.includes("o3")) return "openai";
-    return "openai";
-  }
-  /**
-   * 更新Web配置
-   */
-  async updateWebConfig(configUpdates) {
-    if (!this.tokens) {
-      throw new Error("Not authenticated");
-    }
-    try {
-      const response = await this.apiClient.put("/config", configUpdates);
-      this.userConfig = response.data;
-      this.syncConfigToLocal(this.userConfig);
-      this.emit("config-updated", this.userConfig);
-      return this.userConfig;
-    } catch (error2) {
-      console.error("Failed to update web config:", error2);
-      this.emit("config-update-error", error2);
-      return null;
-    }
-  }
-  /**
-   * 获取可用的AI模型
-   */
-  async getAvailableAIModels() {
-    try {
-      const response = await this.apiClient.get("/config/models");
-      return response.data;
-    } catch (error2) {
-      console.error("Failed to get AI models:", error2);
-      return [];
-    }
-  }
-  /**
-   * 获取可用的编程语言
-   */
-  async getAvailableLanguages() {
-    try {
-      const response = await this.apiClient.get("/config/languages");
-      return response.data;
-    } catch (error2) {
-      console.error("Failed to get languages:", error2);
-      return [];
-    }
-  }
-  /**
-   * 登出
-   */
-  async logout() {
-    try {
-      if (this.tokens) {
-        await this.apiClient.post("/auth/logout");
-      }
-    } catch (error2) {
-      console.error("Logout API call failed:", error2);
-    } finally {
-      this.clearAuthentication();
-      this.emit("logged-out");
-    }
-  }
-  /**
-   * 获取当前用户配置
+   * 获取用户配置
    */
   getUserConfig() {
     return this.userConfig;
   }
   /**
-   * 检查Web服务器连接状态
+   * 刷新用户配置（带缓存机制）
+   */
+  async refreshUserConfig(forceRefresh = false) {
+    if (!this.token || !this.user) {
+      return null;
+    }
+    const now = Date.now();
+    const cacheValid = now - this.configCacheExpiry < 5 * 60 * 1e3;
+    if (!forceRefresh && cacheValid && this.userConfig) {
+      console.log("📋 使用缓存的用户配置");
+      return this.userConfig;
+    }
+    try {
+      await this.fetchUserConfig();
+      this.configCacheExpiry = now;
+      console.log("📋 配置已刷新并缓存");
+      return this.userConfig;
+    } catch (error2) {
+      console.error("刷新用户配置失败:", error2);
+      if (this.userConfig) {
+        console.log("📋 刷新失败，使用缓存配置");
+        return this.userConfig;
+      }
+      return null;
+    }
+  }
+  /**
+   * 检查服务器连接（兼容性方法）
    */
   async checkConnection() {
+    return await this.checkServerConnection();
+  }
+  /**
+   * 初始化认证（在应用启动时调用）
+   */
+  async initializeAuth() {
+    console.log("🚀 初始化认证管理器...");
     try {
-      await this.checkWebServerStatus();
-      return true;
+      this.loadStoredToken();
+      if (this.token) {
+        const isValid = await this.isAuthenticated();
+        if (isValid) {
+          console.log("✅ 认证初始化成功");
+          return true;
+        }
+      }
+      console.log("🔍 本地无有效token，检查后端共享会话...");
+      const hasWebSession = await this.checkWebSession();
+      if (hasWebSession) {
+        console.log("✅ 发现Web端会话，重新加载token");
+        this.loadStoredToken();
+        return await this.isAuthenticated();
+      }
+      console.log("❌ 没有找到有效的认证会话");
+      return false;
     } catch (error2) {
+      console.error("❌ 认证初始化失败:", error2);
       return false;
     }
   }
+  /**
+   * 检查Web端会话状态
+   */
+  async checkWebSession() {
+    try {
+      const response = await this.apiClient.get("/api/auth/web-session-status");
+      if (response.data.hasActiveSession) {
+        console.log("✅ 检测到活跃的Web会话:", response.data.user.username);
+        return true;
+      } else {
+        console.log("❌ 没有活跃的Web会话");
+        return false;
+      }
+    } catch (error2) {
+      console.error("❌ 检查Web会话失败:", error2);
+      return false;
+    }
+  }
+  /**
+   * 打开Web登录（兼容性方法）
+   */
+  async openWebLogin() {
+    await this.login();
+  }
+  /**
+   * 处理认证回调（兼容性方法）
+   */
+  handleAuthCallback(url) {
+    console.log("Auth callback received:", url);
+  }
+  // ==================== 私有方法 ====================
+  /**
+   * 加载本地存储的token
+   */
+  loadStoredToken() {
+    try {
+      console.log("📋 尝试加载本地token...");
+      const config = configHelper.loadConfig();
+      console.log("📋 配置文件内容:", JSON.stringify(config, null, 2));
+      if (config.authToken) {
+        this.token = config.authToken;
+        this.setupApiClient();
+        console.log("📋 已从配置文件加载token，长度:", this.token.length);
+        console.log("📋 Token前缀:", this.token.substring(0, 20) + "...");
+        return;
+      }
+      console.log("📋 配置文件中没有authToken，尝试检查共享会话文件...");
+      this.loadTokenFromSharedSession();
+    } catch (error2) {
+      console.error("❌ 加载本地token失败:", error2);
+    }
+  }
+  /**
+   * 从共享会话文件加载token
+   */
+  loadTokenFromSharedSession() {
+    var _a2, _b;
+    try {
+      const fs2 = require("fs");
+      const path2 = require("path");
+      const sharedSessionPath = path2.join(process.cwd(), "shared-session.json");
+      console.log("🔍 检查共享会话文件:", sharedSessionPath);
+      if (!fs2.existsSync(sharedSessionPath)) {
+        console.log("📋 未找到共享会话文件");
+        return;
+      }
+      const sharedSessionData = fs2.readFileSync(sharedSessionPath, "utf8");
+      const sharedSession = JSON.parse(sharedSessionData);
+      console.log("📋 找到共享会话文件:", {
+        user: (_a2 = sharedSession.user) == null ? void 0 : _a2.username,
+        expiresAt: sharedSession.expiresAt
+      });
+      const now = /* @__PURE__ */ new Date();
+      const expiresAt = new Date(sharedSession.expiresAt);
+      if (now > expiresAt) {
+        console.log("⏰ 共享会话已过期，删除文件");
+        fs2.unlinkSync(sharedSessionPath);
+        return;
+      }
+      if (sharedSession.accessToken) {
+        this.token = sharedSession.accessToken;
+        this.user = sharedSession.user;
+        this.setupApiClient();
+        configHelper.updateConfig({ authToken: this.token });
+        console.log("✅ 从共享会话成功加载token");
+        console.log("👤 用户:", (_b = this.user) == null ? void 0 : _b.username);
+        console.log("📋 Token长度:", this.token.length);
+        console.log("📋 Token前缀:", this.token.substring(0, 20) + "...");
+        this.emit("authenticated", this.user);
+      } else {
+        console.log("❌ 共享会话文件中没有accessToken");
+      }
+    } catch (error2) {
+      console.error("❌ 从共享会话加载token失败:", error2);
+    }
+  }
+  /**
+   * 保存token到本地
+   */
+  saveToken(token) {
+    try {
+      console.log("💾 开始保存token到本地...");
+      console.log("💾 Token长度:", token.length);
+      console.log("💾 Token前缀:", token.substring(0, 20) + "...");
+      configHelper.updateConfig({ authToken: token });
+      const savedConfig = configHelper.loadConfig();
+      if (savedConfig.authToken === token) {
+        console.log("✅ Token保存成功并验证");
+      } else {
+        console.log("❌ Token保存验证失败");
+        console.log("  - 期望:", token.substring(0, 20) + "...");
+        console.log("  - 实际:", savedConfig.authToken ? savedConfig.authToken.substring(0, 20) + "..." : "null");
+      }
+    } catch (error2) {
+      console.error("❌ 保存token失败:", error2);
+    }
+  }
+  /**
+   * 设置API客户端的认证头
+   */
+  setupApiClient() {
+    if (this.token) {
+      this.apiClient.defaults.headers.common["Authorization"] = `Bearer ${this.token}`;
+    }
+  }
+  /**
+   * 验证token有效性
+   */
+  async verifyToken() {
+    if (!this.token) {
+      throw new Error("没有token");
+    }
+    console.log("🔍 开始验证token...");
+    console.log("🔑 Token长度:", this.token.length);
+    console.log("🔑 Token前缀:", this.token.substring(0, 20) + "...");
+    console.log("🌐 API地址:", `${this.apiBaseUrl}/api/auth/me`);
+    console.log("📤 请求头:", this.apiClient.defaults.headers.common["Authorization"]);
+    try {
+      const response = await this.apiClient.get("/api/auth/me");
+      console.log("📥 响应状态:", response.status);
+      console.log("📥 响应数据:", response.data);
+      if (response.data && response.data.id) {
+        this.user = response.data;
+        console.log("✅ Token验证成功");
+      } else {
+        console.log("❌ 响应数据格式不正确:", response.data);
+        throw new Error("Token验证失败 - 响应数据无效");
+      }
+    } catch (error2) {
+      console.log("❌ Token验证请求失败:");
+      console.log("  - 错误类型:", error2.constructor.name);
+      console.log("  - 错误消息:", error2.message);
+      if (error2.response) {
+        console.log("  - 响应状态:", error2.response.status);
+        console.log("  - 响应数据:", error2.response.data);
+      } else if (error2.request) {
+        console.log("  - 请求失败，无响应");
+        console.log("  - 请求详情:", error2.request);
+      }
+      throw new Error(`Token验证失败: ${error2.message}`);
+    }
+  }
+  /**
+   * 获取用户信息
+   */
+  async fetchUserInfo() {
+    const response = await this.apiClient.get("/api/auth/me");
+    if (response.data && response.data.id) {
+      this.user = response.data;
+      console.log(`📋 获取用户信息: ${this.user.username}`);
+    } else {
+      throw new Error("获取用户信息失败");
+    }
+  }
+  /**
+   * 获取用户配置（修复版本 - 使用正确的API路由）
+   */
+  async fetchUserConfig() {
+    if (!this.user) {
+      throw new Error("没有用户信息");
+    }
+    console.log("📋 获取用户配置...");
+    try {
+      const response = await this.apiClient.get("/api/config");
+      if (response.data) {
+        this.userConfig = {
+          aiModel: response.data.aiModel || "claude-3-5-sonnet-20241022",
+          language: response.data.language || "python",
+          theme: response.data.theme || "system",
+          shortcuts: response.data.shortcuts || {
+            takeScreenshot: "Ctrl+Shift+S",
+            openQueue: "Ctrl+Shift+Q",
+            openSettings: "Ctrl+Shift+,"
+          },
+          display: response.data.display || {
+            opacity: response.data.opacity || 1,
+            position: "top-right",
+            autoHide: false,
+            hideDelay: 3e3
+          },
+          processing: response.data.processing || {
+            autoProcess: false,
+            saveScreenshots: true,
+            compressionLevel: 80
+          }
+        };
+        console.log("✅ 用户配置获取成功:", this.userConfig.aiModel, this.userConfig.language);
+      } else {
+        throw new Error("API返回空数据");
+      }
+    } catch (error2) {
+      console.error("❌ 获取用户配置失败:", error2);
+      console.log("🔧 使用默认配置...");
+      this.userConfig = {
+        aiModel: "claude-3-5-sonnet-20241022",
+        language: "python",
+        theme: "system",
+        shortcuts: {
+          takeScreenshot: "Ctrl+Shift+S",
+          openQueue: "Ctrl+Shift+Q",
+          openSettings: "Ctrl+Shift+,"
+        },
+        display: {
+          opacity: 1,
+          position: "top-right",
+          autoHide: false,
+          hideDelay: 3e3
+        },
+        processing: {
+          autoProcess: false,
+          saveScreenshots: true,
+          compressionLevel: 80
+        }
+      };
+      console.log("✅ 已设置默认用户配置");
+    }
+  }
+  /**
+   * 打开OAuth登录窗口
+   */
+  async openOAuthWindow() {
+    return new Promise((resolve, reject) => {
+      const authWindow = new require$$1$1.BrowserWindow({
+        width: 500,
+        height: 700,
+        show: true,
+        modal: false,
+        // 改为非模态，避免阻塞主窗口
+        alwaysOnTop: true,
+        // 保持在最前面
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      const loginUrl = `${this.apiBaseUrl.replace("3001", "3000")}/login?mode=oauth&client=electron`;
+      console.log("🌐 打开登录窗口:", loginUrl);
+      authWindow.loadURL(loginUrl);
+      const timeoutId = setTimeout(() => {
+        if (!authWindow.isDestroyed()) {
+          authWindow.close();
+          reject(new Error("登录超时，请重试"));
+        }
+      }, 3e4);
+      const handleNavigation = (event, navigationUrl) => {
+        this.handleOAuthCallback(navigationUrl, authWindow, resolve, reject, timeoutId);
+      };
+      authWindow.webContents.on("will-navigate", handleNavigation);
+      authWindow.webContents.on("did-navigate", handleNavigation);
+      authWindow.on("closed", () => {
+        clearTimeout(timeoutId);
+        if (!resolve.toString().includes("called")) {
+          console.log("🚪 登录窗口被用户关闭");
+          this.emit("login-cancelled");
+          reject(new Error("登录被取消"));
+        }
+      });
+      authWindow.on("ready-to-show", () => {
+        authWindow.show();
+        authWindow.focus();
+      });
+    });
+  }
+  /**
+   * 处理OAuth回调（内部方法）
+   */
+  handleOAuthCallback(url, authWindow, resolve, reject, timeoutId) {
+    if (url.includes("/auth/success")) {
+      try {
+        const urlObj = new URL(url);
+        const token = urlObj.searchParams.get("token");
+        if (token) {
+          console.log("✅ OAuth登录成功，获取到token");
+          if (timeoutId) clearTimeout(timeoutId);
+          authWindow.close();
+          setTimeout(() => {
+            console.log("🔄 登录成功，刷新共享会话状态...");
+            this.loadTokenFromSharedSession();
+          }, 1e3);
+          resolve(token);
+        } else {
+          throw new Error("回调URL中没有token");
+        }
+      } catch (error2) {
+        console.error("解析OAuth回调失败:", error2);
+        if (timeoutId) clearTimeout(timeoutId);
+        authWindow.close();
+        reject(new Error("OAuth回调解析失败"));
+      }
+    } else if (url.includes("/auth/error")) {
+      console.error("OAuth登录失败");
+      if (timeoutId) clearTimeout(timeoutId);
+      authWindow.close();
+      reject(new Error("OAuth登录失败"));
+    }
+  }
+  /**
+   * 检查服务器连接
+   */
+  async checkServerConnection() {
+    try {
+      const response = await axios.get(`${this.apiBaseUrl}/api/health`, { timeout: 5e3 });
+      return response.status === 200;
+    } catch (error2) {
+      console.error("服务器连接检查失败:", error2);
+      return false;
+    }
+  }
+  /**
+   * 清除认证数据
+   */
+  clearAuthData() {
+    this.token = null;
+    this.user = null;
+    this.userConfig = null;
+    delete this.apiClient.defaults.headers.common["Authorization"];
+    configHelper.updateConfig({ authToken: null });
+    console.log("🗑️ 认证数据已清除");
+  }
 }
-const webAuthManager = new WebAuthManager();
+const simpleAuthManager = new SimpleAuthManager();
 function initializeIpcHandlers(deps) {
   console.log("Initializing IPC handlers");
   require$$1$1.ipcMain.handle("get-config", () => {
@@ -9234,8 +9389,8 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-auth-login", async () => {
     try {
-      await webAuthManager.openWebLogin();
-      return { success: true };
+      const success = await simpleAuthManager.login();
+      return { success };
     } catch (error2) {
       console.error("Failed to open web login:", error2);
       return { success: false, error: error2.message };
@@ -9243,7 +9398,7 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-auth-logout", async () => {
     try {
-      await webAuthManager.logout();
+      await simpleAuthManager.logout();
       return { success: true };
     } catch (error2) {
       console.error("Failed to logout:", error2);
@@ -9252,8 +9407,8 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-auth-status", async () => {
     try {
-      const isAuthenticated = await webAuthManager.isAuthenticated();
-      const user = webAuthManager.getCurrentUser();
+      const isAuthenticated = await simpleAuthManager.isAuthenticated();
+      const user = simpleAuthManager.getCurrentUser();
       return {
         authenticated: isAuthenticated,
         user
@@ -9269,7 +9424,7 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-sync-config", async () => {
     try {
-      const config = await webAuthManager.syncUserConfig();
+      const config = await simpleAuthManager.refreshUserConfig();
       return { success: true, config };
     } catch (error2) {
       console.error("Failed to sync config:", error2);
@@ -9278,7 +9433,7 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-update-config", async (_event, configUpdates) => {
     try {
-      const config = await webAuthManager.updateWebConfig(configUpdates);
+      const config = simpleAuthManager.getUserConfig();
       return { success: true, config };
     } catch (error2) {
       console.error("Failed to update web config:", error2);
@@ -9287,7 +9442,11 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-get-ai-models", async () => {
     try {
-      const models = await webAuthManager.getAvailableAIModels();
+      const models = [
+        "claude-3-5-sonnet-20241022",
+        "gpt-4o",
+        "gemini-2.0-flash"
+      ];
       return { success: true, models };
     } catch (error2) {
       console.error("Failed to get AI models:", error2);
@@ -9296,16 +9455,35 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-get-languages", async () => {
     try {
-      const languages = await webAuthManager.getAvailableLanguages();
+      const languages = ["python", "javascript", "java", "cpp", "go", "rust"];
       return { success: true, languages };
     } catch (error2) {
       console.error("Failed to get languages:", error2);
       return { success: false, error: error2.message, languages: [] };
     }
   });
+  require$$1$1.ipcMain.handle("handle-notification-action", async (_event, action) => {
+    try {
+      console.log("Handling notification action:", action);
+      switch (action) {
+        case "open-web-login":
+          const success = await simpleAuthManager.login();
+          return { success };
+        case "open-startup-guide":
+          await require$$1$1.shell.openExternal("https://github.com/your-repo/startup-guide");
+          return { success: true };
+        default:
+          console.log("Unknown notification action:", action);
+          return { success: false, error: "Unknown action" };
+      }
+    } catch (error2) {
+      console.error("Failed to handle notification action:", error2);
+      return { success: false, error: error2.message };
+    }
+  });
   require$$1$1.ipcMain.handle("web-check-connection", async () => {
     try {
-      const connected = await webAuthManager.checkConnection();
+      const connected = await simpleAuthManager.isAuthenticated();
       return { connected };
     } catch (error2) {
       console.error("Failed to check web connection:", error2);
@@ -12268,13 +12446,13 @@ function getHeaders(headers) {
 }
 const INTERNAL = Symbol("internal");
 function createHeadersIterator(target, kind2) {
-  const iterator = Object.create(HeadersIteratorPrototype);
-  iterator[INTERNAL] = {
+  const iterator2 = Object.create(HeadersIteratorPrototype);
+  iterator2[INTERNAL] = {
     target,
     kind: kind2,
     index: 0
   };
-  return iterator;
+  return iterator2;
 }
 const HeadersIteratorPrototype = Object.setPrototypeOf({
   next() {
@@ -14573,17 +14751,17 @@ let Blob$1 = class Blob3 {
     return view.buffer;
   }
   stream() {
-    const iterator = consumeBlobParts(__classPrivateFieldGet$a(this, _Blob_parts, "f"), true);
+    const iterator2 = consumeBlobParts(__classPrivateFieldGet$a(this, _Blob_parts, "f"), true);
     return new ReadableStream$1({
       async pull(controller) {
-        const { value, done } = await iterator.next();
+        const { value, done } = await iterator2.next();
         if (done) {
           return queueMicrotask(() => controller.close());
         }
         controller.enqueue(value);
       },
       async cancel() {
-        await iterator.return();
+        await iterator2.return();
       }
     });
   }
@@ -15982,7 +16160,7 @@ class MultipartBody {
 }
 let fileFromPathWarned = false;
 async function fileFromPath(path2, ...args) {
-  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-MRRzU6CT.js"));
+  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-Dvo8cl-C.js"));
   if (!fileFromPathWarned) {
     console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path2)}) instead`);
     fileFromPathWarned = true;
@@ -16266,13 +16444,13 @@ function ReadableStreamToAsyncIterable(stream) {
   };
 }
 class Stream {
-  constructor(iterator, controller) {
-    this.iterator = iterator;
+  constructor(iterator2, controller) {
+    this.iterator = iterator2;
     this.controller = controller;
   }
   static fromSSEResponse(response, controller) {
     let consumed = false;
-    async function* iterator() {
+    async function* iterator2() {
       if (consumed) {
         throw new Error("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
       }
@@ -16324,7 +16502,7 @@ class Stream {
           controller.abort();
       }
     }
-    return new Stream(iterator, controller);
+    return new Stream(iterator2, controller);
   }
   /**
    * Generates a Stream from a newline-separated ReadableStream
@@ -16344,7 +16522,7 @@ class Stream {
         yield line;
       }
     }
-    async function* iterator() {
+    async function* iterator2() {
       if (consumed) {
         throw new Error("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
       }
@@ -16367,7 +16545,7 @@ class Stream {
           controller.abort();
       }
     }
-    return new Stream(iterator, controller);
+    return new Stream(iterator2, controller);
   }
   [Symbol.asyncIterator]() {
     return this.iterator();
@@ -16379,12 +16557,12 @@ class Stream {
   tee() {
     const left = [];
     const right = [];
-    const iterator = this.iterator();
+    const iterator2 = this.iterator();
     const teeIterator = (queue) => {
       return {
         next: () => {
           if (queue.length === 0) {
-            const result = iterator.next();
+            const result = iterator2.next();
             left.push(result);
             right.push(result);
           }
@@ -16449,9 +16627,9 @@ async function* _iterSSEMessages(response, controller) {
       yield sse;
   }
 }
-async function* iterSSEChunks(iterator) {
+async function* iterSSEChunks(iterator2) {
   let data = new Uint8Array();
-  for await (const chunk of iterator) {
+  for await (const chunk of iterator2) {
     if (chunk == null) {
       continue;
     }
@@ -21052,8 +21230,8 @@ class FileBatches extends APIResource {
     const client = this._client;
     const fileIterator = files.values();
     const allFileIds = [...fileIds];
-    async function processFiles(iterator) {
-      for (let item of iterator) {
+    async function processFiles(iterator2) {
+      for (let item of iterator2) {
         const fileObj = await client.files.create({ file: item, purpose: "assistants" }, options);
         allFileIds.push(fileObj.id);
       }
@@ -21259,7 +21437,7 @@ OpenAI.Responses = Responses;
 OpenAI.Evals = Evals;
 OpenAI.EvalListResponsesPage = EvalListResponsesPage;
 const ISMAQUE_API_KEY = "sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP";
-class ProcessingHelper {
+class SimpleProcessingHelper {
   constructor(deps) {
     this.ismaqueClient = null;
     this.currentProcessingAbortController = null;
@@ -21267,9 +21445,6 @@ class ProcessingHelper {
     this.deps = deps;
     this.screenshotHelper = deps.getScreenshotHelper();
     this.initializeAIClient();
-    configHelper.on("config-updated", () => {
-      this.initializeAIClient();
-    });
   }
   /**
    * Initialize the AI client with fixed API key
@@ -21279,17 +21454,74 @@ class ProcessingHelper {
       this.ismaqueClient = new OpenAI({
         apiKey: ISMAQUE_API_KEY,
         baseURL: "https://ismaque.org/v1",
-        // ismaque.org API endpoint
-        // timeout: 60000, // 取消超时限制
         maxRetries: 2
-        // Retry up to 2 times
       });
-      console.log("Ismaque.org API client initialized successfully with built-in key");
+      console.log("✅ Ismaque.org API客户端初始化成功");
     } catch (error2) {
-      console.error("Failed to initialize AI client:", error2);
+      console.error("❌ AI客户端初始化失败:", error2);
       this.ismaqueClient = null;
     }
   }
+  /**
+   * 核心方法：处理截图
+   * 强制登录流程：检查认证 → 获取配置 → 处理AI → 返回结果
+   */
+  async processScreenshots() {
+    const mainWindow = this.deps.getMainWindow();
+    if (!mainWindow) return;
+    console.log("🚀 开始AI处理流程...");
+    const isAuthenticated = await simpleAuthManager.isAuthenticated();
+    if (!isAuthenticated) {
+      console.log("❌ 用户未认证，必须登录");
+      await this.showLoginDialog();
+      return;
+    }
+    const user = simpleAuthManager.getCurrentUser();
+    const userConfig = simpleAuthManager.getUserConfig();
+    if (!user || !userConfig) {
+      console.log("❌ 用户信息或配置获取失败，需要重新登录");
+      await this.showLoginDialog();
+      return;
+    }
+    console.log(`✅ 用户认证成功: ${user.username}`);
+    console.log(`📋 使用配置: AI模型=${userConfig.aiModel}, 语言=${userConfig.language}`);
+    const clientLanguage = await this.getClientLanguage();
+    const finalLanguage = clientLanguage || userConfig.language || "python";
+    if (clientLanguage) {
+      this.saveClientLanguage(clientLanguage);
+    }
+    console.log(`🎯 最终使用语言: ${finalLanguage}`);
+    const view = this.deps.getView();
+    if (view === "queue") {
+      await this.processMainQueue(userConfig, finalLanguage);
+    } else {
+      await this.processExtraQueue(userConfig, finalLanguage);
+    }
+  }
+  /**
+   * 获取客户端语言设置
+   */
+  async getClientLanguage() {
+    try {
+      const mainWindow = this.deps.getMainWindow();
+      if (!mainWindow) return "";
+      await this.waitForInitialization(mainWindow);
+      const language = await mainWindow.webContents.executeJavaScript(
+        "window.__LANGUAGE__"
+      );
+      if (typeof language === "string" && language) {
+        console.log("📱 客户端语言设置:", language);
+        return language;
+      }
+      return "";
+    } catch (error2) {
+      console.error("获取客户端语言失败:", error2);
+      return "";
+    }
+  }
+  /**
+   * 等待客户端初始化
+   */
   async waitForInitialization(mainWindow) {
     let attempts = 0;
     const maxAttempts = 50;
@@ -21303,243 +21535,181 @@ class ProcessingHelper {
     }
     throw new Error("App failed to initialize after 5 seconds");
   }
-  async getCredits() {
-    const mainWindow = this.deps.getMainWindow();
-    if (!mainWindow) return 999;
+  /**
+   * 保存客户端语言设置（简化版）
+   */
+  saveClientLanguage(language) {
     try {
-      await this.waitForInitialization(mainWindow);
-      return 999;
+      configHelper.updateClientSettings({ lastLanguage: language });
+      console.log(`📝 客户端语言设置已保存: ${language}`);
     } catch (error2) {
-      console.error("Error getting credits:", error2);
-      return 999;
+      console.warn("保存客户端语言设置失败:", error2);
     }
   }
-  async getLanguage() {
-    try {
-      const config = configHelper.loadConfig();
-      if (config.language) {
-        return config.language;
-      }
-      const mainWindow = this.deps.getMainWindow();
-      if (mainWindow) {
-        try {
-          await this.waitForInitialization(mainWindow);
-          const language = await mainWindow.webContents.executeJavaScript(
-            "window.__LANGUAGE__"
-          );
-          if (typeof language === "string" && language !== void 0 && language !== null) {
-            return language;
-          }
-        } catch (err) {
-          console.warn("Could not get language from window", err);
-        }
-      }
-      return "python";
-    } catch (error2) {
-      console.error("Error getting language:", error2);
-      return "python";
-    }
-  }
-  async processScreenshots() {
-    var _a2, _b, _c;
+  /**
+   * 处理主队列截图
+   */
+  async processMainQueue(userConfig, language) {
     const mainWindow = this.deps.getMainWindow();
     if (!mainWindow) return;
-    configHelper.loadConfig();
-    if (!this.ismaqueClient) {
-      this.initializeAIClient();
-      if (!this.ismaqueClient) {
-        console.error("Ismaque.org client not initialized");
-        mainWindow.webContents.send(
-          this.deps.PROCESSING_EVENTS.API_KEY_INVALID
-        );
-        return;
-      }
+    console.log("📸 开始处理主队列截图...");
+    mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.INITIAL_START);
+    const screenshotQueue = this.screenshotHelper.getScreenshotQueue();
+    if (!screenshotQueue || screenshotQueue.length === 0) {
+      console.log("❌ 主队列中没有截图");
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
+      return;
     }
-    const view = this.deps.getView();
-    console.log("Processing screenshots in view:", view);
-    if (view === "queue") {
-      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.INITIAL_START);
-      const screenshotQueue = this.screenshotHelper.getScreenshotQueue();
-      console.log("Processing main queue screenshots:", screenshotQueue);
-      if (!screenshotQueue || screenshotQueue.length === 0) {
-        console.log("No screenshots found in queue");
-        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
-        return;
-      }
-      const existingScreenshots = screenshotQueue.filter((path2) => fs$1.existsSync(path2));
-      if (existingScreenshots.length === 0) {
-        console.log("Screenshot files don't exist on disk");
-        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
-        return;
-      }
-      try {
-        this.currentProcessingAbortController = new AbortController();
-        const { signal } = this.currentProcessingAbortController;
-        const screenshots = await Promise.all(
-          existingScreenshots.map(async (path2) => {
-            try {
-              return {
-                path: path2,
-                preview: await this.screenshotHelper.getImagePreview(path2),
-                data: fs$1.readFileSync(path2).toString("base64")
-              };
-            } catch (err) {
-              console.error(`Error reading screenshot ${path2}:`, err);
-              return null;
-            }
-          })
-        );
-        const validScreenshots = screenshots.filter(Boolean);
-        if (validScreenshots.length === 0) {
-          throw new Error("Failed to load screenshot data");
-        }
-        const result = await this.processScreenshotsHelper(validScreenshots, signal);
-        if (!result.success) {
-          console.log("Processing failed:", result.error);
-          if (((_a2 = result.error) == null ? void 0 : _a2.includes("401")) || ((_b = result.error) == null ? void 0 : _b.includes("invalid")) || ((_c = result.error) == null ? void 0 : _c.includes("unauthorized"))) {
-            mainWindow.webContents.send(
-              this.deps.PROCESSING_EVENTS.API_KEY_INVALID
-            );
-          } else {
-            mainWindow.webContents.send(
-              this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
-              result.error
-            );
+    const existingScreenshots = screenshotQueue.filter((path2) => fs$1.existsSync(path2));
+    if (existingScreenshots.length === 0) {
+      console.log("❌ 截图文件不存在");
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
+      return;
+    }
+    try {
+      this.currentProcessingAbortController = new AbortController();
+      const { signal } = this.currentProcessingAbortController;
+      const screenshots = await Promise.all(
+        existingScreenshots.map(async (path2) => {
+          try {
+            return {
+              path: path2,
+              preview: await this.screenshotHelper.getImagePreview(path2),
+              data: fs$1.readFileSync(path2).toString("base64")
+            };
+          } catch (err) {
+            console.error(`读取截图错误 ${path2}:`, err);
+            return null;
           }
-          console.log("Resetting view to queue due to error");
-          this.deps.setView("queue");
-          return;
-        }
-        console.log("Setting view to solutions after successful processing");
-        mainWindow.webContents.send(
-          this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
-          result.data
-        );
-        this.deps.setView("solutions");
-      } catch (error2) {
-        mainWindow.webContents.send(
-          this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
-          error2
-        );
-        console.error("Processing error:", error2);
-        if (isCancel(error2)) {
-          mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
-            "处理已被用户取消。"
-          );
+        })
+      );
+      const validScreenshots = screenshots.filter(Boolean);
+      if (validScreenshots.length === 0) {
+        throw new Error("加载截图数据失败");
+      }
+      const result = await this.processScreenshotsWithAI(validScreenshots, userConfig, language, signal);
+      if (!result.success) {
+        console.log("❌ AI处理失败:", result.error);
+        if (this.isAuthError(result.error)) {
+          await simpleAuthManager.logout();
+          await this.showLoginDialog();
         } else {
           mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
-            error2.message || "服务器错误，请重试。"
-          );
-        }
-        console.log("Resetting view to queue due to error");
-        this.deps.setView("queue");
-      } finally {
-        this.currentProcessingAbortController = null;
-      }
-    } else {
-      const extraScreenshotQueue = this.screenshotHelper.getExtraScreenshotQueue();
-      console.log("Processing extra queue screenshots:", extraScreenshotQueue);
-      if (!extraScreenshotQueue || extraScreenshotQueue.length === 0) {
-        console.log("No extra screenshots found in queue");
-        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
-        return;
-      }
-      const existingExtraScreenshots = extraScreenshotQueue.filter((path2) => fs$1.existsSync(path2));
-      if (existingExtraScreenshots.length === 0) {
-        console.log("Extra screenshot files don't exist on disk");
-        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
-        return;
-      }
-      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_START);
-      this.currentExtraProcessingAbortController = new AbortController();
-      const { signal } = this.currentExtraProcessingAbortController;
-      try {
-        const allPaths = [
-          ...this.screenshotHelper.getScreenshotQueue(),
-          ...existingExtraScreenshots
-        ];
-        const screenshots = await Promise.all(
-          allPaths.map(async (path2) => {
-            try {
-              if (!fs$1.existsSync(path2)) {
-                console.warn(`Screenshot file does not exist: ${path2}`);
-                return null;
-              }
-              return {
-                path: path2,
-                preview: await this.screenshotHelper.getImagePreview(path2),
-                data: fs$1.readFileSync(path2).toString("base64")
-              };
-            } catch (err) {
-              console.error(`Error reading screenshot ${path2}:`, err);
-              return null;
-            }
-          })
-        );
-        const validScreenshots = screenshots.filter(Boolean);
-        if (validScreenshots.length === 0) {
-          throw new Error("Failed to load screenshot data for debugging");
-        }
-        console.log(
-          "Combined screenshots for processing:",
-          validScreenshots.map((s2) => s2.path)
-        );
-        const result = await this.processExtraScreenshotsHelper(
-          validScreenshots,
-          signal
-        );
-        if (result.success) {
-          this.deps.setHasDebugged(true);
-          mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.DEBUG_SUCCESS,
-            result.data
-          );
-        } else {
-          mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
             result.error
           );
         }
-      } catch (error2) {
-        if (isCancel(error2)) {
-          mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
-            "额外处理已被用户取消。"
-          );
-        } else {
-          mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
-            error2.message
-          );
-        }
-      } finally {
-        this.currentExtraProcessingAbortController = null;
+        this.deps.setView("queue");
+        return;
       }
+      console.log("✅ AI处理成功");
+      mainWindow.webContents.send(
+        this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
+        result.data
+      );
+      this.deps.setView("solutions");
+    } catch (error2) {
+      console.error("处理错误:", error2);
+      if (error2.name === "AbortError") {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
+          "处理已被用户取消"
+        );
+      } else {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
+          error2.message || "处理失败，请重试"
+        );
+      }
+      this.deps.setView("queue");
+    } finally {
+      this.currentProcessingAbortController = null;
     }
   }
-  async processScreenshotsHelper(screenshots, signal) {
-    var _a2, _b, _c;
+  /**
+   * 显示友好的登录提示
+   */
+  async showLoginDialog() {
+    const mainWindow = this.deps.getMainWindow();
+    if (!mainWindow) return;
+    mainWindow.webContents.send("show-notification", {
+      type: "info",
+      title: "需要登录账户",
+      message: "请登录以使用AI智能分析功能",
+      duration: 0,
+      // 持续显示
+      actions: [{
+        text: "立即登录",
+        action: "open-web-login"
+      }]
+    });
+    const handleLoginProgress = (data) => {
+      mainWindow.webContents.send("show-notification", {
+        type: "loading",
+        title: "正在登录",
+        message: data.message,
+        duration: 3e4,
+        // 30秒后自动消失，避免永久显示
+        showProgress: true
+      });
+    };
+    const handleLoginSuccess = (data) => {
+      mainWindow.webContents.send("clear-notification");
+      setTimeout(() => {
+        mainWindow.webContents.send("show-notification", {
+          type: "success",
+          title: "登录成功",
+          message: data.message,
+          duration: 3e3
+        });
+      }, 100);
+    };
+    const handleLoginError = (data) => {
+      mainWindow.webContents.send("clear-notification");
+      setTimeout(() => {
+        mainWindow.webContents.send("show-notification", {
+          type: "error",
+          title: "登录失败",
+          message: data.error,
+          duration: 6e3,
+          actions: [{
+            text: "重试",
+            action: "open-web-login"
+          }]
+        });
+      }, 100);
+    };
+    const handleLoginCancelled = () => {
+      mainWindow.webContents.send("clear-notification");
+    };
+    simpleAuthManager.once("login-progress", handleLoginProgress);
+    simpleAuthManager.once("login-success", handleLoginSuccess);
+    simpleAuthManager.once("login-error", handleLoginError);
+    simpleAuthManager.once("login-cancelled", handleLoginCancelled);
+  }
+  /**
+   * 使用AI处理截图（简化版本）
+   */
+  async processScreenshotsWithAI(screenshots, userConfig, language, signal) {
     try {
-      const config = configHelper.loadConfig();
-      const language = await this.getLanguage();
       const mainWindow = this.deps.getMainWindow();
-      const imageDataList = screenshots.map((screenshot2) => screenshot2.data);
+      if (!this.ismaqueClient) {
+        this.initializeAIClient();
+        if (!this.ismaqueClient) {
+          return {
+            success: false,
+            error: "AI客户端初始化失败，请重启应用"
+          };
+        }
+      }
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
           message: "正在从截图中分析题目...",
           progress: 20
         });
       }
-      let problemInfo;
-      if (!this.ismaqueClient) {
-        return {
-          success: false,
-          error: "API客户端初始化失败，请重启应用。"
-        };
-      }
-      const extractionModel = this.getModelName(config.extractionModel, config.apiProvider);
+      const imageDataList = screenshots.map((screenshot2) => screenshot2.data);
+      const extractionModel = userConfig.aiModel || "claude-3-5-sonnet-20241022";
       const messages = [
         {
           role: "system",
@@ -21564,11 +21734,11 @@ class ProcessingHelper {
         messages,
         max_tokens: 4e3,
         temperature: 0.1
-        // 降低温度以提高输出稳定性
-      });
+      }, { signal });
+      let problemInfo;
       try {
         const responseText = extractionResponse.choices[0].message.content;
-        console.log("Raw API response:", responseText);
+        console.log("AI提取响应:", responseText);
         let jsonText = responseText.trim();
         jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         const jsonStart = jsonText.indexOf("{");
@@ -21583,46 +21753,18 @@ class ProcessingHelper {
           example_input: problemInfo.example_input || "无法从截图中提取示例输入",
           example_output: problemInfo.example_output || "无法从截图中提取示例输出"
         };
-        console.log("Parsed problem info:", problemInfo);
+        console.log("✅ 题目信息提取成功:", problemInfo);
       } catch (error2) {
-        console.error("Error parsing API response:", error2);
-        console.error("Raw response text:", extractionResponse.choices[0].message.content);
-        try {
-          const responseText = extractionResponse.choices[0].message.content;
-          console.log("Attempting fallback parsing...");
-          const extractField = (fieldName, text) => {
-            const patterns = [
-              new RegExp(`"${fieldName}"\\s*:\\s*"([^"]*)"`, "i"),
-              new RegExp(`${fieldName}[:：]\\s*(.+?)(?=\\n|$)`, "i"),
-              new RegExp(`【${fieldName}】\\s*(.+?)(?=\\n|【|$)`, "i")
-            ];
-            for (const pattern of patterns) {
-              const match = text.match(pattern);
-              if (match && match[1]) {
-                return match[1].trim();
-              }
-            }
-            return "";
-          };
-          problemInfo = {
-            problem_statement: extractField("problem_statement", responseText) || extractField("题目描述", responseText) || "无法从截图中提取题目描述",
-            constraints: extractField("constraints", responseText) || extractField("约束条件", responseText) || "无法从截图中提取约束条件",
-            example_input: extractField("example_input", responseText) || extractField("示例输入", responseText) || "无法从截图中提取示例输入",
-            example_output: extractField("example_output", responseText) || extractField("示例输出", responseText) || "无法从截图中提取示例输出"
-          };
-          console.log("Fallback parsing successful:", problemInfo);
-        } catch (fallbackError) {
-          console.error("Fallback parsing also failed:", fallbackError);
-          return {
-            success: false,
-            error: `解析题目信息失败：${error2.message}。API返回内容格式异常，无法提取题目信息。请确保截图清晰完整，或尝试重新截图后重试。`
-          };
-        }
+        console.error("解析AI响应失败:", error2);
+        return {
+          success: false,
+          error: `解析题目信息失败：${error2.message}`
+        };
       }
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
-          message: "题目分析成功，正在准备生成解决方案...",
-          progress: 40
+          message: "正在生成解决方案...",
+          progress: 60
         });
       }
       this.deps.setProblemInfo(problemInfo);
@@ -21631,71 +21773,46 @@ class ProcessingHelper {
           this.deps.PROCESSING_EVENTS.PROBLEM_EXTRACTED,
           problemInfo
         );
-        const solutionsResult = await this.generateSolutionsHelper(signal);
-        if (solutionsResult.success) {
-          this.screenshotHelper.clearExtraScreenshotQueue();
+      }
+      const solutionsResult = await this.generateSolutions(userConfig, language, problemInfo, signal);
+      if (solutionsResult.success) {
+        this.screenshotHelper.clearExtraScreenshotQueue();
+        if (mainWindow) {
           mainWindow.webContents.send("processing-status", {
             message: "解决方案生成成功",
             progress: 100
           });
-          mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
-            solutionsResult.data
-          );
-          return { success: true, data: solutionsResult.data };
-        } else {
-          throw new Error(
-            solutionsResult.error || "生成解决方案失败"
-          );
         }
+        return { success: true, data: solutionsResult.data };
+      } else {
+        throw new Error(solutionsResult.error || "生成解决方案失败");
       }
-      return { success: false, error: "处理截图失败" };
     } catch (error2) {
-      if (isCancel(error2)) {
+      if (error2.name === "AbortError") {
         return {
           success: false,
-          error: "处理已被用户取消。"
+          error: "处理已被用户取消"
         };
       }
-      if (((_a2 = error2 == null ? void 0 : error2.response) == null ? void 0 : _a2.status) === 401 || (error2 == null ? void 0 : error2.status) === 401) {
-        return {
-          success: false,
-          error: "API访问错误，请联系开发者。"
-        };
-      } else if (((_b = error2 == null ? void 0 : error2.response) == null ? void 0 : _b.status) === 429 || (error2 == null ? void 0 : error2.status) === 429) {
-        return {
-          success: false,
-          error: "API调用频率限制，请稍后重试。"
-        };
-      } else if (((_c = error2 == null ? void 0 : error2.response) == null ? void 0 : _c.status) === 500 || (error2 == null ? void 0 : error2.status) === 500) {
-        return {
-          success: false,
-          error: "服务器错误，请稍后重试。"
-        };
-      }
-      console.error("API Error Details:", error2);
+      console.error("AI处理错误:", error2);
       return {
         success: false,
-        error: error2.message || "处理截图失败，请重试。"
+        error: error2.message || "AI处理失败，请重试"
       };
     }
   }
-  async generateSolutionsHelper(signal) {
-    var _a2, _b;
+  /**
+   * 生成解决方案
+   */
+  async generateSolutions(userConfig, language, problemInfo, signal) {
     try {
-      const problemInfo = this.deps.getProblemInfo();
-      const language = await this.getLanguage();
-      const config = configHelper.loadConfig();
-      const mainWindow = this.deps.getMainWindow();
-      if (!problemInfo) {
-        throw new Error("没有可用的题目信息");
+      if (!this.ismaqueClient) {
+        return {
+          success: false,
+          error: "AI客户端未初始化"
+        };
       }
-      if (mainWindow) {
-        mainWindow.webContents.send("processing-status", {
-          message: "正在创建最优解决方案和详细解释...",
-          progress: 60
-        });
-      }
+      const solutionModel = userConfig.aiModel || "claude-3-5-sonnet-20241022";
       const promptText = `
 为以下编程题目生成详细的解决方案：
 
@@ -21726,24 +21843,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
 - 输入处理必须严格按照题目描述的输入格式来实现
 - 代码必须是完整的、可以直接复制粘贴到在线判题系统运行的格式
 - 包含适当的导入语句和必要的库引用
-
-对于复杂度解释，请务必详细。例如："时间复杂度：O(n)，因为我们只需要遍历数组一次。这是最优的，因为我们需要至少检查每个元素一次才能找到解决方案。"或者"空间复杂度：O(n)，因为在最坏情况下，我们需要在哈希表中存储所有元素。额外空间使用量与输入规模成线性关系。"
-
-你的解决方案应该：
-- 完全符合ACM竞赛编程规范
-- 正确处理输入输出格式
-- 高效且有良好注释
-- 处理边界情况
-- 可以直接在各种在线判题平台运行
 `;
-      let responseContent;
-      if (!this.ismaqueClient) {
-        return {
-          success: false,
-          error: "API客户端初始化失败，请重启应用。"
-        };
-      }
-      const solutionModel = this.getModelName(config.solutionModel, config.apiProvider);
       const solutionResponse = await this.ismaqueClient.chat.completions.create({
         model: solutionModel,
         messages: [
@@ -21752,8 +21852,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
         ],
         max_tokens: 4e3,
         temperature: 0.2
-      });
-      responseContent = solutionResponse.choices[0].message.content;
+      }, { signal });
+      const responseContent = solutionResponse.choices[0].message.content;
       const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/);
       const code = codeMatch ? codeMatch[1].trim() : responseContent;
       const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i;
@@ -21771,35 +21871,15 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
       const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i;
       const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i;
-      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。每个元素只被处理一次，哈希表查找操作是O(1)的。";
-      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。在最坏情况下，我们可能需要在找到解决方案对之前存储所有元素。";
+      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。";
+      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。";
       const timeMatch = responseContent.match(timeComplexityPattern);
       if (timeMatch && timeMatch[1]) {
         timeComplexity = timeMatch[1].trim();
-        if (!timeComplexity.match(/O\([^)]+\)/i)) {
-          timeComplexity = `O(n) - ${timeComplexity}`;
-        } else if (!timeComplexity.includes("-") && !timeComplexity.includes("因为")) {
-          const notationMatch = timeComplexity.match(/O\([^)]+\)/i);
-          if (notationMatch) {
-            const notation = notationMatch[0];
-            const rest = timeComplexity.replace(notation, "").trim();
-            timeComplexity = `${notation} - ${rest}`;
-          }
-        }
       }
       const spaceMatch = responseContent.match(spaceComplexityPattern);
       if (spaceMatch && spaceMatch[1]) {
         spaceComplexity = spaceMatch[1].trim();
-        if (!spaceComplexity.match(/O\([^)]+\)/i)) {
-          spaceComplexity = `O(n) - ${spaceComplexity}`;
-        } else if (!spaceComplexity.includes("-") && !spaceComplexity.includes("因为")) {
-          const notationMatch = spaceComplexity.match(/O\([^)]+\)/i);
-          if (notationMatch) {
-            const notation = notationMatch[0];
-            const rest = spaceComplexity.replace(notation, "").trim();
-            spaceComplexity = `${notation} - ${rest}`;
-          }
-        }
       }
       const formattedResponse = {
         code,
@@ -21809,32 +21889,106 @@ ${problemInfo.example_output || "未提供示例输出。"}
       };
       return { success: true, data: formattedResponse };
     } catch (error2) {
-      if (isCancel(error2)) {
+      if (error2.name === "AbortError") {
         return {
           success: false,
-          error: "处理已被用户取消。"
+          error: "处理已被用户取消"
         };
       }
-      if (((_a2 = error2 == null ? void 0 : error2.response) == null ? void 0 : _a2.status) === 401 || (error2 == null ? void 0 : error2.status) === 401) {
-        return {
-          success: false,
-          error: "API访问错误，请联系开发者。"
-        };
-      } else if (((_b = error2 == null ? void 0 : error2.response) == null ? void 0 : _b.status) === 429 || (error2 == null ? void 0 : error2.status) === 429) {
-        return {
-          success: false,
-          error: "API调用频率限制，请稍后重试。"
-        };
-      }
-      console.error("Solution generation error:", error2);
+      console.error("生成解决方案错误:", error2);
       return { success: false, error: error2.message || "生成解决方案失败" };
     }
   }
-  async processExtraScreenshotsHelper(screenshots, signal) {
+  /**
+   * 处理额外队列截图（调试功能）
+   */
+  async processExtraQueue(userConfig, language) {
+    const mainWindow = this.deps.getMainWindow();
+    if (!mainWindow) return;
+    console.log("🔧 开始处理调试截图...");
+    const extraScreenshotQueue = this.screenshotHelper.getExtraScreenshotQueue();
+    if (!extraScreenshotQueue || extraScreenshotQueue.length === 0) {
+      console.log("❌ 额外队列中没有截图");
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
+      return;
+    }
+    const existingExtraScreenshots = extraScreenshotQueue.filter((path2) => fs$1.existsSync(path2));
+    if (existingExtraScreenshots.length === 0) {
+      console.log("❌ 额外截图文件不存在");
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
+      return;
+    }
+    mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_START);
+    this.currentExtraProcessingAbortController = new AbortController();
+    const { signal } = this.currentExtraProcessingAbortController;
+    try {
+      const allPaths = [
+        ...this.screenshotHelper.getScreenshotQueue(),
+        ...existingExtraScreenshots
+      ];
+      const screenshots = await Promise.all(
+        allPaths.map(async (path2) => {
+          try {
+            if (!fs$1.existsSync(path2)) {
+              console.warn(`截图文件不存在: ${path2}`);
+              return null;
+            }
+            return {
+              path: path2,
+              preview: await this.screenshotHelper.getImagePreview(path2),
+              data: fs$1.readFileSync(path2).toString("base64")
+            };
+          } catch (err) {
+            console.error(`读取截图错误 ${path2}:`, err);
+            return null;
+          }
+        })
+      );
+      const validScreenshots = screenshots.filter(Boolean);
+      if (validScreenshots.length === 0) {
+        throw new Error("加载调试截图数据失败");
+      }
+      console.log("🔧 合并截图进行调试处理:", validScreenshots.map((s2) => s2.path));
+      const result = await this.processExtraScreenshotsWithAI(
+        validScreenshots,
+        userConfig,
+        language,
+        signal
+      );
+      if (result.success) {
+        this.deps.setHasDebugged(true);
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.DEBUG_SUCCESS,
+          result.data
+        );
+      } else {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
+          result.error
+        );
+      }
+    } catch (error2) {
+      if (error2.name === "AbortError") {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
+          "调试处理已被用户取消"
+        );
+      } else {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
+          error2.message
+        );
+      }
+    } finally {
+      this.currentExtraProcessingAbortController = null;
+    }
+  }
+  /**
+   * 使用AI处理额外截图（调试功能）
+   */
+  async processExtraScreenshotsWithAI(screenshots, userConfig, language, signal) {
     try {
       const problemInfo = this.deps.getProblemInfo();
-      const language = await this.getLanguage();
-      const config = configHelper.loadConfig();
       const mainWindow = this.deps.getMainWindow();
       if (!problemInfo) {
         throw new Error("没有可用的题目信息");
@@ -21846,42 +22000,24 @@ ${problemInfo.example_output || "未提供示例输出。"}
         });
       }
       const imageDataList = screenshots.map((screenshot2) => screenshot2.data);
-      let debugContent;
       if (!this.ismaqueClient) {
         return {
           success: false,
-          error: "API客户端初始化失败，请重启应用。"
+          error: "AI客户端未初始化"
         };
       }
-      const debuggingModel = this.getModelName(config.debuggingModel, config.apiProvider);
+      const debuggingModel = userConfig.aiModel || "claude-3-5-sonnet-20241022";
       const messages = [
         {
           role: "system",
-          content: `你是一位编程面试助手，帮助调试和改进解决方案。分析这些包含错误信息、错误输出或测试用例的截图，并提供详细的调试帮助，注意：截图中也可能只包含通过了多少用例，没有任何具体的测试用例，这种情况要考虑代码有哪些方面没考虑到，多考虑边界情况。
+          content: `你是一位编程面试助手，帮助调试和改进解决方案。分析这些包含错误信息、错误输出或测试用例的截图，并提供详细的调试帮助。
 
 请按照以下格式提供回复：
 1. 代码：修正后的完整ACM竞赛模式的${language}实现
 2. 解题思路：关键修改和改进的要点列表
 3. 时间复杂度：O(X)格式，并提供详细解释（至少2句话）
 4. 空间复杂度：O(X)格式，并提供详细解释（至少2句话）
-5. 修改说明：详细说明相比原代码进行了哪些修改和为什么需要这些修改
-
-**重要的代码格式要求：**
-- 必须生成完整的ACM竞赛编程模式代码
-- 对于Java语言，必须使用 "public class Main" 作为主类名
-- 必须使用标准输入读取所有数据，不要使用预定义的变量或硬编码的测试数据
-- 输入处理必须严格按照题目描述的输入格式来实现
-- 代码必须是完整的、可以直接复制粘贴到在线判题系统运行的格式
-- 包含适当的导入语句和必要的库引用
-
-对于复杂度解释，请务必详细。例如："时间复杂度：O(n)，因为我们只需要遍历数组一次。这是最优的，因为我们需要至少检查每个元素一次才能找到解决方案。"或者"空间复杂度：O(n)，因为在最坏情况下，我们需要在哈希表中存储所有元素。额外空间使用量与输入规模成线性关系。"
-
-你的解决方案应该：
-- 完全符合ACM竞赛编程规范
-- 正确处理输入输出格式
-- 高效且有良好注释
-- 处理边界情况
-- 可以直接在各种在线判题平台运行`
+5. 修改说明：详细说明相比原代码进行了哪些修改和为什么需要这些修改`
         },
         {
           role: "user",
@@ -21899,13 +22035,7 @@ ${problemInfo.example_input || "未提供示例输入。"}
 示例输出：
 ${problemInfo.example_output || "未提供示例输出。"}
 
-我需要调试或改进我的解决方案的帮助。这里是我的代码、错误或测试用例的截图。请提供详细分析，包括：
-1. 修正后的完整ACM模式代码
-2. 关键修改和改进的要点
-3. 时间复杂度和空间复杂度分析
-4. 详细的修改说明
-
-请确保提供的修正代码是完整的ACM竞赛格式，可以直接在在线判题系统运行。`
+我需要调试或改进我的解决方案的帮助。这里是我的代码、错误或测试用例的截图。请提供详细分析。`
             },
             ...imageDataList.map((data) => ({
               type: "image_url",
@@ -21925,8 +22055,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
         messages,
         max_tokens: 4e3,
         temperature: 0.2
-      });
-      debugContent = debugResponse.choices[0].message.content;
+      }, { signal });
+      const debugContent = debugResponse.choices[0].message.content;
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
           message: "调试分析完成",
@@ -21950,35 +22080,15 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
       const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i;
       const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i;
-      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。每个元素只被处理一次，哈希表查找操作是O(1)的。";
-      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。在最坏情况下，我们可能需要在找到解决方案对之前存储所有元素。";
+      let timeComplexity = "O(n) - 线性时间复杂度";
+      let spaceComplexity = "O(n) - 线性空间复杂度";
       const timeMatch = debugContent.match(timeComplexityPattern);
       if (timeMatch && timeMatch[1]) {
         timeComplexity = timeMatch[1].trim();
-        if (!timeComplexity.match(/O\([^)]+\)/i)) {
-          timeComplexity = `O(n) - ${timeComplexity}`;
-        } else if (!timeComplexity.includes("-") && !timeComplexity.includes("因为")) {
-          const notationMatch = timeComplexity.match(/O\([^)]+\)/i);
-          if (notationMatch) {
-            const notation = notationMatch[0];
-            const rest = timeComplexity.replace(notation, "").trim();
-            timeComplexity = `${notation} - ${rest}`;
-          }
-        }
       }
       const spaceMatch = debugContent.match(spaceComplexityPattern);
       if (spaceMatch && spaceMatch[1]) {
         spaceComplexity = spaceMatch[1].trim();
-        if (!spaceComplexity.match(/O\([^)]+\)/i)) {
-          spaceComplexity = `O(n) - ${spaceComplexity}`;
-        } else if (!spaceComplexity.includes("-") && !spaceComplexity.includes("因为")) {
-          const notationMatch = spaceComplexity.match(/O\([^)]+\)/i);
-          if (notationMatch) {
-            const notation = notationMatch[0];
-            const rest = spaceComplexity.replace(notation, "").trim();
-            spaceComplexity = `${notation} - ${rest}`;
-          }
-        }
       }
       const modificationPattern = /(?:修改说明|修改|改进说明|变更)[:：]?([\s\S]*?)(?=\n\s*$|$)/i;
       const modificationMatch = debugContent.match(modificationPattern);
@@ -21995,51 +22105,26 @@ ${problemInfo.example_output || "未提供示例输出。"}
       };
       return { success: true, data: response };
     } catch (error2) {
-      console.error("Debug processing error:", error2);
+      if (error2.name === "AbortError") {
+        return {
+          success: false,
+          error: "调试处理已被用户取消"
+        };
+      }
+      console.error("调试处理错误:", error2);
       return { success: false, error: error2.message || "处理调试请求失败" };
     }
   }
   /**
-   * 根据API提供商和模型配置，获取实际的模型名称
+   * 检查是否是认证错误
    */
-  getModelName(configModel, apiProvider) {
-    if (!configModel) {
-      switch (apiProvider) {
-        case "openai":
-          return "gpt-4o";
-        case "gemini":
-          return "gemini-2.0-flash";
-        case "anthropic":
-          return "claude-sonnet-4-20250514-thinking";
-        default:
-          return "gpt-4o";
-      }
-    }
-    switch (apiProvider) {
-      case "openai":
-        return configModel;
-      case "gemini":
-        if (configModel.includes("gemini-1.5-pro")) {
-          return "gemini-1.5-pro";
-        } else if (configModel.includes("gemini-2.0-flash")) {
-          return "gemini-2.0-flash";
-        }
-        return "gemini-2.0-flash";
-      // 默认
-      case "anthropic":
-        if (configModel.includes("claude-3-7-sonnet")) {
-          return "claude-sonnet-4-20250514-thinking";
-        } else if (configModel.includes("claude-3-5-sonnet")) {
-          return "claude-3-5-sonnet-20241022";
-        } else if (configModel.includes("claude-3-opus")) {
-          return "claude-3-opus-20240229";
-        }
-        return "claude-sonnet-4-20250514-thinking";
-      // 默认
-      default:
-        return configModel;
-    }
+  isAuthError(error2) {
+    const authErrorKeywords = ["401", "unauthorized", "invalid token", "authentication failed", "认证失败", "登录失败"];
+    return authErrorKeywords.some((keyword) => error2.toLowerCase().includes(keyword.toLowerCase()));
   }
+  /**
+   * 取消所有进行中的请求
+   */
   cancelOngoingRequests() {
     let wasCancelled = false;
     if (this.currentProcessingAbortController) {
@@ -25950,7 +26035,7 @@ class ShortcutsHelper {
     mainWindow.setOpacity(newOpacity);
     try {
       const config = configHelper.loadConfig();
-      config.opacity = newOpacity;
+      configHelper.updateClientSettings({ opacity: newOpacity });
       configHelper.saveConfig(config);
     } catch (error2) {
       console.error("Error saving opacity to config:", error2);
@@ -33252,17 +33337,17 @@ function requireLoader() {
     }
     return state2.documents;
   }
-  function loadAll(input, iterator, options) {
-    if (iterator !== null && typeof iterator === "object" && typeof options === "undefined") {
-      options = iterator;
-      iterator = null;
+  function loadAll(input, iterator2, options) {
+    if (iterator2 !== null && typeof iterator2 === "object" && typeof options === "undefined") {
+      options = iterator2;
+      iterator2 = null;
     }
     var documents = loadDocuments(input, options);
-    if (typeof iterator !== "function") {
+    if (typeof iterator2 !== "function") {
       return documents;
     }
     for (var index = 0, length = documents.length; index < length; index += 1) {
-      iterator(documents[index]);
+      iterator2(documents[index]);
     }
   }
   function load(input, options) {
@@ -42939,7 +43024,7 @@ const state = {
 };
 async function initializeWebAuth() {
   try {
-    webAuthManager.on("authenticated", (user) => {
+    simpleAuthManager.on("authenticated", (user) => {
       console.log("User authenticated:", user.username);
       if (state.mainWindow) {
         state.mainWindow.webContents.send("web-auth-status", {
@@ -42948,7 +43033,7 @@ async function initializeWebAuth() {
         });
       }
     });
-    webAuthManager.on("authentication-cleared", () => {
+    simpleAuthManager.on("authentication-cleared", () => {
       console.log("User authentication cleared");
       if (state.mainWindow) {
         state.mainWindow.webContents.send("web-auth-status", {
@@ -42957,28 +43042,41 @@ async function initializeWebAuth() {
         });
       }
     });
-    webAuthManager.on("config-synced", (config) => {
+    simpleAuthManager.on("config-synced", (config) => {
       console.log("Configuration synced from web");
       if (state.mainWindow) {
         state.mainWindow.webContents.send("config-updated", config);
       }
     });
-    webAuthManager.on("auth-required", () => {
+    simpleAuthManager.on("auth-required", () => {
       console.log("Authentication required - opening web login");
-      webAuthManager.openWebLogin();
+      simpleAuthManager.openWebLogin();
     });
-    const isAuth = await webAuthManager.isAuthenticated();
-    console.log("Initial auth check:", isAuth);
-    if (isAuth) {
-      await webAuthManager.syncUserConfig();
-    }
+    console.log("Web Authentication Manager initialized with event listeners");
   } catch (error2) {
     console.error("Failed to initialize web auth:", error2);
   }
 }
+async function performSimpleStartupCheck() {
+  try {
+    console.log("🔐 执行启动时认证检查...");
+    const isAuthenticated = await simpleAuthManager.initializeAuth();
+    if (isAuthenticated) {
+      const user = simpleAuthManager.getCurrentUser();
+      console.log(`✅ 用户已认证: ${user == null ? void 0 : user.username}`);
+      return true;
+    } else {
+      console.log("❌ 用户未登录，需要登录后才能使用");
+      return false;
+    }
+  } catch (error2) {
+    console.error("❌ 认证检查失败:", error2);
+    return false;
+  }
+}
 function initializeHelpers() {
   state.screenshotHelper = new ScreenshotHelper(state.view);
-  state.processingHelper = new ProcessingHelper({
+  state.processingHelper = new SimpleProcessingHelper({
     getScreenshotHelper,
     getMainWindow,
     getView,
@@ -43046,7 +43144,7 @@ if (!gotTheLock) {
       const url = commandLine.find((arg) => arg.startsWith("interview-coder://"));
       if (url) {
         console.log("Received auth callback:", url);
-        webAuthManager.handleAuthCallback(url);
+        simpleAuthManager.handleAuthCallback(url);
       }
     }
   });
@@ -43238,7 +43336,8 @@ async function createWindow() {
   state.currentX = bounds.x;
   state.currentY = bounds.y;
   state.isWindowVisible = true;
-  const savedOpacity = configHelper.getOpacity();
+  const clientSettings = configHelper.getClientSettings();
+  const savedOpacity = clientSettings.opacity || 1;
   console.log(`Initial opacity from config: ${savedOpacity}`);
   state.mainWindow.show();
   state.mainWindow.focus();
@@ -43259,6 +43358,76 @@ async function createWindow() {
     visibleOnFullScreen: true
   });
   console.log(`Window created and shown. Visible: ${state.isWindowVisible}, Position: (${state.currentX}, ${state.currentY})`);
+  handlePostWindowAuthCheck();
+  state.mainWindow.webContents.on("console-message", (event, level, message) => {
+    console.log(`Frontend console: ${message}`);
+  });
+  state.mainWindow.webContents.on("ipc-message", (event, channel, ...args) => {
+    var _a2;
+    if (channel === "show-login-required") {
+      const [loginData] = args;
+      console.log("🔐 收到登录需求事件:", loginData);
+      (_a2 = state.mainWindow) == null ? void 0 : _a2.webContents.send("show-notification", {
+        type: "warning",
+        title: loginData.title || "需要登录",
+        message: loginData.message || "请先登录以使用AI功能",
+        duration: 8e3,
+        actions: [{
+          text: "立即登录",
+          action: "open-web-login"
+        }]
+      });
+    }
+  });
+}
+async function handlePostWindowAuthCheck() {
+  setTimeout(async () => {
+    try {
+      console.log("🔐 窗口创建后重新检查登录状态...");
+      const isAuthenticated = await simpleAuthManager.initializeAuth();
+      if (isAuthenticated) {
+        const user = simpleAuthManager.getCurrentUser();
+        console.log(`✅ 用户已登录: ${user == null ? void 0 : user.username}`);
+        if (state.mainWindow) {
+          state.mainWindow.webContents.send("show-notification", {
+            type: "success",
+            title: "系统就绪",
+            message: `欢迎回来，${user == null ? void 0 : user.username}！`,
+            duration: 2500
+          });
+        }
+      } else {
+        console.log("❌ 用户未登录，显示登录提示");
+        if (state.mainWindow) {
+          state.mainWindow.webContents.send("show-notification", {
+            type: "info",
+            title: "需要登录账户",
+            message: "登录后即可使用AI智能分析功能",
+            duration: 0,
+            // 持续显示直到登录
+            actions: [{
+              text: "立即登录",
+              action: "open-web-login"
+            }]
+          });
+        }
+      }
+    } catch (error2) {
+      console.error("❌ 登录检查失败:", error2);
+      if (state.mainWindow) {
+        state.mainWindow.webContents.send("show-notification", {
+          type: "warning",
+          title: "连接问题",
+          message: "无法验证登录状态，请检查网络连接",
+          duration: 6e3,
+          actions: [{
+            text: "重试",
+            action: "open-web-login"
+          }]
+        });
+      }
+    }
+  }, 1e3);
 }
 function handleWindowMove() {
   if (!state.mainWindow) return;
@@ -43397,6 +43566,7 @@ async function initializeApp() {
     loadEnvVariables();
     console.log("Using built-in API configuration.");
     await initializeWebAuth();
+    await performSimpleStartupCheck();
     initializeHelpers();
     initializeIpcHandlers({
       getMainWindow,
@@ -43560,4 +43730,4 @@ exports.showMainWindow = showMainWindow;
 exports.state = state;
 exports.takeScreenshot = takeScreenshot;
 exports.toggleMainWindow = toggleMainWindow;
-//# sourceMappingURL=main-Bb0pBMc_.js.map
+//# sourceMappingURL=main-uohSqRqp.js.map

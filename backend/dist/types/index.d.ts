@@ -4,8 +4,13 @@ export interface UserPayload {
     username: string;
     email?: string | null;
 }
+export interface SimpleUserPayload {
+    userId: string;
+}
 export interface AuthenticatedRequest extends Request {
-    user?: UserPayload;
+    user?: {
+        userId: string;
+    };
 }
 export interface AIModel {
     id: string;

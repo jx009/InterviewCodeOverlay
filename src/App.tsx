@@ -10,7 +10,8 @@ import {
   ToastDescription,
   ToastProvider,
   ToastTitle,
-  ToastViewport
+  ToastViewport,
+  ToastVariant
 } from "./components/ui/toast"
 import { ToastContext } from "./contexts/toast"
 import { WelcomeScreen } from "./components/WelcomeScreen"
@@ -40,7 +41,9 @@ function App() {
     open: false,
     title: "",
     description: "",
-    variant: "neutral" as "neutral" | "success" | "error"
+    variant: "neutral" as ToastVariant,
+    actionText: "",
+    onActionClick: undefined as (() => void) | undefined
   })
   const [credits, setCredits] = useState<number>(999) // Unlimited credits
   const [currentLanguage, setCurrentLanguage] = useState<string>("python")
@@ -76,32 +79,96 @@ function App() {
     window.__IS_INITIALIZED__ = true
   }, [])
 
-  // Show toast method
+  // Show toast method (enhanced with action support)
   const showToast = useCallback(
     (
       title: string,
       description: string,
-      variant: "neutral" | "success" | "error"
+      variant: ToastVariant,
+      actionText?: string,
+      onActionClick?: () => void
     ) => {
       setToastState({
         open: true,
         title,
         description,
-        variant
+        variant,
+        actionText: actionText || "",
+        onActionClick: onActionClick || undefined
       })
     },
     []
   )
 
-  // Check Web authentication status and prompt if not authenticated
+  // 监听后端发送的通知消息（优化用户体验）
   useEffect(() => {
-    if (isInitialized && !authLoading) {
-      // If user is not authenticated, show Web auth dialog after a short delay
-      if (!authenticated) {
-        setTimeout(() => {
-          setIsWebAuthOpen(true)
-        }, 1000)
-      }
+    const unsubscribers: (() => void)[] = []
+    
+    if (window.electronAPI?.onNotification) {
+      const unsubscribeNotification = window.electronAPI.onNotification((notification: any) => {
+        console.log('收到通知:', notification)
+        
+        // 映射通知类型到Toast变体
+        const getToastVariant = (type: string): ToastVariant => {
+          switch (type) {
+            case 'error': return 'error'
+            case 'success': return 'success'
+            case 'warning': return 'warning'
+            case 'info': return 'info'
+            case 'loading': return 'loading'
+            default: return 'neutral'
+          }
+        }
+        
+        showToast(
+          notification.title,
+          notification.message,
+          getToastVariant(notification.type),
+          notification.actions && notification.actions.length > 0 ? notification.actions[0].text : undefined,
+          notification.actions && notification.actions.length > 0 ? () => {
+            if (notification.actions[0].action === 'open-web-login') {
+              // 实际触发登录操作
+              setTimeout(async () => {
+                console.log('准备触发登录操作')
+                try {
+                  // 调用后端的登录功能
+                  const result = await window.electronAPI.webAuthLogin()
+                  if (result.success) {
+                    showToast('登录成功', '欢迎回来！', 'success')
+                  } else {
+                    showToast('登录失败', result.error || '请重试', 'error')
+                  }
+                } catch (error) {
+                  console.error('登录操作失败:', error)
+                  showToast('登录失败', '网络错误，请重试', 'error')
+                }
+              }, 1000)
+            }
+          } : undefined
+        )
+      })
+      unsubscribers.push(unsubscribeNotification)
+    }
+    
+    // 监听清除通知事件
+    if (window.electronAPI?.onClearNotification) {
+      const unsubscribeClear = window.electronAPI.onClearNotification(() => {
+        console.log('收到清除通知事件')
+        setToastState(prev => ({ ...prev, open: false }))
+      })
+      unsubscribers.push(unsubscribeClear)
+    }
+    
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe())
+    }
+  }, [showToast])
+
+  // 简化的认证检查，只在初始化时触发一次
+  useEffect(() => {
+    if (isInitialized && !authLoading && !authenticated) {
+      // 认证状态由后端智能管理，前端不再频繁检查
+      console.log('User not authenticated, auth status managed by backend')
     }
   }, [isInitialized, authenticated, authLoading])
 
@@ -242,87 +309,40 @@ function App() {
         <ToastContext.Provider value={{ showToast }}>
           <div className="relative">
             {isInitialized ? (
-              authenticated ? (
-                <ClickThroughManager
-                  nonClickThroughSelectors={[
-                    // 顶部区域
-                    '.top-area', 
-                    // 交互元素
-                    '.pointer-events-auto',
-                    'button',
-                    'select',
-                    'input',
-                    '.settings-button',
-                    // 设置相关
-                    '.settings-dialog',
-                    '[role="dialog"]',
-                    // 复制按钮
-                    '.absolute.top-2.right-2',
-                    // 其他可能需要交互的元素
-                    'a',
-                    '[role="button"]',
-                    '[role="menuitem"]',
-                    '[role="tab"]',
-                    '[role="switch"]',
-                    '[role="checkbox"]',
-                    '[role="radio"]',
-                    '.react-select__control',
-                    '.react-select__menu'
-                  ]}
-                >
-                  <SubscribedApp
-                    credits={credits}
-                    currentLanguage={currentLanguage}
-                    setLanguage={updateLanguage}
-                  />
-                </ClickThroughManager>
-              ) : (
-                <div className="min-h-screen bg-black flex items-center justify-center">
-                  <div className="flex flex-col items-center gap-6 p-8 bg-gray-900 rounded-lg border border-gray-700 max-w-md mx-4">
-                    <div className="text-center">
-                      <h1 className="text-2xl font-bold text-white mb-2">Interview Code Overlay</h1>
-                      <p className="text-gray-300 text-sm">需要登录Web配置中心才能使用</p>
-                    </div>
-                    
-                    {authLoading ? (
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-6 h-6 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                        <p className="text-gray-400 text-sm">检查认证状态...</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-4 w-full">
-                        <div className="text-center">
-                          <p className="text-gray-400 text-sm mb-2">
-                            {connectionStatus.connected 
-                              ? "请点击下方按钮登录" 
-                              : "请先启动Web配置中心"
-                            }
-                          </p>
-                          {user && (
-                            <p className="text-green-400 text-xs">
-                              上次登录: {user.username}
-                            </p>
-                          )}
-                        </div>
-                        
-                        <button
-                          onClick={() => setIsWebAuthOpen(true)}
-                          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
-                        >
-                          {connectionStatus.connected ? "登录配置中心" : "检查连接状态"}
-                        </button>
-                        
-                        <button
-                          onClick={() => setIsSettingsOpen(true)}
-                          className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors text-sm"
-                        >
-                          本地设置
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
+              // 简化逻辑：直接显示主应用，让后端通知系统处理认证
+              <ClickThroughManager
+                nonClickThroughSelectors={[
+                  // 顶部区域
+                  '.top-area', 
+                  // 交互元素
+                  '.pointer-events-auto',
+                  'button',
+                  'select',
+                  'input',
+                  '.settings-button',
+                  // 设置相关
+                  '.settings-dialog',
+                  '[role="dialog"]',
+                  // 复制按钮
+                  '.absolute.top-2.right-2',
+                  // 其他可能需要交互的元素
+                  'a',
+                  '[role="button"]',
+                  '[role="menuitem"]',
+                  '[role="tab"]',
+                  '[role="switch"]',
+                  '[role="checkbox"]',
+                  '[role="radio"]',
+                  '.react-select__control',
+                  '.react-select__menu'
+                ]}
+              >
+                <SubscribedApp
+                  credits={credits}
+                  currentLanguage={currentLanguage}
+                  setLanguage={updateLanguage}
+                />
+              </ClickThroughManager>
             ) : (
               <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -357,6 +377,8 @@ function App() {
             }
             variant={toastState.variant}
             duration={1500}
+            actionText={toastState.actionText}
+            onActionClick={toastState.onActionClick || undefined}
           >
             <ToastTitle>{toastState.title}</ToastTitle>
             <ToastDescription>{toastState.description}</ToastDescription>

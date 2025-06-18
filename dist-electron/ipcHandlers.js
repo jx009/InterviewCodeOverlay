@@ -4,7 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeIpcHandlers = initializeIpcHandlers;
 const electron_1 = require("electron");
 const ConfigHelper_1 = require("./ConfigHelper");
-const WebAuthManager_1 = require("./WebAuthManager");
+const SimpleAuthManager_1 = require("./SimpleAuthManager");
 function initializeIpcHandlers(deps) {
     console.log("Initializing IPC handlers");
     // Configuration handlers
@@ -143,8 +143,8 @@ function initializeIpcHandlers(deps) {
     // Web Authentication handlers
     electron_1.ipcMain.handle("web-auth-login", async () => {
         try {
-            await WebAuthManager_1.webAuthManager.openWebLogin();
-            return { success: true };
+            const success = await SimpleAuthManager_1.simpleAuthManager.login();
+            return { success };
         }
         catch (error) {
             console.error("Failed to open web login:", error);
@@ -153,7 +153,7 @@ function initializeIpcHandlers(deps) {
     });
     electron_1.ipcMain.handle("web-auth-logout", async () => {
         try {
-            await WebAuthManager_1.webAuthManager.logout();
+            await SimpleAuthManager_1.simpleAuthManager.logout();
             return { success: true };
         }
         catch (error) {
@@ -163,8 +163,8 @@ function initializeIpcHandlers(deps) {
     });
     electron_1.ipcMain.handle("web-auth-status", async () => {
         try {
-            const isAuthenticated = await WebAuthManager_1.webAuthManager.isAuthenticated();
-            const user = WebAuthManager_1.webAuthManager.getCurrentUser();
+            const isAuthenticated = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
+            const user = SimpleAuthManager_1.simpleAuthManager.getCurrentUser();
             return {
                 authenticated: isAuthenticated,
                 user: user
@@ -181,7 +181,7 @@ function initializeIpcHandlers(deps) {
     });
     electron_1.ipcMain.handle("web-sync-config", async () => {
         try {
-            const config = await WebAuthManager_1.webAuthManager.syncUserConfig();
+            const config = await SimpleAuthManager_1.simpleAuthManager.refreshUserConfig();
             return { success: true, config: config };
         }
         catch (error) {
@@ -191,7 +191,8 @@ function initializeIpcHandlers(deps) {
     });
     electron_1.ipcMain.handle("web-update-config", async (_event, configUpdates) => {
         try {
-            const config = await WebAuthManager_1.webAuthManager.updateWebConfig(configUpdates);
+            // 简化版：不支持更新Web配置，只返回当前配置
+            const config = SimpleAuthManager_1.simpleAuthManager.getUserConfig();
             return { success: true, config: config };
         }
         catch (error) {
@@ -201,7 +202,12 @@ function initializeIpcHandlers(deps) {
     });
     electron_1.ipcMain.handle("web-get-ai-models", async () => {
         try {
-            const models = await WebAuthManager_1.webAuthManager.getAvailableAIModels();
+            // 简化版：返回固定的AI模型列表
+            const models = [
+                'claude-3-5-sonnet-20241022',
+                'gpt-4o',
+                'gemini-2.0-flash'
+            ];
             return { success: true, models: models };
         }
         catch (error) {
@@ -211,7 +217,8 @@ function initializeIpcHandlers(deps) {
     });
     electron_1.ipcMain.handle("web-get-languages", async () => {
         try {
-            const languages = await WebAuthManager_1.webAuthManager.getAvailableLanguages();
+            // 简化版：返回固定的语言列表
+            const languages = ['python', 'javascript', 'java', 'cpp', 'go', 'rust'];
             return { success: true, languages: languages };
         }
         catch (error) {
@@ -219,9 +226,32 @@ function initializeIpcHandlers(deps) {
             return { success: false, error: error.message, languages: [] };
         }
     });
+    // Handle notification actions
+    electron_1.ipcMain.handle("handle-notification-action", async (_event, action) => {
+        try {
+            console.log("Handling notification action:", action);
+            switch (action) {
+                case 'open-web-login':
+                    const success = await SimpleAuthManager_1.simpleAuthManager.login();
+                    return { success };
+                case 'open-startup-guide':
+                    // Open startup guide or documentation
+                    await electron_1.shell.openExternal('https://github.com/your-repo/startup-guide');
+                    return { success: true };
+                default:
+                    console.log("Unknown notification action:", action);
+                    return { success: false, error: "Unknown action" };
+            }
+        }
+        catch (error) {
+            console.error("Failed to handle notification action:", error);
+            return { success: false, error: error.message };
+        }
+    });
     electron_1.ipcMain.handle("web-check-connection", async () => {
         try {
-            const connected = await WebAuthManager_1.webAuthManager.checkConnection();
+            // 简化版：检查认证状态作为连接状态
+            const connected = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
             return { connected: connected };
         }
         catch (error) {

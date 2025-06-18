@@ -2,12 +2,12 @@ import { app, BrowserWindow, screen, shell, ipcMain } from "electron"
 import path from "path"
 import fs from "fs"
 import { initializeIpcHandlers } from "./ipcHandlers"
-import { ProcessingHelper } from "./ProcessingHelper"
+import { SimpleProcessingHelper } from "./SimpleProcessingHelper"
 import { ScreenshotHelper } from "./ScreenshotHelper"
 import { ShortcutsHelper } from "./shortcuts"
 import { initAutoUpdater } from "./autoUpdater"
 import { configHelper } from "./ConfigHelper"
-import { webAuthManager } from "./WebAuthManager"
+import { simpleAuthManager } from "./SimpleAuthManager"
 import * as dotenv from "dotenv"
 
 // Constants
@@ -29,7 +29,7 @@ const state = {
   // Application helpers
   screenshotHelper: null as ScreenshotHelper | null,
   shortcutsHelper: null as ShortcutsHelper | null,
-  processingHelper: null as ProcessingHelper | null,
+  processingHelper: null as SimpleProcessingHelper | null,
 
   // View and state management
   view: "queue" as "queue" | "solutions" | "debug",
@@ -77,7 +77,7 @@ export interface IShortcutsHelperDeps {
   getMainWindow: () => BrowserWindow | null
   takeScreenshot: () => Promise<string>
   getImagePreview: (filepath: string) => Promise<string>
-  processingHelper: ProcessingHelper | null
+  processingHelper: SimpleProcessingHelper | null
   clearQueues: () => void
   setView: (view: "queue" | "solutions" | "debug") => void
   isVisible: () => boolean
@@ -97,7 +97,7 @@ export interface IIpcHandlerDeps {
     path: string
   ) => Promise<{ success: boolean; error?: string }>
   getImagePreview: (filepath: string) => Promise<string>
-  processingHelper: ProcessingHelper | null
+  processingHelper: SimpleProcessingHelper | null
   PROCESSING_EVENTS: typeof state.PROCESSING_EVENTS
   takeScreenshot: () => Promise<string>
   getView: () => "queue" | "solutions" | "debug"
@@ -114,7 +114,7 @@ export interface IIpcHandlerDeps {
 async function initializeWebAuth() {
   try {
     // Set up Web authentication event listeners
-    webAuthManager.on('authenticated', (user) => {
+    simpleAuthManager.on('authenticated', (user) => {
       console.log('User authenticated:', user.username)
       // Notify renderer process
       if (state.mainWindow) {
@@ -125,7 +125,7 @@ async function initializeWebAuth() {
       }
     })
 
-    webAuthManager.on('authentication-cleared', () => {
+    simpleAuthManager.on('authentication-cleared', () => {
       console.log('User authentication cleared')
       if (state.mainWindow) {
         state.mainWindow.webContents.send('web-auth-status', { 
@@ -135,35 +135,51 @@ async function initializeWebAuth() {
       }
     })
 
-    webAuthManager.on('config-synced', (config) => {
+    simpleAuthManager.on('config-synced', (config) => {
       console.log('Configuration synced from web')
       if (state.mainWindow) {
         state.mainWindow.webContents.send('config-updated', config)
       }
     })
 
-    webAuthManager.on('auth-required', () => {
+    simpleAuthManager.on('auth-required', () => {
       console.log('Authentication required - opening web login')
-      webAuthManager.openWebLogin()
+      simpleAuthManager.openWebLogin()
     })
 
-    // Check if user is already authenticated
-    const isAuth = await webAuthManager.isAuthenticated()
-    console.log('Initial auth check:', isAuth)
-    
-    if (isAuth) {
-      // Sync configuration on startup
-      await webAuthManager.syncUserConfig()
-    }
+    console.log("Web Authentication Manager initialized with event listeners")
   } catch (error) {
     console.error('Failed to initialize web auth:', error)
+  }
+}
+
+/**
+ * 启动检查 - 确保用户登录
+ */
+async function performSimpleStartupCheck() {
+  try {
+    console.log("🔐 执行启动时认证检查...")
+    
+    // 使用新的认证初始化方法，它会自动检查共享会话
+    const isAuthenticated = await simpleAuthManager.initializeAuth()
+    if (isAuthenticated) {
+      const user = simpleAuthManager.getCurrentUser()
+      console.log(`✅ 用户已认证: ${user?.username}`)
+      return true
+    } else {
+      console.log("❌ 用户未登录，需要登录后才能使用")
+      return false // 返回false表示需要登录
+    }
+  } catch (error) {
+    console.error("❌ 认证检查失败:", error)
+    return false
   }
 }
 
 // Initialize helpers
 function initializeHelpers() {
   state.screenshotHelper = new ScreenshotHelper(state.view)
-  state.processingHelper = new ProcessingHelper({
+  state.processingHelper = new SimpleProcessingHelper({
     getScreenshotHelper,
     getMainWindow,
     getView,
@@ -239,7 +255,7 @@ if (!gotTheLock) {
       const url = commandLine.find((arg) => arg.startsWith("interview-coder://"))
       if (url) {
         console.log("Received auth callback:", url)
-        webAuthManager.handleAuthCallback(url)
+        simpleAuthManager.handleAuthCallback(url)
       }
     }
   })
@@ -477,7 +493,8 @@ async function createWindow(): Promise<void> {
   state.isWindowVisible = true
   
   // Set initial window state
-  const savedOpacity = configHelper.getOpacity();
+  const clientSettings = configHelper.getClientSettings();
+  const savedOpacity = clientSettings.opacity || 1.0;
   console.log(`Initial opacity from config: ${savedOpacity}`);
   
   // Force window to be visible initially and then set proper state
@@ -504,7 +521,92 @@ async function createWindow(): Promise<void> {
     visibleOnFullScreen: true
   });
   
-    console.log(`Window created and shown. Visible: ${state.isWindowVisible}, Position: (${state.currentX}, ${state.currentY})`);
+  console.log(`Window created and shown. Visible: ${state.isWindowVisible}, Position: (${state.currentX}, ${state.currentY})`);
+  
+  // 窗口创建后处理认证状态
+  handlePostWindowAuthCheck()
+
+  // Event listeners for webContents messages
+  state.mainWindow.webContents.on('console-message', (event, level, message) => {
+    console.log(`Frontend console: ${message}`)
+  })
+
+  // 监听登录需求事件
+  state.mainWindow.webContents.on('ipc-message', (event, channel, ...args) => {
+    if (channel === 'show-login-required') {
+      const [loginData] = args;
+      console.log('🔐 收到登录需求事件:', loginData);
+      
+      // 显示登录提示通知
+      state.mainWindow?.webContents.send('show-notification', {
+        type: 'warning',
+        title: loginData.title || '需要登录',
+        message: loginData.message || '请先登录以使用AI功能',
+        duration: 8000,
+        actions: [{
+          text: '立即登录',
+          action: 'open-web-login'
+        }]
+      });
+    }
+  });
+}
+
+/**
+ * 窗口创建后处理认证状态（优化用户体验）
+ */
+async function handlePostWindowAuthCheck() {
+  // 延迟1秒后检查登录状态
+  setTimeout(async () => {
+    try {
+      console.log("🔐 窗口创建后重新检查登录状态...")
+      
+      // 使用完整的认证初始化，包括检查共享会话
+      const isAuthenticated = await simpleAuthManager.initializeAuth()
+      if (isAuthenticated) {
+        // 用户已登录，显示简洁的欢迎信息
+        const user = simpleAuthManager.getCurrentUser()
+        console.log(`✅ 用户已登录: ${user?.username}`)
+        if (state.mainWindow) {
+          state.mainWindow.webContents.send('show-notification', {
+            type: 'success',
+            title: '系统就绪',
+            message: `欢迎回来，${user?.username}！`,
+            duration: 2500
+          })
+        }
+      } else {
+        // 用户未登录，显示友好的登录提示
+        console.log("❌ 用户未登录，显示登录提示")
+        if (state.mainWindow) {
+          state.mainWindow.webContents.send('show-notification', {
+            type: 'info',
+            title: '需要登录账户',
+            message: '登录后即可使用AI智能分析功能',
+            duration: 0, // 持续显示直到登录
+            actions: [{
+              text: '立即登录',
+              action: 'open-web-login'
+            }]
+          })
+        }
+      }
+    } catch (error) {
+      console.error("❌ 登录检查失败:", error)
+      if (state.mainWindow) {
+        state.mainWindow.webContents.send('show-notification', {
+          type: 'warning',
+          title: '连接问题',
+          message: '无法验证登录状态，请检查网络连接',
+          duration: 6000,
+          actions: [{
+            text: '重试',
+            action: 'open-web-login'
+          }]
+        })
+      }
+    }
+  }, 1000)
 }
 
 function handleWindowMove(): void {
@@ -671,6 +773,9 @@ async function initializeApp() {
     
     // Initialize Web authentication manager
     await initializeWebAuth()
+    
+    // 智能认证检查 - 如果未登录则引导用户登录
+    await performSimpleStartupCheck()
     
     initializeHelpers()
     initializeIpcHandlers({

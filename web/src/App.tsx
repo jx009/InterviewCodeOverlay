@@ -5,13 +5,13 @@ import LoadingSpinner from './components/LoadingSpinner'
 import { useAuth } from './hooks/useAuth'
 
 function App() {
-  const { user, isLoading, isAuthenticated, login, logout, register } = useAuth()
+  const { user, loading, isAuthenticated } = useAuth()
 
   useEffect(() => {
-    console.log('App检测到认证状态变化:', { isAuthenticated, isLoading, user: user?.username })
-  }, [isAuthenticated, isLoading, user])
+    console.log('App检测到认证状态变化:', { isAuthenticated, loading, user: user?.username })
+  }, [isAuthenticated, loading, user])
 
-  if (isLoading) {
+  if (loading) {
     console.log('App渲染加载状态')
     return <LoadingSpinner />
   }

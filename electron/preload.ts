@@ -278,6 +278,24 @@ const electronAPI = {
       ipcRenderer.removeListener("config-updated", subscription)
     }
   },
+  
+  // 添加通知事件监听器
+  onNotification: (callback: (notification: any) => void) => {
+    const subscription = (_: any, notification: any) => callback(notification)
+    ipcRenderer.on("show-notification", subscription)
+    return () => {
+      ipcRenderer.removeListener("show-notification", subscription)
+    }
+  },
+  
+  // 添加清除通知事件监听器
+  onClearNotification: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on("clear-notification", subscription)
+    return () => {
+      ipcRenderer.removeListener("clear-notification", subscription)
+    }
+  },
 }
 
 // Before exposing the API

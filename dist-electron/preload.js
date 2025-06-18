@@ -251,6 +251,22 @@ const electronAPI = {
             electron_1.ipcRenderer.removeListener("config-updated", subscription);
         };
     },
+    // 添加通知事件监听器
+    onNotification: (callback) => {
+        const subscription = (_, notification) => callback(notification);
+        electron_1.ipcRenderer.on("show-notification", subscription);
+        return () => {
+            electron_1.ipcRenderer.removeListener("show-notification", subscription);
+        };
+    },
+    // 添加清除通知事件监听器
+    onClearNotification: (callback) => {
+        const subscription = () => callback();
+        electron_1.ipcRenderer.on("clear-notification", subscription);
+        return () => {
+            electron_1.ipcRenderer.removeListener("clear-notification", subscription);
+        };
+    },
 };
 // Before exposing the API
 console.log("About to expose electronAPI with methods:", Object.keys(electronAPI));
