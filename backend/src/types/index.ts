@@ -17,6 +17,53 @@ export interface AuthenticatedRequest extends Request {
   user?: { userId: string };
 }
 
+// 题目类型枚举
+export type QuestionType = 'programming' | 'multiple_choice';
+
+// 单个选择题信息
+export interface MultipleChoiceQuestion {
+  question_number: string;  // 题号，如 "1", "2", "A", "B" 等
+  question_text: string;
+  options: string[];        // 选项 A, B, C, D 等
+  correct_answer?: string;  // 正确答案
+}
+
+// 题目信息结构
+export interface ProblemInfo {
+  type: QuestionType;
+  problem_statement: string;
+  constraints?: string;
+  example_input?: string;
+  example_output?: string;
+  // 选择题特有字段 - 支持多题
+  multiple_choice_questions?: MultipleChoiceQuestion[];
+}
+
+// 响应数据结构
+export interface ProgrammingResponse {
+  type: 'programming';
+  code: string;
+  thoughts: string[];
+  time_complexity: string;
+  space_complexity: string;
+}
+
+// 单个选择题的答案
+export interface MultipleChoiceAnswer {
+  question_number: string;
+  answer: string;           // 选择的答案，如 "A", "B", "C", "D"
+  reasoning?: string;       // 该题的解题思路
+}
+
+export interface MultipleChoiceResponse {
+  type: 'multiple_choice';
+  answers: MultipleChoiceAnswer[];  // 所有题目的答案数组
+  thoughts: string[];               // 整体思路分析
+  // time_complexity 和 space_complexity 留空
+}
+
+export type AIResponse = ProgrammingResponse | MultipleChoiceResponse;
+
 // AI模型相关类型
 export interface AIModel {
   id: string;
@@ -30,9 +77,13 @@ export interface AIModel {
 
 export interface UserConfigData {
   selectedProvider: 'claude' | 'gemini' | 'openai';
-  extractionModel: string;
-  solutionModel: string;
-  debuggingModel: string;
+  // 分离的模型配置
+  programmingModel: string;
+  multipleChoiceModel: string;
+  // 保留向后兼容的字段
+  extractionModel?: string;
+  solutionModel?: string;
+  debuggingModel?: string;
   language: string;
   opacity: number;
   showCopyButton: boolean;

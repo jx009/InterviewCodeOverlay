@@ -44,6 +44,8 @@ class Database {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER NOT NULL,
           ai_model TEXT DEFAULT 'claude-sonnet-4-20250514',
+          programming_model TEXT DEFAULT 'claude-3-5-sonnet-20241022',
+          multiple_choice_model TEXT DEFAULT 'claude-3-5-sonnet-20241022',
           language TEXT DEFAULT 'python',
           theme TEXT DEFAULT 'dark',
           shortcuts TEXT DEFAULT '{"takeScreenshot":"Ctrl+H","openQueue":"Ctrl+Q","openSettings":"Ctrl+S"}',
@@ -73,6 +75,9 @@ class Database {
         
         this.db.run(createConfigTable, (err) => {
           if (err) console.error('创建配置表失败:', err);
+          else {
+            this.addNewConfigFields();
+          }
         });
         
         this.db.run(createTokenTable, (err) => {
@@ -81,6 +86,37 @@ class Database {
         });
       });
     });
+  }
+
+  async addNewConfigFields() {
+    const addColumnIfNotExists = (tableName, columnName, columnDef) => {
+      return new Promise((resolve) => {
+        this.db.all(`PRAGMA table_info(${tableName})`, (err, rows) => {
+          if (err) {
+            console.error(`检查表 ${tableName} 结构失败:`, err);
+            resolve();
+            return;
+          }
+          
+          const columnExists = rows.some(row => row.name === columnName);
+          if (!columnExists) {
+            this.db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`, (err) => {
+              if (err) {
+                console.error(`添加字段 ${columnName} 失败:`, err);
+              } else {
+                console.log(`✅ 添加了新字段: ${columnName}`);
+              }
+              resolve();
+            });
+          } else {
+            resolve();
+          }
+        });
+      });
+    };
+
+    await addColumnIfNotExists('user_configs', 'programming_model', 'TEXT DEFAULT "claude-3-5-sonnet-20241022"');
+    await addColumnIfNotExists('user_configs', 'multiple_choice_model', 'TEXT DEFAULT "claude-3-5-sonnet-20241022"');
   }
 
   async seedDefaultData() {
@@ -189,11 +225,13 @@ class Database {
           // 解析JSON字段
           const config = {
             aiModel: row.ai_model,
+            programmingModel: row.programming_model || row.ai_model,
+            multipleChoiceModel: row.multiple_choice_model || row.ai_model,
             language: row.language,
             theme: row.theme,
-            shortcuts: JSON.parse(row.shortcuts),
-            display: JSON.parse(row.display),
-            processing: JSON.parse(row.processing)
+            shortcuts: JSON.parse(row.shortcuts || '{}'),
+            display: JSON.parse(row.display || '{}'),
+            processing: JSON.parse(row.processing || '{}')
           };
           resolve(config);
         } else {
@@ -208,6 +246,8 @@ class Database {
     return new Promise((resolve, reject) => {
       const defaultConfig = {
         aiModel: 'claude-sonnet-4-20250514',
+        programmingModel: 'claude-3-5-sonnet-20241022',
+        multipleChoiceModel: 'claude-3-5-sonnet-20241022',
         language: 'python',
         theme: 'dark',
         shortcuts: { takeScreenshot: 'Ctrl+H', openQueue: 'Ctrl+Q', openSettings: 'Ctrl+S' },
@@ -216,13 +256,15 @@ class Database {
       };
 
       const query = `
-        INSERT INTO user_configs (user_id, ai_model, language, theme, shortcuts, display, processing) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_configs (user_id, ai_model, programming_model, multiple_choice_model, language, theme, shortcuts, display, processing) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       this.db.run(query, [
         userId,
         defaultConfig.aiModel,
+        defaultConfig.programmingModel,
+        defaultConfig.multipleChoiceModel,
         defaultConfig.language,
         defaultConfig.theme,
         JSON.stringify(defaultConfig.shortcuts),
@@ -246,22 +288,29 @@ class Database {
         
         const query = `
           UPDATE user_configs 
-          SET ai_model = ?, language = ?, theme = ?, shortcuts = ?, display = ?, processing = ?, updated_at = CURRENT_TIMESTAMP
+          SET ai_model = ?, programming_model = ?, multiple_choice_model = ?, language = ?, theme = ?, shortcuts = ?, display = ?, processing = ?, updated_at = CURRENT_TIMESTAMP
           WHERE user_id = ?
         `;
         
         this.db.run(query, [
           updatedConfig.aiModel,
+          updatedConfig.programmingModel,
+          updatedConfig.multipleChoiceModel,
           updatedConfig.language,
           updatedConfig.theme,
-          JSON.stringify(updatedConfig.shortcuts),
-          JSON.stringify(updatedConfig.display),
-          JSON.stringify(updatedConfig.processing),
+          JSON.stringify(updatedConfig.shortcuts || {}),
+          JSON.stringify(updatedConfig.display || {}),
+          JSON.stringify(updatedConfig.processing || {}),
           userId
         ], function(err) {
           if (err) {
+            console.error('数据库更新配置失败:', err);
             reject(err);
           } else {
+            console.log(`✅ 用户 ${userId} 配置已更新:`, {
+              programmingModel: updatedConfig.programmingModel,
+              multipleChoiceModel: updatedConfig.multipleChoiceModel
+            });
             resolve(updatedConfig);
           }
         });

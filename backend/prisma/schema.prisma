@@ -32,14 +32,18 @@ model UserConfig {
   userId           String   @unique
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // 简化的AI模型设置（Cursor式）
-  aiModel          String   @default("claude-3-5-sonnet-20241022") // 统一AI模型
+  // 分离的AI模型设置
+  programmingModel     String   @default("claude-3-5-sonnet-20241022") // 编程题模型
+  multipleChoiceModel  String   @default("claude-3-5-sonnet-20241022") // 选择题模型
+  
+  // 简化的AI模型设置（保持向后兼容）
+  aiModel          String?   @default("claude-3-5-sonnet-20241022") // 统一AI模型
   
   // 原有的AI Model Settings（保持兼容性）
   selectedProvider String   @default("claude") // claude, gemini, openai
-  extractionModel  String   @default("claude-3-7-sonnet-20250219")
-  solutionModel    String   @default("claude-3-7-sonnet-20250219")
-  debuggingModel   String   @default("claude-3-7-sonnet-20250219")
+  extractionModel  String?  @default("claude-3-7-sonnet-20250219")
+  solutionModel    String?  @default("claude-3-7-sonnet-20250219")
+  debuggingModel   String?  @default("claude-3-7-sonnet-20250219")
   
   // Language Settings
   language         String   @default("python")

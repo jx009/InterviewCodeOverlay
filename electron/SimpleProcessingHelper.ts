@@ -62,7 +62,10 @@ export class SimpleProcessingHelper {
     console.log('🚀 开始AI处理流程...')
 
     // Step 1: 强制检查用户认证
+    console.log('🔐 执行认证检查...')
     const isAuthenticated = await simpleAuthManager.isAuthenticated()
+    console.log('🔐 认证检查结果:', isAuthenticated)
+    
     if (!isAuthenticated) {
       console.log('❌ 用户未认证，必须登录')
       await this.showLoginDialog()
@@ -70,11 +73,27 @@ export class SimpleProcessingHelper {
     }
 
     // Step 2: 获取用户和配置
+    console.log('👤 获取用户信息...')
     const user = simpleAuthManager.getCurrentUser()
+    console.log('👤 用户信息:', user ? `${user.username} (${user.id})` : 'null')
+    
+    console.log('⚙️ 获取用户配置...')
+    // 强制刷新配置以确保获取最新设置
+    console.log('🔄 强制刷新用户配置以获取最新设置...')
+    await simpleAuthManager.refreshUserConfig(true) // 强制刷新
+    
     const userConfig = simpleAuthManager.getUserConfig()
+    console.log('⚙️ 用户配置:', userConfig ? {
+      aiModel: userConfig.aiModel,
+      programmingModel: userConfig.programmingModel,
+      multipleChoiceModel: userConfig.multipleChoiceModel,
+      language: userConfig.language
+    } : 'null')
     
     if (!user || !userConfig) {
       console.log('❌ 用户信息或配置获取失败，需要重新登录')
+      console.log('  - 用户信息存在:', !!user)
+      console.log('  - 用户配置存在:', !!userConfig)
       await this.showLoginDialog()
       return
     }
@@ -238,7 +257,7 @@ export class SimpleProcessingHelper {
       console.log("✅ AI处理成功")
       mainWindow.webContents.send(
         this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
-        result.data
+        'data' in result ? result.data : null
       )
       this.deps.setView("solutions")
 
@@ -357,78 +376,34 @@ export class SimpleProcessingHelper {
         }
       }
 
-      // Step 1: 提取题目信息
+      // Step 1: 识别题目类型和提取题目信息
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
-          message: "正在从截图中分析题目...",
-          progress: 20
+          message: "正在识别题目类型...",
+          progress: 10
         })
       }
 
       const imageDataList = screenshots.map(screenshot => screenshot.data)
-      const extractionModel = userConfig.aiModel || 'claude-3-5-sonnet-20241022'
-
-      const messages = [
-        {
-          role: "system" as const, 
-          content: "你是一个编程题目解释助手。请严格按照要求分析编程题目的截图，提取所有相关信息。\n\n重要要求：\n1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记\n2. JSON必须包含以下字段：problem_statement, constraints, example_input, example_output\n3. 如果某个字段无法从截图中获取，请设置为空字符串\n4. 确保返回的是有效的JSON格式\n\n示例输出格式：\n{\"problem_statement\":\"题目描述\",\"constraints\":\"约束条件\",\"example_input\":\"示例输入\",\"example_output\":\"示例输出\"}"
-        },
-        {
-          role: "user" as const,
-          content: [
-            {
-              type: "text" as const, 
-              text: `从这些截图中提取编程题目详情、输入描述、输出描述以及示例，以严格的JSON格式返回。我们将使用${language}语言来解决这个问题。请确保返回的是有效的JSON格式，不要包含任何其他文本。`
-            },
-            ...imageDataList.map(data => ({
-              type: "image_url" as const,
-              image_url: { url: `data:image/png;base64,${data}` }
-            }))
-          ]
-        }
-      ]
-
-      const extractionResponse = await this.ismaqueClient.chat.completions.create({
-        model: extractionModel,
-        messages: messages,
-        max_tokens: 4000,
-        temperature: 0.1
-      }, { signal })
-
-      // 解析题目信息
-      let problemInfo
-      try {
-        const responseText = extractionResponse.choices[0].message.content
-        console.log("AI提取响应:", responseText)
-        
-        let jsonText = responseText.trim()
-        jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-        
-        const jsonStart = jsonText.indexOf('{')
-        const jsonEnd = jsonText.lastIndexOf('}')
-        
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-          jsonText = jsonText.substring(jsonStart, jsonEnd + 1)
-        }
-        
-        problemInfo = JSON.parse(jsonText)
-        
-        problemInfo = {
-          problem_statement: problemInfo.problem_statement || "无法从截图中提取题目描述",
-          constraints: problemInfo.constraints || "无法从截图中提取约束条件",
-          example_input: problemInfo.example_input || "无法从截图中提取示例输入", 
-          example_output: problemInfo.example_output || "无法从截图中提取示例输出"
-        }
-        
-        console.log("✅ 题目信息提取成功:", problemInfo)
-        
-      } catch (error) {
-        console.error("解析AI响应失败:", error)
-        return {
-          success: false,
-          error: `解析题目信息失败：${error.message}`
-        }
+      
+      // 根据题目类型选择合适的模型
+      const questionType = await this.identifyQuestionType(imageDataList, userConfig, signal)
+      
+      if (mainWindow) {
+        mainWindow.webContents.send("processing-status", {
+          message: `检测到${questionType === 'programming' ? '编程题' : '选择题'}，正在提取题目信息...`,
+          progress: 20
+        })
       }
+
+      // 根据题目类型提取不同的信息
+      const problemInfo = await this.extractProblemInfo(imageDataList, questionType, userConfig, language, signal)
+      
+      if (!problemInfo.success) {
+        return problemInfo
+      }
+      
+      console.log("✅ 题目信息提取成功:", (problemInfo as any).data)
 
       // Step 2: 生成解决方案
       if (mainWindow) {
@@ -439,17 +414,17 @@ export class SimpleProcessingHelper {
       }
 
       // 存储题目信息
-      this.deps.setProblemInfo(problemInfo)
+      this.deps.setProblemInfo((problemInfo as any).data)
 
       // 发送题目提取成功事件
       if (mainWindow) {
         mainWindow.webContents.send(
           this.deps.PROCESSING_EVENTS.PROBLEM_EXTRACTED,
-          problemInfo
+          (problemInfo as any).data
         )
       }
 
-      const solutionsResult = await this.generateSolutions(userConfig, language, problemInfo, signal)
+      const solutionsResult = await this.generateSolutions(userConfig, language, (problemInfo as any).data, signal)
       
       if (solutionsResult.success) {
         // 清除额外截图队列
@@ -462,9 +437,9 @@ export class SimpleProcessingHelper {
           })
         }
         
-        return { success: true, data: solutionsResult.data }
+        return { success: true, data: (solutionsResult as any).data }
       } else {
-        throw new Error(solutionsResult.error || "生成解决方案失败")
+        throw new Error((solutionsResult as any).error || "生成解决方案失败")
       }
       
     } catch (error: any) {
@@ -495,9 +470,34 @@ export class SimpleProcessingHelper {
         }
       }
 
-      const solutionModel = userConfig.aiModel || 'claude-3-5-sonnet-20241022'
+      // 根据题目类型选择处理方式
+      if (problemInfo.type === 'multiple_choice') {
+        return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal)
+      } else {
+        return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal)
+      }
+      
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "处理已被用户取消"
+        }
+      }
+      
+      console.error("生成解决方案错误:", error)
+      return { success: false, error: error.message || "生成解决方案失败" }
+    }
+  }
 
-      const promptText = `
+  /**
+   * 生成编程题解决方案
+   */
+  private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
+    // 使用编程题模型
+    const solutionModel = userConfig.programmingModel || userConfig.aiModel || 'claude-3-5-sonnet-20241022'
+
+    const promptText = `
 为以下编程题目生成详细的解决方案：
 
 题目描述：
@@ -529,77 +529,204 @@ ${problemInfo.example_output || "未提供示例输出。"}
 - 包含适当的导入语句和必要的库引用
 `
 
-      const solutionResponse = await this.ismaqueClient.chat.completions.create({
-        model: solutionModel,
-        messages: [
-          { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
-          { role: "user", content: promptText }
-        ],
-        max_tokens: 4000,
-        temperature: 0.2
-      }, { signal })
+    const solutionResponse = await this.ismaqueClient.chat.completions.create({
+      model: solutionModel,
+      messages: [
+        { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
+        { role: "user", content: promptText }
+      ],
+      max_tokens: 4000,
+      temperature: 0.2
+    }, { signal })
 
-      const responseContent = solutionResponse.choices[0].message.content
-      
-      // 解析响应内容
-      const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
-      const code = codeMatch ? codeMatch[1].trim() : responseContent
-      
-      // 提取思路
-      const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i
-      const thoughtsMatch = responseContent.match(thoughtsRegex)
-      let thoughts: string[] = []
-      
-      if (thoughtsMatch && thoughtsMatch[1]) {
-        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
-        if (bulletPoints) {
-          thoughts = bulletPoints.map(point => 
-            point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
-          ).filter(Boolean)
-        } else {
-          thoughts = thoughtsMatch[1].split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-        }
+    const responseContent = solutionResponse.choices[0].message.content
+    
+    // 解析响应内容
+    const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
+    const code = codeMatch ? codeMatch[1].trim() : responseContent
+    
+    // 提取思路
+    const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i
+    const thoughtsMatch = responseContent.match(thoughtsRegex)
+    let thoughts: string[] = []
+    
+    if (thoughtsMatch && thoughtsMatch[1]) {
+      const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
+      if (bulletPoints) {
+        thoughts = bulletPoints.map(point => 
+          point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
+        ).filter(Boolean)
+      } else {
+        thoughts = thoughtsMatch[1].split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
       }
-      
-      // 提取复杂度信息
-      const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i
-      const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i
-      
-      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。"
-      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。"
-      
-      const timeMatch = responseContent.match(timeComplexityPattern)
-      if (timeMatch && timeMatch[1]) {
-        timeComplexity = timeMatch[1].trim()
-      }
-      
-      const spaceMatch = responseContent.match(spaceComplexityPattern)
-      if (spaceMatch && spaceMatch[1]) {
-        spaceComplexity = spaceMatch[1].trim()
-      }
-
-      const formattedResponse = {
-        code: code,
-        thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
-        time_complexity: timeComplexity,
-        space_complexity: spaceComplexity
-      }
-
-      return { success: true, data: formattedResponse }
-      
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        return {
-          success: false,
-          error: "处理已被用户取消"
-        }
-      }
-      
-      console.error("生成解决方案错误:", error)
-      return { success: false, error: error.message || "生成解决方案失败" }
     }
+    
+    // 提取复杂度信息
+    const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i
+    const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i
+    
+    let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。"
+    let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。"
+    
+    const timeMatch = responseContent.match(timeComplexityPattern)
+    if (timeMatch && timeMatch[1]) {
+      timeComplexity = timeMatch[1].trim()
+    }
+    
+    const spaceMatch = responseContent.match(spaceComplexityPattern)
+    if (spaceMatch && spaceMatch[1]) {
+      spaceComplexity = spaceMatch[1].trim()
+    }
+
+    const formattedResponse = {
+      type: 'programming',
+      code: code,
+      thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
+      time_complexity: timeComplexity,
+      space_complexity: spaceComplexity
+    }
+
+    return { success: true, data: formattedResponse }
+  }
+
+  /**
+   * 生成选择题解决方案（支持多题）
+   */
+  private async generateMultipleChoiceSolutions(userConfig: any, problemInfo: any, signal: AbortSignal) {
+    console.log('🎯 开始生成选择题解决方案...')
+    
+    // 使用选择题模型
+    const solutionModel = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-3-5-sonnet-20241022'
+    console.log('🤖 使用模型:', solutionModel)
+
+    const questions = problemInfo.multiple_choice_questions || []
+    console.log('📝 处理题目数量:', questions.length)
+    
+    if (questions.length === 0) {
+      console.log('❌ 没有找到选择题题目')
+      return {
+        success: false,
+        error: "没有找到选择题题目"
+      }
+    }
+
+    // 构建问题文本
+    const questionsText = questions.map((q: any, index: number) => `
+题目${q.question_number || (index + 1)}：
+${q.question_text}
+
+选项：
+${q.options.join('\n')}
+`).join('\n---\n')
+
+    const promptText = `
+请分析以下选择题并给出答案：
+
+${questionsText}
+
+**要求：**
+1. 对每道题进行分析并给出答案
+2. 提供解题思路和推理过程
+3. 答案格式：题号 - 答案选项（如：1 - A）
+
+请按照以下格式回复：
+
+**答案：**
+题目1 - A
+题目2 - B
+...
+
+**解题思路：**
+1. 题目1分析：...
+2. 题目2分析：...
+...
+
+**整体思路：**
+- 关键点1
+- 关键点2
+...
+`
+
+    console.log('🔄 发送选择题请求到AI...')
+    
+    const solutionResponse = await this.ismaqueClient.chat.completions.create({
+      model: solutionModel,
+      messages: [
+        { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。" },
+        { role: "user", content: promptText }
+      ],
+      max_tokens: 4000,
+      temperature: 0.1
+    }, { signal })
+
+    const responseContent = solutionResponse.choices[0].message.content
+    console.log('✅ 选择题AI响应完成')
+    console.log('📄 AI回复内容:', responseContent?.substring(0, 500) + '...')
+    
+    // 解析答案
+    console.log('🔍 开始解析选择题答案...')
+    const answers: any[] = []
+    
+    // 尝试多种答案格式
+    const answerPatterns = [
+      /题目(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
+      /(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
+      /答案[：:]\s*([A-Z])/g,
+      /选择[：:]?\s*([A-Z])/g
+    ]
+    
+    let foundAnswers = false
+    for (const pattern of answerPatterns) {
+      pattern.lastIndex = 0 // 重置正则表达式索引
+      let match
+      while ((match = pattern.exec(responseContent)) !== null) {
+        const questionNum = match[1] || questions[0]?.question_number || '1'
+        const answer = match[match.length - 1] // 取最后一个匹配组作为答案
+        
+        answers.push({
+          question_number: questionNum,
+          answer: answer,
+          reasoning: `题目${questionNum}的解答分析`
+        })
+        foundAnswers = true
+      }
+      if (foundAnswers) break
+    }
+    
+    console.log('🎯 解析到的答案数量:', answers.length)
+    console.log('📋 答案详情:', answers)
+
+    // 提取整体思路
+    const thoughtsRegex = /(?:整体思路|解题思路|思路|关键点)[:：]([\s\S]*?)(?:$)/i
+    const thoughtsMatch = responseContent.match(thoughtsRegex)
+    let thoughts: string[] = []
+    
+    if (thoughtsMatch && thoughtsMatch[1]) {
+      const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
+      if (bulletPoints) {
+        thoughts = bulletPoints.map(point => 
+          point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
+        ).filter(Boolean)
+      } else {
+        thoughts = thoughtsMatch[1].split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+      }
+    }
+
+    const formattedResponse = {
+      type: 'multiple_choice',
+      answers: answers,
+      thoughts: thoughts.length > 0 ? thoughts : ["选择题分析和推理过程"]
+      // time_complexity 和 space_complexity 对选择题留空
+    }
+
+    console.log('✅ 选择题解决方案生成完成')
+    console.log('📊 最终响应:', JSON.stringify(formattedResponse, null, 2))
+    
+    return { success: true, data: formattedResponse }
   }
 
   /**
@@ -736,7 +863,9 @@ ${problemInfo.example_output || "未提供示例输出。"}
         }
       }
       
-      const debuggingModel = userConfig.aiModel || 'claude-3-5-sonnet-20241022'
+      // 固定使用 gemini-2.5-flash-preview-04-17 进行调试截图处理
+      const debuggingModel = 'gemini-2.5-flash-preview-04-17'
+      console.log('🔍 使用固定模型进行调试截图处理:', debuggingModel)
       
       const messages = [
         {
@@ -875,6 +1004,291 @@ ${problemInfo.example_output || "未提供示例输出。"}
   private isAuthError(error: string): boolean {
     const authErrorKeywords = ['401', 'unauthorized', 'invalid token', 'authentication failed', '认证失败', '登录失败']
     return authErrorKeywords.some(keyword => error.toLowerCase().includes(keyword.toLowerCase()))
+  }
+
+  /**
+   * 识别题目类型（编程题 vs 选择题）
+   */
+  private async identifyQuestionType(
+    imageDataList: string[], 
+    userConfig: any, 
+    signal: AbortSignal
+  ): Promise<'programming' | 'multiple_choice'> {
+    try {
+      if (!this.ismaqueClient) {
+        throw new Error("AI客户端未初始化")
+      }
+
+      // 固定使用 gemini-2.5-flash-preview-04-17 进行截图识别
+      const model = 'gemini-2.5-flash-preview-04-17'
+      console.log('🔍 使用固定模型进行截图识别:', model)
+
+      const messages = [
+        {
+          role: "system" as const,
+          content: `你是一个题目类型识别专家。请分析截图中的题目类型。
+
+**重要要求：**
+1. 只返回一个单词：programming 或 multiple_choice
+2. 不要任何解释或额外文字
+3. programming = 编程题（需要写代码的题目）
+4. multiple_choice = 选择题（有A、B、C、D等选项的题目）
+
+**判断标准：**
+- 如果看到选项A、B、C、D或类似的选择项 → multiple_choice
+- 如果看到"输入格式"、"输出格式"、"示例"等编程题特征 → programming
+- 如果看到代码输入输出要求 → programming
+- 如果看到多个选择项排列 → multiple_choice`
+        },
+        {
+          role: "user" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: "请识别这些截图中的题目类型，只返回：programming 或 multiple_choice"
+            },
+            ...imageDataList.map(data => ({
+              type: "image_url" as const,
+              image_url: { url: `data:image/png;base64,${data}` }
+            }))
+          ]
+        }
+      ]
+
+      const response = await this.ismaqueClient.chat.completions.create({
+        model: model,
+        messages: messages,
+        max_tokens: 10,
+        temperature: 0.1
+      }, { signal })
+
+      const result = response.choices[0].message.content.trim().toLowerCase()
+      
+      if (result.includes('multiple_choice')) {
+        return 'multiple_choice'
+      } else {
+        return 'programming'  // 默认为编程题
+      }
+
+    } catch (error) {
+      console.warn("题目类型识别失败，默认为编程题:", error)
+      return 'programming'  // 默认情况
+    }
+  }
+
+  /**
+   * 根据题目类型提取题目信息
+   */
+  private async extractProblemInfo(
+    imageDataList: string[], 
+    questionType: 'programming' | 'multiple_choice',
+    userConfig: any,
+    language: string,
+    signal: AbortSignal
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      if (!this.ismaqueClient) {
+        return {
+          success: false,
+          error: "AI客户端未初始化"
+        }
+      }
+
+      // 固定使用 gemini-2.5-flash-preview-04-17 进行截图识别和题目信息提取
+      const model = 'gemini-2.5-flash-preview-04-17'
+      console.log(`🔍 使用固定模型提取${questionType === 'programming' ? '编程题' : '选择题'}信息:`, model)
+
+      if (questionType === 'programming') {
+        return await this.extractProgrammingProblem(imageDataList, model, language, signal)
+      } else {
+        return await this.extractMultipleChoiceProblems(imageDataList, model, signal)
+      }
+
+    } catch (error) {
+      return {
+        success: false,
+        error: `提取题目信息失败：${error.message}`
+      }
+    }
+  }
+
+  /**
+   * 提取编程题信息
+   */
+  private async extractProgrammingProblem(
+    imageDataList: string[],
+    model: string,
+    language: string,
+    signal: AbortSignal
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const messages = [
+        {
+          role: "system" as const,
+          content: `你是一个编程题目解释助手。请严格按照要求分析编程题目的截图，提取所有相关信息。
+
+**重要要求：**
+1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记
+2. JSON必须包含以下字段：type, problem_statement, constraints, example_input, example_output
+3. type 必须设为 "programming"
+4. 如果某个字段无法从截图中获取，请设置为空字符串
+5. 确保返回的是有效的JSON格式
+
+**示例输出格式：**
+{"type":"programming","problem_statement":"题目描述","constraints":"约束条件","example_input":"示例输入","example_output":"示例输出"}`
+        },
+        {
+          role: "user" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: `从这些截图中提取编程题目详情、输入描述、输出描述以及示例，以严格的JSON格式返回。我们将使用${language}语言来解决这个问题。请确保返回的是有效的JSON格式，不要包含任何其他文本。`
+            },
+            ...imageDataList.map(data => ({
+              type: "image_url" as const,
+              image_url: { url: `data:image/png;base64,${data}` }
+            }))
+          ]
+        }
+      ]
+
+      const response = await this.ismaqueClient.chat.completions.create({
+        model: model,
+        messages: messages,
+        max_tokens: 4000,
+        temperature: 0.1
+      }, { signal })
+
+      const responseText = response.choices[0].message.content
+      console.log("编程题AI提取响应:", responseText)
+
+      let jsonText = responseText.trim()
+      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+      const jsonStart = jsonText.indexOf('{')
+      const jsonEnd = jsonText.lastIndexOf('}')
+
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonText = jsonText.substring(jsonStart, jsonEnd + 1)
+      }
+
+      const problemInfo = JSON.parse(jsonText)
+
+      return {
+        success: true,
+        data: {
+          type: 'programming',
+          problem_statement: problemInfo.problem_statement || "无法从截图中提取题目描述",
+          constraints: problemInfo.constraints || "无法从截图中提取约束条件",
+          example_input: problemInfo.example_input || "无法从截图中提取示例输入",
+          example_output: problemInfo.example_output || "无法从截图中提取示例输出"
+        }
+      }
+
+    } catch (error) {
+      console.error("解析编程题AI响应失败:", error)
+      return {
+        success: false,
+        error: `解析编程题信息失败：${error.message}`
+      }
+    }
+  }
+
+  /**
+   * 提取选择题信息（支持多题）
+   */
+  private async extractMultipleChoiceProblems(
+    imageDataList: string[],
+    model: string,
+    signal: AbortSignal
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const messages = [
+        {
+          role: "system" as const,
+          content: `你是一个选择题识别专家。请分析截图中的所有选择题，提取完整信息。
+
+**重要要求：**
+1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记
+2. JSON必须包含：type, problem_statement, multiple_choice_questions
+3. type 必须设为 "multiple_choice"
+4. multiple_choice_questions 是数组，包含所有识别到的选择题
+5. 每个选择题包含：question_number, question_text, options
+6. question_number 是题号（如"1", "2", "A", "B"等）
+7. options 是选项数组（如["A. 选项A", "B. 选项B", ...]）
+8. 确保返回的是有效的JSON格式
+
+**示例输出格式：**
+{
+  "type": "multiple_choice",
+  "problem_statement": "选择题集合",
+  "multiple_choice_questions": [
+    {
+      "question_number": "1",
+      "question_text": "第一题的题目内容",
+      "options": ["A. 选项A", "B. 选项B", "C. 选项C", "D. 选项D"]
+    },
+    {
+      "question_number": "2", 
+      "question_text": "第二题的题目内容",
+      "options": ["A. 选项A", "B. 选项B", "C. 选项C", "D. 选项D"]
+    }
+  ]
+}`
+        },
+        {
+          role: "user" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: "请识别这些截图中的所有选择题，按题号顺序提取题目和选项信息，以严格的JSON格式返回。请确保识别出所有完整的题目。"
+            },
+            ...imageDataList.map(data => ({
+              type: "image_url" as const,
+              image_url: { url: `data:image/png;base64,${data}` }
+            }))
+          ]
+        }
+      ]
+
+      const response = await this.ismaqueClient.chat.completions.create({
+        model: model,
+        messages: messages,
+        max_tokens: 6000,
+        temperature: 0.1
+      }, { signal })
+
+      const responseText = response.choices[0].message.content
+      console.log("选择题AI提取响应:", responseText)
+
+      let jsonText = responseText.trim()
+      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+
+      const jsonStart = jsonText.indexOf('{')
+      const jsonEnd = jsonText.lastIndexOf('}')
+
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonText = jsonText.substring(jsonStart, jsonEnd + 1)
+      }
+
+      const problemInfo = JSON.parse(jsonText)
+
+      return {
+        success: true,
+        data: {
+          type: 'multiple_choice',
+          problem_statement: problemInfo.problem_statement || "选择题集合",
+          multiple_choice_questions: problemInfo.multiple_choice_questions || []
+        }
+      }
+
+    } catch (error) {
+      console.error("解析选择题AI响应失败:", error)
+      return {
+        success: false,
+        error: `解析选择题信息失败：${error.message}`
+      }
+    }
   }
 
   /**

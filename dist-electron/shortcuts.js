@@ -30,6 +30,10 @@ class ShortcutsHelper {
         }
     }
     registerGlobalShortcuts() {
+        // 清理之前注册的快捷键，防止重复注册
+        console.log("Cleaning up existing global shortcuts...");
+        electron_1.globalShortcut.unregisterAll();
+        console.log("Registering global shortcuts...");
         electron_1.globalShortcut.register("CommandOrControl+H", async () => {
             const mainWindow = this.deps.getMainWindow();
             if (mainWindow) {
@@ -62,8 +66,33 @@ class ShortcutsHelper {
             // Notify renderer process to switch view to 'queue'
             const mainWindow = this.deps.getMainWindow();
             if (mainWindow && !mainWindow.isDestroyed()) {
+                // 确保窗口可见并恢复焦点
+                if (mainWindow.getOpacity() === 0 || !this.deps.isVisible()) {
+                    console.log("Window was hidden, restoring visibility...");
+                    mainWindow.setOpacity(1);
+                    mainWindow.setIgnoreMouseEvents(false);
+                    mainWindow.showInactive();
+                    // 更新状态管理
+                    if (typeof this.deps.setVisible === 'function') {
+                        this.deps.setVisible(true);
+                    }
+                }
+                // 确保窗口在屏幕内可见
+                const bounds = mainWindow.getBounds();
+                const { screen } = require('electron');
+                const primaryDisplay = screen.getPrimaryDisplay();
+                const workArea = primaryDisplay.workArea;
+                // 如果窗口完全在屏幕外，将其移回屏幕内
+                if (bounds.x + bounds.width < 0 || bounds.x > workArea.width ||
+                    bounds.y + bounds.height < 0 || bounds.y > workArea.height) {
+                    console.log("Window was off-screen, repositioning...");
+                    const newX = Math.max(0, Math.min(bounds.x, workArea.width - bounds.width));
+                    const newY = Math.max(0, Math.min(bounds.y, workArea.height - bounds.height));
+                    mainWindow.setPosition(newX, newY);
+                }
                 mainWindow.webContents.send("reset-view");
                 mainWindow.webContents.send("reset");
+                console.log("Reset completed, window visibility ensured");
             }
         });
         // New shortcuts for moving the window
@@ -77,11 +106,21 @@ class ShortcutsHelper {
         });
         electron_1.globalShortcut.register("CommandOrControl+Down", () => {
             console.log("Command/Ctrl + down pressed. Moving window down.");
-            this.deps.moveWindowDown();
+            try {
+                this.deps.moveWindowDown();
+            }
+            catch (error) {
+                console.error("Error moving window down:", error);
+            }
         });
         electron_1.globalShortcut.register("CommandOrControl+Up", () => {
             console.log("Command/Ctrl + Up pressed. Moving window Up.");
-            this.deps.moveWindowUp();
+            try {
+                this.deps.moveWindowUp();
+            }
+            catch (error) {
+                console.error("Error moving window up:", error);
+            }
         });
         electron_1.globalShortcut.register("CommandOrControl+B", () => {
             console.log("Command/Ctrl + B pressed. Toggling window visibility.");
@@ -131,6 +170,50 @@ class ShortcutsHelper {
             if (mainWindow) {
                 // Send an event to the renderer to delete the last screenshot
                 mainWindow.webContents.send("delete-last-screenshot");
+            }
+        });
+        // Emergency window recovery shortcut (Ctrl+Shift+R)
+        electron_1.globalShortcut.register("CommandOrControl+Shift+R", () => {
+            console.log("Emergency window recovery shortcut activated!");
+            const mainWindow = this.deps.getMainWindow();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                try {
+                    // Force window to be visible and on screen
+                    const { screen } = require('electron');
+                    const primaryDisplay = screen.getPrimaryDisplay();
+                    const workArea = primaryDisplay.workArea;
+                    // Reset window to center of screen
+                    const bounds = mainWindow.getBounds();
+                    const centerX = workArea.x + (workArea.width - bounds.width) / 2;
+                    const centerY = workArea.y + (workArea.height - bounds.height) / 2;
+                    mainWindow.setPosition(Math.round(centerX), Math.round(centerY));
+                    mainWindow.setOpacity(1);
+                    mainWindow.setIgnoreMouseEvents(false);
+                    mainWindow.show();
+                    mainWindow.focus();
+                    console.log("Window recovered to center of screen");
+                }
+                catch (error) {
+                    console.error("Error during emergency window recovery:", error);
+                }
+            }
+        });
+        // Manual config refresh shortcut (Ctrl+Shift+C)
+        electron_1.globalShortcut.register("CommandOrControl+Shift+C", async () => {
+            console.log("Manual config refresh shortcut activated!");
+            try {
+                const { simpleAuthManager } = require('./SimpleAuthManager');
+                console.log("🔄 手动刷新用户配置...");
+                await simpleAuthManager.refreshUserConfig(true);
+                console.log("✅ 配置刷新完成");
+                // 显示通知
+                const mainWindow = this.deps.getMainWindow();
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send("config-refreshed");
+                }
+            }
+            catch (error) {
+                console.error("Error during manual config refresh:", error);
             }
         });
         // Unregister shortcuts when quitting

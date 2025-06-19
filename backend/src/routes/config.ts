@@ -14,6 +14,16 @@ const configValidation = [
     .optional()
     .isIn(['claude', 'gemini', 'openai'])
     .withMessage('无效的AI服务提供商'),
+  // 新的分类模型字段
+  body('programmingModel')
+    .optional()
+    .isString()
+    .withMessage('编程题模型必须是字符串'),
+  body('multipleChoiceModel')
+    .optional()
+    .isString()
+    .withMessage('选择题模型必须是字符串'),
+  // 保留向后兼容的字段
   body('extractionModel')
     .optional()
     .isString()
@@ -52,15 +62,21 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
       const defaultConfig = await prisma.userConfig.create({
         data: {
           userId: req.user!.userId,
+          programmingModel: 'claude-3-5-sonnet-20241022',
+          multipleChoiceModel: 'claude-3-5-sonnet-20241022',
           selectedProvider: 'claude',
           extractionModel: 'claude-3-7-sonnet-20250219',
           solutionModel: 'claude-3-7-sonnet-20250219',
           debuggingModel: 'claude-3-7-sonnet-20250219',
           language: 'python'
-        }
+        } as any
       });
 
       return ResponseUtils.success(res, {
+        // 新的分类模型字段
+        programmingModel: (defaultConfig as any).programmingModel,
+        multipleChoiceModel: (defaultConfig as any).multipleChoiceModel,
+        // 保留向后兼容的字段
         selectedProvider: defaultConfig.selectedProvider,
         extractionModel: defaultConfig.extractionModel,
         solutionModel: defaultConfig.solutionModel,
@@ -72,6 +88,10 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     }
 
     ResponseUtils.success(res, {
+      // 新的分类模型字段
+      programmingModel: (config as any).programmingModel,
+      multipleChoiceModel: (config as any).multipleChoiceModel,
+      // 保留向后兼容的字段
       selectedProvider: config.selectedProvider,
       extractionModel: config.extractionModel,
       solutionModel: config.solutionModel,
@@ -97,7 +117,15 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
 
     const updateData: Partial<UserConfigData> = {};
     
-    // 只更新提供的字段
+    // 新的分类模型字段
+    if (req.body.programmingModel !== undefined) {
+      updateData.programmingModel = req.body.programmingModel;
+    }
+    if (req.body.multipleChoiceModel !== undefined) {
+      updateData.multipleChoiceModel = req.body.multipleChoiceModel;
+    }
+    
+    // 只更新提供的字段（保留向后兼容）
     if (req.body.selectedProvider !== undefined) {
       updateData.selectedProvider = req.body.selectedProvider;
     }
@@ -125,6 +153,8 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
       update: updateData,
       create: {
         userId: req.user!.userId,
+        programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
+        multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
         selectedProvider: updateData.selectedProvider || 'claude',
         extractionModel: updateData.extractionModel || 'claude-3-7-sonnet-20250219',
         solutionModel: updateData.solutionModel || 'claude-3-7-sonnet-20250219',
@@ -132,10 +162,14 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
         language: updateData.language || 'python',
         opacity: updateData.opacity || 1.0,
         showCopyButton: updateData.showCopyButton !== undefined ? updateData.showCopyButton : true
-      }
+      } as any
     });
 
     ResponseUtils.success(res, {
+      // 新的分类模型字段
+      programmingModel: (updatedConfig as any).programmingModel,
+      multipleChoiceModel: (updatedConfig as any).multipleChoiceModel,
+      // 保留向后兼容的字段
       selectedProvider: updatedConfig.selectedProvider,
       extractionModel: updatedConfig.extractionModel,
       solutionModel: updatedConfig.solutionModel,
@@ -222,6 +256,8 @@ router.get('/languages', authenticateToken, async (req: AuthenticatedRequest, re
 router.post('/reset', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const defaultConfig = {
+      programmingModel: 'claude-3-5-sonnet-20241022',
+      multipleChoiceModel: 'claude-3-5-sonnet-20241022',
       selectedProvider: 'claude',
       extractionModel: 'claude-3-7-sonnet-20250219',
       solutionModel: 'claude-3-7-sonnet-20250219',
@@ -241,6 +277,8 @@ router.post('/reset', authenticateToken, async (req: AuthenticatedRequest, res: 
     });
 
     ResponseUtils.success(res, {
+      programmingModel: (updatedConfig as any).programmingModel,
+      multipleChoiceModel: (updatedConfig as any).multipleChoiceModel,
       selectedProvider: updatedConfig.selectedProvider,
       extractionModel: updatedConfig.extractionModel,
       solutionModel: updatedConfig.solutionModel,
@@ -281,6 +319,8 @@ router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
       const defaultConfig = await prisma.userConfig.create({
         data: {
           userId,
+          programmingModel: 'claude-3-5-sonnet-20241022',
+          multipleChoiceModel: 'claude-3-5-sonnet-20241022',
           aiModel: 'claude-3-5-sonnet-20241022',
           selectedProvider: 'claude',
           extractionModel: 'claude-3-7-sonnet-20250219',
@@ -288,10 +328,12 @@ router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
           debuggingModel: 'claude-3-7-sonnet-20250219',
           language: 'python',
           theme: 'system'
-        }
+        } as any
       });
 
       res.json({
+        programmingModel: (defaultConfig as any).programmingModel,
+        multipleChoiceModel: (defaultConfig as any).multipleChoiceModel,
         aiModel: defaultConfig.aiModel,
         language: defaultConfig.language,
         theme: defaultConfig.theme,
@@ -322,6 +364,8 @@ router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
     }
 
     res.json({
+      programmingModel: (config as any).programmingModel,
+      multipleChoiceModel: (config as any).multipleChoiceModel,
       aiModel: config!.aiModel,
       language: config!.language,
       theme: config!.theme,
@@ -355,6 +399,14 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
     }
 
     const updateData: any = {};
+    
+    // 新的分类模型字段
+    if (req.body.programmingModel !== undefined) {
+      updateData.programmingModel = req.body.programmingModel;
+    }
+    if (req.body.multipleChoiceModel !== undefined) {
+      updateData.multipleChoiceModel = req.body.multipleChoiceModel;
+    }
     
     // 简化配置字段
     if (req.body.aiModel !== undefined) {
@@ -401,6 +453,8 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
       update: updateData,
       create: {
         userId,
+        programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
+        multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
         aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',
         language: updateData.language || 'python',
         theme: updateData.theme || 'system',
@@ -413,12 +467,14 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
         debuggingModel: updateData.debuggingModel || 'claude-3-7-sonnet-20250219',
         opacity: updateData.opacity || 1.0,
         showCopyButton: updateData.showCopyButton !== undefined ? updateData.showCopyButton : true
-      }
+      } as any
     });
 
     res.json({
       message: '配置更新成功',
       config: {
+        programmingModel: (updatedConfig as any).programmingModel,
+        multipleChoiceModel: (updatedConfig as any).multipleChoiceModel,
         aiModel: updatedConfig.aiModel,
         language: updatedConfig.language,
         theme: updatedConfig.theme,

@@ -189,23 +189,33 @@ class SimpleAuthManager extends events_1.EventEmitter {
      */
     async refreshUserConfig(forceRefresh = false) {
         if (!this.token || !this.user) {
+            console.log('❌ 无法刷新配置：缺少token或用户信息');
             return null;
         }
         // 检查缓存是否有效（5分钟缓存）
         const now = Date.now();
-        const cacheValid = (now - this.configCacheExpiry) < 5 * 60 * 1000;
+        const cacheAge = now - this.configCacheExpiry;
+        const cacheValid = cacheAge < 5 * 60 * 1000;
+        console.log(`📋 配置缓存状态检查:`);
+        console.log(`  - 强制刷新: ${forceRefresh}`);
+        console.log(`  - 缓存年龄: ${Math.round(cacheAge / 1000)}秒`);
+        console.log(`  - 缓存有效: ${cacheValid}`);
+        console.log(`  - 当前有配置: ${!!this.userConfig}`);
         if (!forceRefresh && cacheValid && this.userConfig) {
             console.log('📋 使用缓存的用户配置');
+            console.log(`📋 缓存配置详情: multipleChoiceModel=${this.userConfig.multipleChoiceModel}`);
             return this.userConfig;
         }
+        console.log(`🔄 开始${forceRefresh ? '强制' : '自动'}刷新配置...`);
         try {
             await this.fetchUserConfig();
             this.configCacheExpiry = now;
-            console.log('📋 配置已刷新并缓存');
+            console.log('✅ 配置已刷新并缓存');
+            console.log(`📋 新配置详情: multipleChoiceModel=${this.userConfig?.multipleChoiceModel}`);
             return this.userConfig;
         }
         catch (error) {
-            console.error('刷新用户配置失败:', error);
+            console.error('❌ 刷新用户配置失败:', error);
             // 如果刷新失败但有缓存，返回缓存
             if (this.userConfig) {
                 console.log('📋 刷新失败，使用缓存配置');
@@ -425,12 +435,65 @@ class SimpleAuthManager extends events_1.EventEmitter {
             if (error.response) {
                 console.log('  - 响应状态:', error.response.status);
                 console.log('  - 响应数据:', error.response.data);
+                // 如果是401错误，尝试刷新token
+                if (error.response.status === 401) {
+                    console.log('🔄 Token可能已过期，尝试刷新...');
+                    const refreshResult = await this.tryRefreshToken();
+                    if (refreshResult) {
+                        console.log('✅ Token刷新成功，重新验证...');
+                        // 递归调用验证，但限制递归次数
+                        if (!this.verifyToken.name.includes('_retry')) {
+                            const retryVerify = this.verifyToken.bind(this);
+                            Object.defineProperty(retryVerify, 'name', { value: 'verifyToken_retry' });
+                            return await retryVerify();
+                        }
+                    }
+                }
             }
             else if (error.request) {
                 console.log('  - 请求失败，无响应');
                 console.log('  - 请求详情:', error.request);
             }
             throw new Error(`Token验证失败: ${error.message}`);
+        }
+    }
+    /**
+     * 尝试刷新Token
+     */
+    async tryRefreshToken() {
+        try {
+            // 从shared-session.json获取refreshToken
+            const fs = require('fs');
+            const path = require('path');
+            const sharedSessionPath = path.join(process.cwd(), 'shared-session.json');
+            if (!fs.existsSync(sharedSessionPath)) {
+                console.log('❌ 没有找到共享会话文件，无法刷新token');
+                return false;
+            }
+            const sharedSession = JSON.parse(fs.readFileSync(sharedSessionPath, 'utf8'));
+            if (!sharedSession.refreshToken) {
+                console.log('❌ 共享会话中没有refreshToken');
+                return false;
+            }
+            console.log('🔄 使用refreshToken刷新访问token...');
+            const response = await this.apiClient.post('/api/auth/refresh', {
+                refreshToken: sharedSession.refreshToken
+            });
+            if (response.data && response.data.token) {
+                console.log('✅ Token刷新成功');
+                this.token = response.data.token;
+                this.setupApiClient();
+                this.saveToken(this.token);
+                // 更新shared-session.json
+                sharedSession.accessToken = this.token;
+                fs.writeFileSync(sharedSessionPath, JSON.stringify(sharedSession, null, 2));
+                return true;
+            }
+            return false;
+        }
+        catch (error) {
+            console.error('❌ Token刷新失败:', error);
+            return false;
         }
     }
     /**
@@ -453,14 +516,20 @@ class SimpleAuthManager extends events_1.EventEmitter {
         if (!this.user) {
             throw new Error('没有用户信息');
         }
-        console.log('📋 获取用户配置...');
+        console.log('📋 正在从后端获取用户配置...');
+        console.log('🌐 请求URL:', `${this.apiBaseUrl}/api/config`);
         try {
             // 使用简化的配置API路由
             const response = await this.apiClient.get('/api/config');
+            console.log('📥 后端配置响应状态:', response.status);
+            console.log('📥 后端返回的原始配置数据:', JSON.stringify(response.data, null, 2));
             if (response.data) {
-                // 根据后端返回的数据结构适配
+                // 根据后端返回的数据结构适配，支持新的模型字段
                 this.userConfig = {
-                    aiModel: response.data.aiModel || 'claude-3-5-sonnet-20241022',
+                    // 兼容新旧模型字段
+                    aiModel: response.data.aiModel || response.data.programmingModel || 'claude-3-5-sonnet-20241022',
+                    programmingModel: response.data.programmingModel || response.data.aiModel || 'claude-3-5-sonnet-20241022',
+                    multipleChoiceModel: response.data.multipleChoiceModel || response.data.aiModel || 'claude-3-5-sonnet-20241022',
                     language: response.data.language || 'python',
                     theme: response.data.theme || 'system',
                     shortcuts: response.data.shortcuts || {
@@ -480,7 +549,11 @@ class SimpleAuthManager extends events_1.EventEmitter {
                         compressionLevel: 80
                     }
                 };
-                console.log('✅ 用户配置获取成功:', this.userConfig.aiModel, this.userConfig.language);
+                console.log('✅ 用户配置构建成功:');
+                console.log(`  - aiModel: ${this.userConfig.aiModel}`);
+                console.log(`  - programmingModel: ${this.userConfig.programmingModel}`);
+                console.log(`  - multipleChoiceModel: ${this.userConfig.multipleChoiceModel}`);
+                console.log(`  - language: ${this.userConfig.language}`);
             }
             else {
                 throw new Error('API返回空数据');
@@ -492,6 +565,8 @@ class SimpleAuthManager extends events_1.EventEmitter {
             console.log('🔧 使用默认配置...');
             this.userConfig = {
                 aiModel: 'claude-3-5-sonnet-20241022',
+                programmingModel: 'claude-3-5-sonnet-20241022',
+                multipleChoiceModel: 'claude-3-5-sonnet-20241022',
                 language: 'python',
                 theme: 'system',
                 shortcuts: {

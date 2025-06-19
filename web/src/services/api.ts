@@ -1,33 +1,9 @@
 import axios from 'axios';
-import type { 
-  User, 
-  AuthResponse, 
-  LoginRequest, 
-  RegisterRequest, 
-  UserConfig, 
-  AIModel, 
-  ApiResponse 
-} from '../types';
+// Import removed - will be added back when needed
 
 const BASE_URL = 'http://localhost:3001/api';
 
-interface LoginCredentials {
-  username: string;
-  password: string;
-}
-
-interface RegisterCredentials {
-  username: string;
-  password: string;
-  email: string;
-}
-
-interface UserResponse {
-  id: string;
-  username: string;
-  email: string;
-  token: string;
-}
+// Removed unused interfaces
 
 // 扩展配置类型定义
 export interface ExtendedDisplayConfig {
@@ -41,6 +17,8 @@ export interface ExtendedDisplayConfig {
 export interface Config {
   display?: ExtendedDisplayConfig;
   aiModel?: string;
+  programmingModel?: string; // 编程题专用模型
+  multipleChoiceModel?: string; // 选择题专用模型
   shortcuts?: {
     takeScreenshot?: string;
     openQueue?: string;
@@ -49,30 +27,7 @@ export interface Config {
   };
 }
 
-// 添加一个本地模拟的配置，用于开发和演示
-let localConfig: Config = {
-  display: {
-    opacity: 0.9,
-    position: 'bottom-right',
-    autoHide: true,
-    hideDelay: 5,
-    showCopyButton: true
-  },
-  aiModel: 'gpt-4o',
-  shortcuts: {
-    takeScreenshot: 'Alt+S',
-    openQueue: 'Alt+Q',
-    openSettings: 'Alt+,'
-  }
-};
-
-// 模拟AI模型列表
-const mockAIModels: AIModel[] = [
-  { id: '1', name: 'gpt-4o', displayName: 'GPT-4o', provider: 'openai', description: '最新的GPT-4o模型', isActive: true },
-  { id: '2', name: 'claude-3-opus', displayName: 'Claude 3 Opus', provider: 'anthropic', description: 'Anthropic的高级模型', isActive: true },
-  { id: '3', name: 'claude-3-sonnet', displayName: 'Claude 3 Sonnet', provider: 'anthropic', description: '平衡能力和速度', isActive: true },
-  { id: '4', name: 'gemini-pro', displayName: 'Gemini Pro', provider: 'google', description: 'Google的高级AI模型', isActive: true },
-];
+// Removed unused local config and mock models - these are now handled by the backend
 
 // 创建axios实例
 const api = axios.create({

@@ -12,6 +12,39 @@ export interface AuthenticatedRequest extends Request {
         userId: string;
     };
 }
+export type QuestionType = 'programming' | 'multiple_choice';
+export interface MultipleChoiceQuestion {
+    question_number: string;
+    question_text: string;
+    options: string[];
+    correct_answer?: string;
+}
+export interface ProblemInfo {
+    type: QuestionType;
+    problem_statement: string;
+    constraints?: string;
+    example_input?: string;
+    example_output?: string;
+    multiple_choice_questions?: MultipleChoiceQuestion[];
+}
+export interface ProgrammingResponse {
+    type: 'programming';
+    code: string;
+    thoughts: string[];
+    time_complexity: string;
+    space_complexity: string;
+}
+export interface MultipleChoiceAnswer {
+    question_number: string;
+    answer: string;
+    reasoning?: string;
+}
+export interface MultipleChoiceResponse {
+    type: 'multiple_choice';
+    answers: MultipleChoiceAnswer[];
+    thoughts: string[];
+}
+export type AIResponse = ProgrammingResponse | MultipleChoiceResponse;
 export interface AIModel {
     id: string;
     modelId: string;
@@ -23,9 +56,11 @@ export interface AIModel {
 }
 export interface UserConfigData {
     selectedProvider: 'claude' | 'gemini' | 'openai';
-    extractionModel: string;
-    solutionModel: string;
-    debuggingModel: string;
+    programmingModel: string;
+    multipleChoiceModel: string;
+    extractionModel?: string;
+    solutionModel?: string;
+    debuggingModel?: string;
     language: string;
     opacity: number;
     showCopyButton: boolean;

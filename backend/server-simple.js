@@ -329,7 +329,7 @@ app.post('/api/auth/create-shared-session', authenticateToken, async (req, res) 
     const accessToken = jwt.sign(
       { userId: user.id, email: user.email },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '7d' } // 延长到7天
     );
 
     const refreshToken = jwt.sign(
@@ -440,10 +440,16 @@ app.get('/api/config', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     const config = await db.getUserConfig(userId);
     
-    console.log(`📋 获取用户 ${userId} 的配置:`, config.aiModel);
+    console.log(`📋 获取用户 ${userId} 的配置:`, {
+      aiModel: config.aiModel,
+      programmingModel: config.programmingModel,
+      multipleChoiceModel: config.multipleChoiceModel,
+      language: config.language
+    });
+    
     res.json(config);
   } catch (error) {
-    console.error('获取配置失败:', error);
+    console.error('❌ 获取配置失败:', error);
     res.status(500).json({ error: '获取配置失败' });
   }
 });
@@ -452,12 +458,21 @@ app.get('/api/config', authenticateToken, async (req, res) => {
 app.put('/api/config', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
+    
+    console.log(`🔄 用户 ${userId} 请求更新配置:`, req.body);
+    
     const updatedConfig = await db.updateUserConfig(userId, req.body);
     
-    console.log(`✅ 用户 ${userId} 配置已更新:`, updatedConfig.aiModel);
+    console.log(`✅ 用户 ${userId} 配置已更新:`, {
+      aiModel: updatedConfig.aiModel,
+      programmingModel: updatedConfig.programmingModel,
+      multipleChoiceModel: updatedConfig.multipleChoiceModel,
+      language: updatedConfig.language
+    });
+    
     res.json(updatedConfig);
   } catch (error) {
-    console.error('更新配置失败:', error);
+    console.error('❌ 更新配置失败:', error);
     res.status(500).json({ error: '更新配置失败' });
   }
 });
@@ -482,11 +497,15 @@ app.post('/api/auth/refresh', async (req, res) => {
     const accessToken = jwt.sign(
       { userId: tokenData.userId, email: tokenData.email },
       JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: '7d' } // 延长到7天
     );
     
     console.log(`🔄 用户 ${tokenData.username} 刷新访问令牌`);
-    res.json({ accessToken });
+    res.json({ 
+      success: true,
+      token: accessToken,  // 客户端期望的字段名
+      accessToken: accessToken
+    });
   } catch (error) {
     console.error('Token refresh error:', error);
     res.status(401).json({ error: '刷新令牌无效' });

@@ -4,6 +4,8 @@ import { configApi } from '../services/api'
 
 interface UserConfig {
   aiModel: string;
+  programmingModel?: string;    // 编程题专用模型
+  multipleChoiceModel?: string; // 选择题专用模型
   language: string;
   theme: 'light' | 'dark' | 'system';
   shortcuts: {
@@ -151,11 +153,11 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  选择AI模型
+                  编程题模型
                 </label>
                 <select
-                  value={config.aiModel}
-                  onChange={(e) => handleConfigUpdate({ aiModel: e.target.value })}
+                  value={config.programmingModel || config.aiModel}
+                  onChange={(e) => handleConfigUpdate({ programmingModel: e.target.value })}
                   disabled={saving}
                   className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
                 >
@@ -165,6 +167,26 @@ export default function DashboardPage() {
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-gray-400 mt-1">用于代码生成和算法分析</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  选择题模型
+                </label>
+                <select
+                  value={config.multipleChoiceModel || config.aiModel}
+                  onChange={(e) => handleConfigUpdate({ multipleChoiceModel: e.target.value })}
+                  disabled={saving}
+                  className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                >
+                  {aiModels.map(model => (
+                    <option key={model.id} value={model.name}>
+                      {model.displayName} ({model.provider})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">用于选择题识别和分析</p>
               </div>
 
               <div>

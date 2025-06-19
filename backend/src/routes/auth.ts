@@ -83,10 +83,12 @@ router.post('/register', async (req, res): Promise<void> => {
     await prismaClient.userConfig.create({
       data: {
         userId: user.id,
+        programmingModel: 'claude-3-5-sonnet-20241022',
+        multipleChoiceModel: 'claude-3-5-sonnet-20241022',
         aiModel: 'claude-3-5-sonnet-20241022',
         language: 'python',
         theme: 'system'
-      }
+      } as any
     });
 
     // 生成JWT token
@@ -179,10 +181,12 @@ router.post('/oauth/callback', async (req, res) => {
       await prismaClient.userConfig.create({
         data: {
           userId: user.id,
+          programmingModel: 'claude-3-5-sonnet-20241022',
+          multipleChoiceModel: 'claude-3-5-sonnet-20241022',
           aiModel: 'claude-3-5-sonnet-20241022',
           language: 'python',
           theme: 'system'
-        }
+        } as any
       });
     }
 
