@@ -21,12 +21,12 @@ echo 🗄️ 启动后端数据库服务...
 cd /d "%~dp0backend"
 
 REM 检查依赖是否安装
-if not exist "node_modules\sqlite3" (
-    echo 📦 安装数据库依赖...
-    npm install sqlite3
+if not exist "node_modules\mysql2" (
+    echo 📦 安装MySQL数据库依赖...
+    npm install mysql2
 )
 
-REM 启动后端服务（带数据库）
+REM 启动后端服务（带MySQL数据库）
 echo 🚀 启动后端API服务 (端口:3001)
 start "后端API服务" cmd /c "node server-simple.js & pause"
 
@@ -97,7 +97,7 @@ echo.
 echo =====================================
 echo 🛠️ 系统管理:
 echo =====================================
-echo • 查看数据库: backend/interview_overlay.db
+echo • 查看数据库: MySQL数据库 (localhost:3306)
 echo • 后端日志: 后端API服务窗口
 echo • Web日志: Web配置中心窗口
 echo • 桌面日志: 桌面客户端窗口
@@ -125,12 +125,8 @@ if errorlevel 1 (
 echo.
 echo 📊 数据库状态:
 cd /d "%~dp0backend"
-if exist "interview_overlay.db" (
-    echo ✅ 数据库文件存在
-    for %%I in (interview_overlay.db) do echo 📄 数据库大小: %%~zI 字节
-) else (
-    echo ❌ 数据库文件不存在
-)
+echo ✅ 使用MySQL数据库
+echo 📄 连接地址: localhost:3306/interview_coder
 
 echo.
 echo 按任意键关闭所有服务...

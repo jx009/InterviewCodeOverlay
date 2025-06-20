@@ -2,7 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('./database');
+const Database = require('./database');
+
+// 创建数据库实例
+const db = new Database();
 
 const app = express();
 const PORT = 3001;

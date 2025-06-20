@@ -156,7 +156,7 @@ export default function DashboardPage() {
                   编程题模型
                 </label>
                 <select
-                  value={config.programmingModel || config.aiModel}
+                  value={config.programmingModel || config.aiModel || 'claude-3-5-sonnet-20241022'}
                   onChange={(e) => handleConfigUpdate({ programmingModel: e.target.value })}
                   disabled={saving}
                   className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
@@ -175,7 +175,7 @@ export default function DashboardPage() {
                   选择题模型
                 </label>
                 <select
-                  value={config.multipleChoiceModel || config.aiModel}
+                  value={config.multipleChoiceModel || config.aiModel || 'claude-3-5-sonnet-20241022'}
                   onChange={(e) => handleConfigUpdate({ multipleChoiceModel: e.target.value })}
                   disabled={saving}
                   className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
@@ -194,7 +194,7 @@ export default function DashboardPage() {
                   首选编程语言
                 </label>
                 <select
-                  value={config.language}
+                  value={config.language || 'python'}
                   onChange={(e) => handleConfigUpdate({ language: e.target.value })}
                   disabled={saving}
                   className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
@@ -221,14 +221,14 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  窗口透明度: {Math.round(config.display.opacity * 100)}%
+                  窗口透明度: {Math.round((config.display?.opacity || 1.0) * 100)}%
                 </label>
                 <input
                   type="range"
                   min="0.1"
                   max="1.0"
                   step="0.05"
-                  value={config.display.opacity}
+                  value={config.display?.opacity || 1.0}
                   onChange={(e) => handleConfigUpdate({ 
                     display: { ...config.display, opacity: parseFloat(e.target.value) }
                   })}
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                   窗口位置
                 </label>
                 <select
-                  value={config.display.position}
+                  value={config.display?.position || 'top-right'}
                   onChange={(e) => handleConfigUpdate({ 
                     display: { ...config.display, position: e.target.value as any }
                   })}
@@ -260,7 +260,7 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-300">自动隐藏</span>
                 <input
                   type="checkbox"
-                  checked={config.display.autoHide}
+                  checked={config.display?.autoHide || false}
                   onChange={(e) => handleConfigUpdate({ 
                     display: { ...config.display, autoHide: e.target.checked }
                   })}
@@ -286,7 +286,7 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-300">自动处理截图</span>
                 <input
                   type="checkbox"
-                  checked={config.processing.autoProcess}
+                  checked={config.processing?.autoProcess || false}
                   onChange={(e) => handleConfigUpdate({ 
                     processing: { ...config.processing, autoProcess: e.target.checked }
                   })}
@@ -299,7 +299,7 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-300">保存截图</span>
                 <input
                   type="checkbox"
-                  checked={config.processing.saveScreenshots}
+                  checked={config.processing?.saveScreenshots || false}
                   onChange={(e) => handleConfigUpdate({ 
                     processing: { ...config.processing, saveScreenshots: e.target.checked }
                   })}
@@ -310,14 +310,14 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  压缩级别: {Math.round(config.processing.compressionLevel * 100)}%
+                  压缩级别: {Math.round((config.processing?.compressionLevel || 0.8) * 100)}%
                 </label>
                 <input
                   type="range"
                   min="0.1"
                   max="1.0"
                   step="0.1"
-                  value={config.processing.compressionLevel}
+                  value={config.processing?.compressionLevel || 0.8}
                   onChange={(e) => handleConfigUpdate({ 
                     processing: { ...config.processing, compressionLevel: parseFloat(e.target.value) }
                   })}
@@ -346,7 +346,7 @@ export default function DashboardPage() {
                 <div
                   key={theme.value}
                   className={`p-3 rounded-lg cursor-pointer transition-colors border ${
-                    config.theme === theme.value
+                    (config.theme || 'system') === theme.value
                       ? 'border-blue-500 bg-blue-500/10'
                       : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/30'
                   }`}
@@ -355,7 +355,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={`w-3 h-3 rounded-full ${
-                        config.theme === theme.value ? 'bg-blue-500' : 'bg-gray-500'
+                        (config.theme || 'system') === theme.value ? 'bg-blue-500' : 'bg-gray-500'
                       }`}
                     />
                     <span className="font-medium">{theme.label}</span>

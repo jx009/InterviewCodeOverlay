@@ -2,19 +2,19 @@ import { Request } from 'express';
 
 // 用户相关类型
 export interface UserPayload {
-  id: string;
+  id: number;
   username: string;
   email?: string | null;
 }
 
 // 简化的用户认证信息（Cursor风格）
 export interface SimpleUserPayload {
-  userId: string;
+  userId: number;
 }
 
 // 更新AuthenticatedRequest以匹配新的认证中间件
 export interface AuthenticatedRequest extends Request {
-  user?: { userId: string };
+  user?: { userId: number };
 }
 
 // 题目类型枚举

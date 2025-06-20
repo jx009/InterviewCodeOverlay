@@ -11,7 +11,12 @@
     "lint": "eslint src/**/*.ts",
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
-    "studio": "npx prisma studio"
+    "studio": "npx prisma studio",
+    "db:push": "npx prisma db push",
+    "db:reset": "npx prisma migrate reset",
+    "db:init": "node scripts/init-mysql.js init",
+    "db:check": "node scripts/init-mysql.js check",
+    "db:setup": "npm run db:init && npm run generate && npm run migrate"
   },
   "keywords": [
     "interview",
@@ -25,6 +30,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@prisma/client": "^5.7.1",
     "@types/bcrypt": "^5.0.2",
+    "@types/redis": "^4.0.10",
     "axios": "^1.7.7",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
@@ -37,8 +43,10 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "mysql2": "^3.6.5",
+    "nodemailer": "^6.9.8",
     "openai": "^4.28.4",
-    "sqlite3": "^5.1.7",
+    "redis": "^4.7.1",
     "uuid": "^11.0.3",
     "ws": "^8.16.0"
   },
@@ -51,6 +59,7 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.11.30",
+    "@types/nodemailer": "^6.4.14",
     "@types/uuid": "^9.0.8",
     "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^7.18.0",

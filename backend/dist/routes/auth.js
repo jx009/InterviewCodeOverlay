@@ -5,13 +5,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
+const database_1 = require("../config/database");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
-const client_1 = require("@prisma/client");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-const prismaClient = new client_1.PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+router.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'InterviewCodeOverlay API'
+    });
+});
 const registerValidation = [
     (0, express_validator_1.body)('username')
         .isLength({ min: 3, max: 20 })
@@ -30,17 +35,19 @@ const loginValidation = [
     (0, express_validator_1.body)('username').notEmpty().withMessage('用户名不能为空'),
     (0, express_validator_1.body)('password').notEmpty().withMessage('密码不能为空')
 ];
-router.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        service: 'InterviewCodeOverlay API'
-    });
-});
-router.post('/register', async (req, res) => {
+router.post('/register', registerValidation, async (req, res) => {
     try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            res.status(400).json({
+                error: '输入验证失败',
+                details: errors.array()
+            });
+            return;
+        }
         const { username, email, password } = req.body;
-        const existingUser = await prismaClient.user.findFirst({
+        const config = (0, database_1.getConfig)();
+        const existingUser = await database_1.prisma.user.findFirst({
             where: {
                 OR: [
                     { username },
@@ -52,25 +59,23 @@ router.post('/register', async (req, res) => {
             res.status(400).json({ error: '用户名或邮箱已存在' });
             return;
         }
-        const hashedPassword = await bcrypt_1.default.hash(password, 10);
-        const user = await prismaClient.user.create({
+        const hashedPassword = await bcrypt_1.default.hash(password, config.security.bcryptRounds);
+        const user = await database_1.prisma.user.create({
             data: {
                 username,
                 email,
                 password: hashedPassword
             }
         });
-        await prismaClient.userConfig.create({
+        await database_1.prisma.userConfig.create({
             data: {
                 userId: user.id,
-                programmingModel: 'claude-3-5-sonnet-20241022',
-                multipleChoiceModel: 'claude-3-5-sonnet-20241022',
                 aiModel: 'claude-3-5-sonnet-20241022',
                 language: 'python',
                 theme: 'system'
             }
         });
-        const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id }, config.security.jwtSecret, { expiresIn: '7d' });
         res.status(201).json({
             message: '注册成功',
             user: {
@@ -84,13 +89,22 @@ router.post('/register', async (req, res) => {
     }
     catch (error) {
         console.error('注册错误:', error);
-        res.status(500).json({ error: '服务器错误' });
+        res.status(500).json({ error: '服务器内部错误' });
     }
 });
-router.post('/login', async (req, res) => {
+router.post('/login', loginValidation, async (req, res) => {
     try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            res.status(400).json({
+                error: '输入验证失败',
+                details: errors.array()
+            });
+            return;
+        }
         const { username, password } = req.body;
-        const user = await prismaClient.user.findFirst({
+        const config = (0, database_1.getConfig)();
+        const user = await database_1.prisma.user.findFirst({
             where: {
                 OR: [
                     { username },
@@ -107,7 +121,7 @@ router.post('/login', async (req, res) => {
             res.status(401).json({ error: '用户名或密码错误' });
             return;
         }
-        const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id }, config.security.jwtSecret, { expiresIn: '7d' });
         res.json({
             message: '登录成功',
             user: {
@@ -121,35 +135,34 @@ router.post('/login', async (req, res) => {
     }
     catch (error) {
         console.error('登录错误:', error);
-        res.status(500).json({ error: '服务器错误' });
+        res.status(500).json({ error: '服务器内部错误' });
     }
 });
 router.post('/oauth/callback', async (req, res) => {
     try {
         const { code, provider = 'github' } = req.body;
-        let user = await prismaClient.user.findFirst({
+        const config = (0, database_1.getConfig)();
+        let user = await database_1.prisma.user.findFirst({
             where: { email: `demo@${provider}.com` }
         });
         if (!user) {
-            user = await prismaClient.user.create({
+            user = await database_1.prisma.user.create({
                 data: {
                     username: `demo_${provider}_user`,
                     email: `demo@${provider}.com`,
-                    password: await bcrypt_1.default.hash('demo_password', 10)
+                    password: await bcrypt_1.default.hash('demo_password', config.security.bcryptRounds)
                 }
             });
-            await prismaClient.userConfig.create({
+            await database_1.prisma.userConfig.create({
                 data: {
                     userId: user.id,
-                    programmingModel: 'claude-3-5-sonnet-20241022',
-                    multipleChoiceModel: 'claude-3-5-sonnet-20241022',
                     aiModel: 'claude-3-5-sonnet-20241022',
                     language: 'python',
                     theme: 'system'
                 }
             });
         }
-        const token = jsonwebtoken_1.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id }, config.security.jwtSecret, { expiresIn: '7d' });
         res.json({
             message: 'OAuth登录成功',
             user: {
@@ -166,19 +179,54 @@ router.post('/oauth/callback', async (req, res) => {
         res.status(500).json({ error: 'OAuth登录失败' });
     }
 });
+router.get('/verify', auth_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({ error: '用户未认证' });
+            return;
+        }
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: parseInt(req.user.userId) },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                createdAt: true,
+                isActive: true
+            }
+        });
+        if (!user) {
+            res.status(404).json({ error: '用户不存在' });
+            return;
+        }
+        if (!user.isActive) {
+            res.status(401).json({ error: '用户账户已被禁用' });
+            return;
+        }
+        res.json({
+            message: 'Token验证成功',
+            user
+        });
+    }
+    catch (error) {
+        console.error('Token验证错误:', error);
+        res.status(500).json({ error: '服务器内部错误' });
+    }
+});
 router.get('/me', auth_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user) {
             res.status(401).json({ error: '用户未认证' });
             return;
         }
-        const user = await prismaClient.user.findUnique({
-            where: { id: req.user.userId },
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: parseInt(req.user.userId) },
             select: {
                 id: true,
                 username: true,
                 email: true,
-                createdAt: true
+                createdAt: true,
+                isActive: true
             }
         });
         if (!user) {
@@ -189,7 +237,7 @@ router.get('/me', auth_1.authMiddleware, async (req, res) => {
     }
     catch (error) {
         console.error('获取用户信息错误:', error);
-        res.status(500).json({ error: '服务器错误' });
+        res.status(500).json({ error: '服务器内部错误' });
     }
 });
 router.post('/logout', auth_1.authMiddleware, (req, res) => {
@@ -201,7 +249,8 @@ router.post('/refresh', auth_1.authMiddleware, async (req, res) => {
             res.status(401).json({ error: '用户未认证' });
             return;
         }
-        const newToken = jsonwebtoken_1.default.sign({ userId: req.user.userId }, JWT_SECRET, { expiresIn: '7d' });
+        const config = (0, database_1.getConfig)();
+        const newToken = jsonwebtoken_1.default.sign({ userId: parseInt(req.user.userId) }, config.security.jwtSecret, { expiresIn: '7d' });
         res.json({
             message: 'Token刷新成功',
             token: newToken
@@ -209,7 +258,7 @@ router.post('/refresh', auth_1.authMiddleware, async (req, res) => {
     }
     catch (error) {
         console.error('Token刷新错误:', error);
-        res.status(500).json({ error: '服务器错误' });
+        res.status(500).json({ error: '服务器内部错误' });
     }
 });
 exports.default = router;

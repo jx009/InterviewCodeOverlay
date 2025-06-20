@@ -305,20 +305,20 @@ router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
     }
     
     // 确保用户只能访问自己的配置
-    if (req.user.userId !== userId) {
+    if (req.user.userId !== parseInt(userId)) {
       res.status(403).json({ error: '无权访问此用户配置' });
       return;
     }
 
     const config = await prisma.userConfig.findUnique({
-      where: { userId }
+      where: { userId: parseInt(userId) }
     });
 
     if (!config) {
       // 如果用户没有配置，创建默认配置
       const defaultConfig = await prisma.userConfig.create({
         data: {
-          userId,
+          userId: parseInt(userId),
           programmingModel: 'claude-3-5-sonnet-20241022',
           multipleChoiceModel: 'claude-3-5-sonnet-20241022',
           aiModel: 'claude-3-5-sonnet-20241022',
@@ -393,7 +393,7 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
     const { userId } = req.params;
     
     // 确保用户只能更新自己的配置
-    if (!req.user || req.user.userId !== userId) {
+    if (!req.user || req.user.userId !== parseInt(userId)) {
       res.status(403).json({ error: '无权修改此用户配置' });
       return;
     }
@@ -449,10 +449,10 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
     }
 
     const updatedConfig = await prisma.userConfig.upsert({
-      where: { userId },
+      where: { userId: parseInt(userId) },
       update: updateData,
       create: {
-        userId,
+        userId: parseInt(userId),
         programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
         multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
         aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',

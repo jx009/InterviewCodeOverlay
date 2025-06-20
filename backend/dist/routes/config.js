@@ -48,7 +48,7 @@ const configValidation = [
 router.get('/', auth_1.authenticateToken, async (req, res) => {
     try {
         const config = await database_1.prisma.userConfig.findUnique({
-            where: { userId: req.user.userId }
+            where: { userId: parseInt(req.user.userId) }
         });
         if (!config) {
             const defaultConfig = await database_1.prisma.userConfig.create({
