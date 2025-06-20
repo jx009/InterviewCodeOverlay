@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 const Database = require('./database');
 
 // 创建数据库实例
@@ -28,8 +30,92 @@ const aiModels = [
   { id: 11, name: 'o3-mini', displayName: 'GPT o3 Mini', provider: 'openai', category: 'premium' }
 ];
 
+// 🆕 增强认证相关配置
+let transporter = null;
+const sessionStore = new Map(); // 简单内存存储，生产环境应该使用Redis
+
+// 初始化邮件服务
+require('dotenv').config();
+function initEmailService() {
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_PORT === '465',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+    console.log('✅ SMTP服务初始化成功');
+  } else {
+    console.log('⚠️ SMTP配置不完整，使用开发环境模式');
+  }
+}
+
+// 生成验证码
+function generateVerificationCode() {
+  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    return '123456'; // 开发环境固定验证码
+  }
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// 生成验证token
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// 生成session ID
+function generateSessionId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 30; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// 邮件模板
+function createVerificationEmail(code, email) {
+  return {
+    from: process.env.SMTP_USER || 'noreply@example.com',
+    to: email,
+    subject: 'InterviewCodeOverlay - 邮箱验证码',
+    html: `
+      <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">InterviewCodeOverlay</h1>
+          <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">面试代码助手</p>
+        </div>
+        
+        <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
+          <h2 style="color: #333; margin-top: 0;">邮箱验证码</h2>
+          <p style="color: #666; font-size: 16px; line-height: 1.6;">
+            您好！您正在注册 InterviewCodeOverlay 账户，请使用以下验证码完成注册：
+          </p>
+          
+          <div style="background: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px dashed #667eea;">
+            <span style="font-size: 32px; font-weight: bold; color: #667eea; letter-spacing: 8px;">${code}</span>
+          </div>
+          
+          <p style="color: #999; font-size: 14px; text-align: center;">
+            验证码有效期为 5 分钟，请及时使用
+          </p>
+        </div>
+      </div>
+    `
+  };
+}
+
+// 初始化邮件服务
+initEmailService();
+
 // 中间件
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3002'],
+  credentials: true
+}));
 app.use(express.json());
 
 // 静态文件服务
@@ -52,7 +138,42 @@ app.get('/auth/error', (req, res) => {
   });
 });
 
-// 身份验证中间件
+// 🆕 增强认证中间件（支持sessionId认证）
+const authenticateSession = (req, res, next) => {
+  // 支持从Cookie或请求头获取sessionId
+  const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+  
+  if (!sessionId) {
+    return res.status(401).json({ 
+      success: false,
+      message: '未登录' 
+    });
+  }
+  
+  const sessionData = sessionStore.get(`session:${sessionId}`);
+  
+  if (!sessionData) {
+    return res.status(401).json({ 
+      success: false,
+      message: '会话已过期' 
+    });
+  }
+  
+  // 更新最后活动时间
+  sessionData.lastActivity = new Date().toISOString();
+  sessionStore.set(`session:${sessionId}`, sessionData);
+  
+  // 将用户信息添加到请求对象
+  req.user = {
+    userId: sessionData.userId,
+    username: sessionData.username,
+    email: sessionData.email
+  };
+  
+  next();
+};
+
+// 📱 传统认证中间件（保持兼容性，后续会删除）
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -316,7 +437,65 @@ app.get('/api/auth/web-session-status', async (req, res) => {
   }
 });
 
-// Web端登录时创建共享token文件
+// 🆕 增强认证：创建共享会话文件
+app.post('/api/create-shared-session', authenticateSession, async (req, res) => {
+  try {
+    console.log('🔄 创建增强认证共享会话文件供Electron客户端使用');
+    
+    const userId = req.user.userId;
+    const user = await db.getUserById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: '用户不存在' 
+      });
+    }
+    
+    // 🆕 获取当前的sessionId（从请求头或Cookie）
+    const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+    
+    if (!sessionId) {
+      return res.status(401).json({ 
+        success: false,
+        message: '未找到会话ID' 
+      });
+    }
+    
+    // 创建共享会话文件（增强认证版本）
+    const sharedSession = {
+      sessionId,  // 🆕 使用sessionId而不是accessToken
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username
+      },
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7天
+    };
+    
+    const fs = require('fs');
+    const path = require('path');
+    const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
+    
+    fs.writeFileSync(sharedSessionPath, JSON.stringify(sharedSession, null, 2));
+    
+    console.log(`✅ 增强认证共享会话文件已创建，用户: ${user.username}`);
+    
+    res.json({
+      success: true,
+      message: '共享会话已创建'
+    });
+  } catch (error) {
+    console.error('创建增强认证共享会话失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '服务器内部错误' 
+    });
+  }
+});
+
+// 📱 传统认证：创建共享token文件（保持兼容性）
 app.post('/api/auth/create-shared-session', authenticateToken, async (req, res) => {
   try {
     console.log('🔄 创建共享会话文件供Electron客户端使用');
@@ -424,12 +603,12 @@ app.get('/api/auth/shared-session', (req, res) => {
 });
 
 // 获取AI模型列表
-app.get('/api/config/models', authenticateToken, (req, res) => {
+app.get('/api/config/models', authenticateSession, (req, res) => {
   res.json(aiModels);
 });
 
 // 获取编程语言列表
-app.get('/api/config/languages', authenticateToken, (req, res) => {
+app.get('/api/config/languages', authenticateSession, (req, res) => {
   const languages = [
     'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 
     'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin', 'Dart', 'Other'
@@ -438,7 +617,7 @@ app.get('/api/config/languages', authenticateToken, (req, res) => {
 });
 
 // 获取用户配置
-app.get('/api/config', authenticateToken, async (req, res) => {
+app.get('/api/config', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId;
     const config = await db.getUserConfig(userId);
@@ -458,7 +637,7 @@ app.get('/api/config', authenticateToken, async (req, res) => {
 });
 
 // 更新用户配置
-app.put('/api/config', authenticateToken, async (req, res) => {
+app.put('/api/config', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId;
     
@@ -514,6 +693,435 @@ app.post('/api/auth/refresh', async (req, res) => {
     res.status(401).json({ error: '刷新令牌无效' });
   }
 });
+
+// ============================================
+// 🆕 增强认证API
+// ============================================
+
+// 🆕 流程图API 1: /mail_verify - 邮箱验证（发送验证码）
+app.post('/api/mail_verify', async (req, res) => {
+  try {
+    const { email, username } = req.body; // 🆕 支持传入用户名进行检查
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: '邮箱地址不能为空'
+      });
+    }
+    
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: '邮箱格式不正确'
+      });
+    }
+    
+    if (!transporter) {
+      console.log('⚠️ SMTP服务未配置，使用开发环境模式');
+    }
+    
+    // 🆕 检查邮箱和用户名是否已存在
+    const conflicts = [];
+    if (email) {
+      const existingUser = await db.getUserByEmail(email);
+      if (existingUser) {
+        conflicts.push(`邮箱 ${email} 已被用户 "${existingUser.username}" 使用`);
+      }
+    }
+    
+    if (username) {
+      const existingUsername = await db.getUserByUsername(username);
+      if (existingUsername) {
+        // 隐藏部分邮箱信息保护隐私
+        const maskedEmail = existingUsername.email.replace(/(.{3}).*@/, '$1***@');
+        conflicts.push(`用户名 "${username}" 已被注册（邮箱：${maskedEmail}）`);
+      }
+    }
+    
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: '注册信息冲突',
+        details: conflicts,
+        suggestion: '请更换邮箱或用户名，或直接使用已有账户登录'
+      });
+    }
+    
+    // 生成验证码和token
+    const code = generateVerificationCode();
+    const token = generateToken();
+    
+    // 内存存储token和邮箱、验证码的关系（5分钟有效期）
+    const verifyData = {
+      email,
+      code,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      attempts: 0
+    };
+    
+    sessionStore.set(`verify_token:${token}`, verifyData);
+    sessionStore.set(`verify_email:${email}`, { token, code });
+    
+    // 5分钟后自动清理
+    setTimeout(() => {
+      sessionStore.delete(`verify_token:${token}`);
+      sessionStore.delete(`verify_email:${email}`);
+    }, 5 * 60 * 1000);
+    
+    // 发送邮件
+    if (transporter) {
+      const mailOptions = createVerificationEmail(code, email);
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ 验证码已发送到 ${email}: ${code}, token: ${token.substring(0, 10)}...`);
+    } else {
+      console.log(`📧 开发环境模式 - 验证码: ${code}, 邮箱: ${email}, token: ${token.substring(0, 10)}...`);
+    }
+    
+    res.json({
+      success: true,
+      message: transporter ? '验证码已发送，请查收邮件' : `开发环境模式 - 验证码: ${code}`,
+      token, // 返回token用于后续注册
+      expiresIn: 300 // 5分钟，单位秒
+    });
+    
+  } catch (error) {
+    console.error('发送验证码失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '发送验证码失败，请稍后重试',
+      error: error.message
+    });
+  }
+});
+
+// 🆕 流程图API - 验证验证码
+app.post('/api/verify_code', async (req, res) => {
+  try {
+    const { token, verify_code } = req.body;
+    
+    if (!token || !verify_code) {
+      return res.status(400).json({
+        success: false,
+        message: 'token和验证码不能为空'
+      });
+    }
+    
+    // 验证token获取邮箱和验证码
+    const verifyData = sessionStore.get(`verify_token:${token}`);
+    if (!verifyData) {
+      return res.status(400).json({
+        success: false,
+        message: '验证令牌无效或已过期'
+      });
+    }
+    
+    // 检查过期时间
+    if (new Date() > new Date(verifyData.expiresAt)) {
+      sessionStore.delete(`verify_token:${token}`);
+      return res.status(400).json({
+        success: false,
+        message: '验证码已过期，请重新获取'
+      });
+    }
+    
+    // 验证验证码
+    if (verifyData.code !== verify_code) {
+      verifyData.attempts++;
+      if (verifyData.attempts >= 5) {
+        sessionStore.delete(`verify_token:${token}`);
+        return res.status(400).json({
+          success: false,
+          message: '验证码错误次数过多，请重新获取'
+        });
+      }
+      
+      return res.status(400).json({
+        success: false,
+        message: `验证码错误，还剩 ${5 - verifyData.attempts} 次机会`
+      });
+    }
+    
+    // 标记为已验证
+    verifyData.verified = true;
+    sessionStore.set(`verify_token:${token}`, verifyData);
+    
+    console.log(`✅ 验证码验证成功: ${verifyData.email}`);
+    
+    res.json({
+      success: true,
+      message: '验证码验证成功',
+      email: verifyData.email
+    });
+    
+  } catch (error) {
+    console.error('验证码验证失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '验证码验证失败，请稍后重试'
+    });
+  }
+});
+
+// 🆕 流程图API 2: /user_register - 增强用户注册
+app.post('/api/user_register', async (req, res) => {
+  try {
+    const { token, password, username, verify_code } = req.body;
+    
+    if (!token || !password || !username || !verify_code) {
+      return res.status(400).json({
+        success: false,
+        message: '所有参数都不能为空'
+      });
+    }
+    
+    // 验证token获取邮箱和验证码
+    const verifyData = sessionStore.get(`verify_token:${token}`);
+    if (!verifyData) {
+      return res.status(400).json({
+        success: false,
+        message: '验证令牌无效或已过期'
+      });
+    }
+    
+    // 检查是否已验证过（通过 /api/verify_code 接口验证）
+    if (verifyData.verified) {
+      console.log(`✅ 使用已验证的token进行注册: ${verifyData.email}`);
+    } else {
+      // 如果未通过单独验证接口验证，则验证验证码
+    if (verifyData.code !== verify_code) {
+      // 增加尝试次数
+      verifyData.attempts++;
+      if (verifyData.attempts >= 5) {
+        sessionStore.delete(`verify_token:${token}`);
+        return res.status(400).json({
+          success: false,
+          message: '验证码错误次数过多，请重新获取'
+        });
+      }
+      
+      sessionStore.set(`verify_token:${token}`, verifyData);
+      return res.status(400).json({
+        success: false,
+        message: `验证码错误，还剩 ${5 - verifyData.attempts} 次机会`
+      });
+      }
+    }
+    
+    const email = verifyData.email;
+    
+    // 检查用户名和邮箱是否已存在
+    const existingUserByUsername = await db.getUserByUsername(username);
+    const existingUserByEmail = await db.getUserByEmail(email);
+    
+    if (existingUserByUsername || existingUserByEmail) {
+      return res.status(400).json({
+        success: false,
+        message: '用户名或邮箱已存在'
+      });
+    }
+    
+    // 密码加密
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // 创建用户
+    const newUser = await db.createUser({
+      username,
+      email,
+      password: hashedPassword
+    });
+    
+    console.log(`✅ 用户注册成功: ${username} (${email}), ID: ${newUser.id}`);
+    
+    // 清理内存中的验证数据（失败不影响注册结果）
+    try {
+      sessionStore.delete(`verify_token:${token}`);
+      sessionStore.delete(`verify_email:${email}`);
+      console.log(`✅ 内存验证数据清理成功`);
+    } catch (memoryError) {
+      console.warn(`⚠️ 内存清理失败，但不影响注册结果:`, memoryError.message);
+    }
+    
+    res.json({
+      success: true,
+      message: '注册成功',
+      user: {
+        id: newUser.id,
+        username,
+        email
+      }
+    });
+    
+  } catch (error) {
+    console.error('用户注册失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '注册失败，请稍后重试',
+      error: error.message
+    });
+  }
+});
+
+// 流程图API 3: /login - 用户登录
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: '邮箱和密码不能为空'
+      });
+    }
+    
+    // 从数据库验证用户
+    const user = await db.getUserByEmail(email);
+    
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: '用户不存在'
+      });
+    }
+    
+    // 验证密码
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '密码错误'
+      });
+    }
+    
+    // 生成30位随机session_id
+    const sessionId = generateSessionId();
+    
+    // 在内存中保存session和用户信息的关系
+    const sessionData = {
+      userId: user.id,
+      username: user.username,
+      email: user.email,
+      loginTime: new Date().toISOString(),
+      lastActivity: new Date().toISOString()
+    };
+    
+    // 设置会话数据（7天有效期）
+    sessionStore.set(`session:${sessionId}`, sessionData);
+    
+    console.log(`✅ 用户登录成功: ${user.username} (${email}), Session: ${sessionId}`);
+    
+    res.json({
+      success: true,
+      message: '登录成功',
+      sessionId,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      }
+    });
+    
+  } catch (error) {
+    console.error('用户登录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '登录失败，请稍后重试',
+      error: error.message
+    });
+  }
+});
+
+// 额外API: 用户登出
+app.post('/api/logout', async (req, res) => {
+  try {
+    // 🆕 支持从Cookie或请求头获取sessionId
+    const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+    
+    if (!sessionId) {
+      return res.json({
+        success: true,
+        message: '已登出'
+      });
+    }
+    
+    const sessionData = sessionStore.get(`session:${sessionId}`);
+    
+    if (sessionData) {
+      // 删除会话数据
+      sessionStore.delete(`session:${sessionId}`);
+      
+      console.log(`✅ 用户登出: ${sessionData.username}, Session: ${sessionId}`);
+    }
+    
+    res.json({
+      success: true,
+      message: '登出成功'
+    });
+    
+  } catch (error) {
+    console.error('用户登出失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '登出失败',
+      error: error.message
+    });
+  }
+});
+
+// 额外API: 检查会话状态
+app.get('/api/session_status', async (req, res) => {
+  try {
+    // 🆕 支持从Cookie或请求头获取sessionId
+    const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: '未登录'
+      });
+    }
+    
+    const sessionData = sessionStore.get(`session:${sessionId}`);
+    
+    if (!sessionData) {
+      return res.status(401).json({
+        success: false,
+        message: '会话已过期'
+      });
+    }
+    
+    // 更新最后活动时间
+    sessionData.lastActivity = new Date().toISOString();
+    sessionStore.set(`session:${sessionId}`, sessionData);
+    
+    res.json({
+      success: true,
+      message: '会话有效',
+      user: {
+        id: sessionData.userId,
+        username: sessionData.username,
+        email: sessionData.email
+      },
+      loginTime: sessionData.loginTime,
+      lastActivity: sessionData.lastActivity
+    });
+    
+  } catch (error) {
+    console.error('检查会话状态失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '检查会话状态失败',
+      error: error.message
+    });
+  }
+});
+
+// ============================================
+// 传统认证API（保持兼容性）
+// ============================================
 
 // 启动服务器
 app.listen(PORT, () => {

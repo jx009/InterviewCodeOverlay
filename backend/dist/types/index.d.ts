@@ -1,15 +1,15 @@
 import { Request } from 'express';
 export interface UserPayload {
-    id: string;
+    id: number;
     username: string;
     email?: string | null;
 }
 export interface SimpleUserPayload {
-    userId: string;
+    userId: number;
 }
 export interface AuthenticatedRequest extends Request {
     user?: {
-        userId: string;
+        userId: number;
     };
 }
 export type QuestionType = 'programming' | 'multiple_choice';

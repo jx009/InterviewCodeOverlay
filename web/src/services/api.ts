@@ -36,14 +36,20 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // 🆕 确保Cookie被发送
 });
 
-// 请求拦截器 - 添加JWT token
+// 请求拦截器 - 添加JWT token和session ID
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
+    const sessionId = localStorage.getItem('sessionId');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    if (sessionId) {
+      config.headers['X-Session-Id'] = sessionId;
     }
     return config;
   },
@@ -61,7 +67,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
-          const response = await axios.post('http://localhost:3001/api/auth/refresh', {
+          const response = await axios.post(`${BASE_URL}/auth/refresh`, {
             refreshToken,
           });
           const { accessToken } = response.data;
@@ -74,12 +80,14 @@ api.interceptors.response.use(
           // 刷新失败，清除token并跳转到登录页
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+          localStorage.removeItem('sessionId');
           window.location.href = '/';
         }
       } else {
         // 没有刷新token，清除token并跳转到登录页
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        localStorage.removeItem('sessionId');
         window.location.href = '/';
       }
     }
@@ -89,6 +97,44 @@ api.interceptors.response.use(
 
 // 认证相关API
 export const authApi = {
+  // 🆕 增强认证API
+  sendVerificationCode: async (email: string, username?: string) => {
+    const response = await api.post('/mail_verify', { email, username });
+    return response.data;
+  },
+
+  verifyCode: async (token: string, verify_code: string) => {
+    const response = await api.post('/verify_code', { token, verify_code });
+    return response.data;
+  },
+
+  enhancedRegister: async (userData: { 
+    token: string; 
+    verify_code: string; 
+    email: string; 
+    password: string; 
+    username: string;
+  }) => {
+    const response = await api.post('/user_register', userData);
+    return response.data;
+  },
+
+  enhancedLogin: async (credentials: { email: string; password: string }) => {
+    const response = await api.post('/login', credentials);
+    return response.data;
+  },
+
+  enhancedLogout: async () => {
+    const response = await api.post('/logout');
+    return response.data;
+  },
+
+  getSessionStatus: async () => {
+    const response = await api.get('/session_status');
+    return response.data;
+  },
+
+  // 📱 传统认证API（保持兼容性）
   login: async (credentials: { username: string; password: string }) => {
     const response = await api.post('/auth/login', credentials);
     return response.data;
@@ -117,6 +163,12 @@ export const authApi = {
 
   createSharedSession: async () => {
     const response = await api.post('/auth/create-shared-session');
+    return response.data;
+  },
+
+  // 🆕 增强认证共享会话创建
+  createEnhancedSharedSession: async () => {
+    const response = await api.post('/create-shared-session');
     return response.data;
   },
 };

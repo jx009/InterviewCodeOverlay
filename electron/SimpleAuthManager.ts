@@ -156,16 +156,16 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 核心方法2：登出
+   * 🆕 核心方法2：登出（适配增强认证）
    */
   public async logout(): Promise<void> {
     try {
       console.log('🚪 正在登出...')
       
-      // 通知服务器登出（如果有token）
+      // 🆕 通知服务器登出（使用增强认证API）
       if (this.token) {
         try {
-          await this.apiClient.post('/api/auth/logout')
+          await this.apiClient.post('/api/logout')
         } catch (error) {
           console.warn('服务器登出请求失败，但继续本地登出')
         }
@@ -326,17 +326,19 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 检查Web端会话状态
+   * 🆕 检查Web端会话状态（适配增强认证）
    */
   private async checkWebSession(): Promise<boolean> {
     try {
-      const response = await this.apiClient.get('/api/auth/web-session-status')
+      // 🆕 增强认证没有专门的会话检查API，直接检查共享会话文件
+      console.log('🔍 检查共享会话文件...')
+      this.loadTokenFromSharedSession()
       
-      if (response.data.hasActiveSession) {
-        console.log('✅ 检测到活跃的Web会话:', response.data.user.username)
+      if (this.token) {
+        console.log('✅ 从共享会话文件找到sessionId')
         return true
       } else {
-        console.log('❌ 没有活跃的Web会话')
+        console.log('❌ 共享会话文件中没有sessionId')
         return false
       }
     } catch (error) {
@@ -426,24 +428,28 @@ export class SimpleAuthManager extends EventEmitter {
         return
       }
       
-      // 如果会话有效，使用其中的token
-      if (sharedSession.accessToken) {
-        this.token = sharedSession.accessToken
+      // 🆕 增强认证使用sessionId而不是accessToken
+      if (sharedSession.sessionId) {
+        this.token = sharedSession.sessionId
         this.user = sharedSession.user
         this.setupApiClient()
         
-        // 将token保存到本地配置以备下次使用
+        // 将sessionId保存到本地配置以备下次使用
         configHelper.updateConfig({ authToken: this.token })
         
-        console.log('✅ 从共享会话成功加载token')
+        console.log('✅ 从共享会话成功加载sessionId')
         console.log('👤 用户:', this.user?.username)
-        console.log('📋 Token长度:', this.token.length)
-        console.log('📋 Token前缀:', this.token.substring(0, 20) + '...')
+        console.log('📋 SessionId长度:', this.token.length)
+        console.log('📋 SessionId前缀:', this.token.substring(0, 10) + '...')
         
         // 触发认证成功事件
         this.emit('authenticated', this.user)
       } else {
-        console.log('❌ 共享会话文件中没有accessToken')
+        console.log('❌ 共享会话文件中没有sessionId')
+        // 🆕 为了兼容性，也检查旧的accessToken字段
+        if (sharedSession.accessToken) {
+          console.log('⚠️ 发现旧的accessToken，但增强认证需要sessionId')
+        }
       }
       
     } catch (error) {
@@ -477,124 +483,78 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 设置API客户端的认证头
+   * 🆕 设置API客户端的认证头（适配增强认证）
    */
   private setupApiClient(): void {
     if (this.token) {
-      this.apiClient.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
+      // 🆕 增强认证使用X-Session-Id头而不是Authorization
+      this.apiClient.defaults.headers.common['X-Session-Id'] = this.token
+      delete this.apiClient.defaults.headers.common['Authorization'] // 清除传统认证头
     }
   }
 
   /**
-   * 验证token有效性
+   * 🆕 验证sessionId有效性（适配增强认证）
    */
   private async verifyToken(): Promise<void> {
     if (!this.token) {
-      throw new Error('没有token')
+      throw new Error('没有sessionId')
     }
 
-    console.log('🔍 开始验证token...')
-    console.log('🔑 Token长度:', this.token.length)
-    console.log('🔑 Token前缀:', this.token.substring(0, 20) + '...')
-    console.log('🌐 API地址:', `${this.apiBaseUrl}/api/auth/me`)
-    console.log('📤 请求头:', this.apiClient.defaults.headers.common['Authorization'])
+    console.log('🔍 开始验证sessionId...')
+    console.log('🔑 SessionId长度:', this.token.length)
+    console.log('🔑 SessionId前缀:', this.token.substring(0, 10) + '...')
+    console.log('🌐 API地址:', `${this.apiBaseUrl}/api/session_status`)
+    console.log('📤 请求头:', this.apiClient.defaults.headers.common['X-Session-Id'])
 
     try {
-      const response = await this.apiClient.get('/api/auth/me')
+      const response = await this.apiClient.get('/api/session_status')
       console.log('📥 响应状态:', response.status)
       console.log('📥 响应数据:', response.data)
       
-      if (response.data && response.data.id) {
-        this.user = response.data
-        console.log('✅ Token验证成功')
+      if (response.data && response.data.success && response.data.user) {
+        this.user = response.data.user
+        console.log('✅ SessionId验证成功')
       } else {
         console.log('❌ 响应数据格式不正确:', response.data)
-        throw new Error('Token验证失败 - 响应数据无效')
+        throw new Error('SessionId验证失败 - 响应数据无效')
       }
     } catch (error: any) {
-      console.log('❌ Token验证请求失败:')
+      console.log('❌ SessionId验证请求失败:')
       console.log('  - 错误类型:', error.constructor.name)
       console.log('  - 错误消息:', error.message)
       if (error.response) {
         console.log('  - 响应状态:', error.response.status)
         console.log('  - 响应数据:', error.response.data)
         
-        // 如果是401错误，尝试刷新token
+        // 🆕 增强认证不支持刷新，401错误直接清除认证
         if (error.response.status === 401) {
-          console.log('🔄 Token可能已过期，尝试刷新...')
-          const refreshResult = await this.tryRefreshToken()
-          if (refreshResult) {
-            console.log('✅ Token刷新成功，重新验证...')
-            // 递归调用验证，但限制递归次数
-            if (!this.verifyToken.name.includes('_retry')) {
-              const retryVerify = this.verifyToken.bind(this)
-              Object.defineProperty(retryVerify, 'name', { value: 'verifyToken_retry' })
-              return await retryVerify()
-            }
-          }
+          console.log('🔄 SessionId已过期，需要重新登录')
+          this.clearAuthData()
         }
       } else if (error.request) {
         console.log('  - 请求失败，无响应')
         console.log('  - 请求详情:', error.request)
       }
-      throw new Error(`Token验证失败: ${error.message}`)
+      throw new Error(`SessionId验证失败: ${error.message}`)
     }
   }
 
   /**
-   * 尝试刷新Token
+   * 🆕 增强认证不支持刷新，此方法已废弃
    */
   private async tryRefreshToken(): Promise<boolean> {
-    try {
-      // 从shared-session.json获取refreshToken
-      const fs = require('fs')
-      const path = require('path')
-      const sharedSessionPath = path.join(process.cwd(), 'shared-session.json')
-      
-      if (!fs.existsSync(sharedSessionPath)) {
-        console.log('❌ 没有找到共享会话文件，无法刷新token')
-        return false
-      }
-      
-      const sharedSession = JSON.parse(fs.readFileSync(sharedSessionPath, 'utf8'))
-      
-      if (!sharedSession.refreshToken) {
-        console.log('❌ 共享会话中没有refreshToken')
-        return false
-      }
-      
-      console.log('🔄 使用refreshToken刷新访问token...')
-      const response = await this.apiClient.post('/api/auth/refresh', {
-        refreshToken: sharedSession.refreshToken
-      })
-      
-      if (response.data && response.data.token) {
-        console.log('✅ Token刷新成功')
-        this.token = response.data.token
-        this.setupApiClient()
-        this.saveToken(this.token)
-        
-        // 更新shared-session.json
-        sharedSession.accessToken = this.token
-        fs.writeFileSync(sharedSessionPath, JSON.stringify(sharedSession, null, 2))
-        
-        return true
-      }
-      
-      return false
-    } catch (error) {
-      console.error('❌ Token刷新失败:', error)
-      return false
-    }
+    console.log('🚫 增强认证不支持token刷新，需要重新登录')
+    return false
   }
 
   /**
-   * 获取用户信息
+   * 🆕 获取用户信息（适配增强认证）
    */
   private async fetchUserInfo(): Promise<void> {
-    const response = await this.apiClient.get('/api/auth/me')
-    if (response.data && response.data.id) {
-      this.user = response.data
+    const response = await this.apiClient.get('/api/session_status')
+    if (response.data && response.data.success && response.data.user) {
+      this.user = response.data.user
       console.log(`📋 获取用户信息: ${this.user.username}`)
     } else {
       throw new Error('获取用户信息失败')
@@ -746,7 +706,7 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 处理OAuth回调（内部方法）
+   * 🆕 处理OAuth回调（适配增强认证）
    */
   private handleOAuthCallback(
     url: string, 
@@ -755,37 +715,57 @@ export class SimpleAuthManager extends EventEmitter {
     reject: (error: Error) => void,
     timeoutId?: NodeJS.Timeout
   ): void {
-    // 检查是否是成功回调
-    if (url.includes('/auth/success')) {
-      try {
-        const urlObj = new URL(url)
-        const token = urlObj.searchParams.get('token')
-        
-        if (token) {
-          console.log('✅ OAuth登录成功，获取到token')
+    console.log('🔍 检查URL:', url)
+    
+    // 🆕 检查是否跳转到了配置管理页面（登录成功的标志）
+    if (url.includes('localhost:3000') && !url.includes('/login')) {
+      console.log('✅ 检测到登录成功，用户已跳转到配置管理页面')
+      
+      // 从localStorage获取sessionId
+      authWindow.webContents.executeJavaScript(`
+        localStorage.getItem('sessionId')
+      `).then((sessionId) => {
+        if (sessionId) {
+          console.log('✅ 从Web端获取到sessionId')
           if (timeoutId) clearTimeout(timeoutId)
           authWindow.close()
-          
-          // 登录成功后，立即尝试刷新共享会话状态
-          setTimeout(() => {
-            console.log('🔄 登录成功，刷新共享会话状态...')
-            this.loadTokenFromSharedSession()
-          }, 1000)
-          
-          resolve(token)
+          resolve(sessionId)
         } else {
-          throw new Error('回调URL中没有token')
+          console.log('❌ 未能从Web端获取sessionId，尝试等待...')
+          // 等待一下再重试
+          setTimeout(() => {
+            authWindow.webContents.executeJavaScript(`
+              localStorage.getItem('sessionId')
+            `).then((retrySessionId) => {
+              if (retrySessionId) {
+                console.log('✅ 重试成功，获取到sessionId')
+                if (timeoutId) clearTimeout(timeoutId)
+                authWindow.close()
+                resolve(retrySessionId)
+              } else {
+                console.log('❌ 重试失败，无法获取sessionId')
+                if (timeoutId) clearTimeout(timeoutId)
+                authWindow.close()
+                reject(new Error('无法获取登录会话'))
+              }
+            }).catch((error) => {
+              console.error('❌ 重试获取sessionId失败:', error)
+              if (timeoutId) clearTimeout(timeoutId)
+              authWindow.close()
+              reject(new Error('获取登录会话失败'))
+            })
+          }, 2000)
         }
-      } catch (error) {
-        console.error('解析OAuth回调失败:', error)
+      }).catch((error) => {
+        console.error('❌ 获取sessionId失败:', error)
         if (timeoutId) clearTimeout(timeoutId)
         authWindow.close()
-        reject(new Error('OAuth回调解析失败'))
-      }
+        reject(new Error('获取登录会话失败'))
+      })
     }
-    // 检查是否是失败回调
-    else if (url.includes('/auth/error')) {
-      console.error('OAuth登录失败')
+    // 检查是否是登录错误页面
+    else if (url.includes('/login') && url.includes('error')) {
+      console.error('❌ OAuth登录失败')
       if (timeoutId) clearTimeout(timeoutId)
       authWindow.close()
       reject(new Error('OAuth登录失败'))
@@ -806,15 +786,16 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 清除认证数据
+   * 🆕 清除认证数据（适配增强认证）
    */
   private clearAuthData(): void {
     this.token = null
     this.user = null
     this.userConfig = null
     
-    // 清除API客户端认证头
+    // 🆕 清除增强认证的API客户端认证头
     delete this.apiClient.defaults.headers.common['Authorization']
+    delete this.apiClient.defaults.headers.common['X-Session-Id']
     
     // 清除本地存储
     configHelper.updateConfig({ authToken: null })

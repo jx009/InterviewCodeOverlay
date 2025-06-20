@@ -1,11 +1,10 @@
 {
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoiMTIzNDU2QHRlc3QuY29tIiwiaWF0IjoxNzUwMzIzMDEwLCJleHAiOjE3NTA5Mjc4MTB9.CTuExE6U0wEHgoIEJCkGcwUSAzu3hHf1rLkQHD4fObc",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc1MDMyMzAxMCwiZXhwIjoxNzUwOTI3ODEwfQ.9ENdKU6YG25JtLPheVzzKaeLwpooysDqzoijYeLf7rg",
+  "sessionId": "ta3rlTxIPygEuKnaUqAExxHXxigXbZ",
   "user": {
-    "id": 1,
-    "email": "123456@test.com",
-    "username": "123456"
+    "id": 8,
+    "email": "1751940279@qq.com",
+    "username": "jianxin"
   },
-  "createdAt": "2025-06-19T08:50:10.051Z",
-  "expiresAt": "2025-06-26T08:50:10.046Z"
+  "createdAt": "2025-06-20T14:21:41.784Z",
+  "expiresAt": "2025-06-27T14:21:41.784Z"
 }

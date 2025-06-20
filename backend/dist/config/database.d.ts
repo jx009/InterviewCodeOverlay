@@ -297,7 +297,7 @@ export declare const redis: import("@redis/client").RedisClientType<{
         reserve: typeof import("@redis/bloom/dist/commands/top-k/RESERVE");
     };
 } & import("redis").RedisModules, import("redis").RedisFunctions, import("redis").RedisScripts>;
-export declare const connectRedis: () => Promise<void>;
+export declare const connectRedis: () => Promise<boolean>;
 export declare const connectDatabase: () => Promise<void>;
 export declare const disconnectDatabase: () => Promise<void>;
 export declare const checkDatabaseHealth: () => Promise<{
@@ -309,12 +309,6 @@ export declare const checkDatabaseHealth: () => Promise<{
         redisHost: string;
         redisDatabase: number;
     };
-    error?: undefined;
-} | {
-    mysql: boolean;
-    redis: boolean;
-    error: unknown;
-    config?: undefined;
 }>;
 export declare const sessionManager: {
     setSession(sessionId: string, userId: number, expiresIn?: number): Promise<{
@@ -631,7 +625,7 @@ declare const _default: {
         };
     } & import("redis").RedisModules, import("redis").RedisFunctions, import("redis").RedisScripts>;
     connectDatabase: () => Promise<void>;
-    connectRedis: () => Promise<void>;
+    connectRedis: () => Promise<boolean>;
     disconnectDatabase: () => Promise<void>;
     checkDatabaseHealth: () => Promise<{
         mysql: boolean;
@@ -642,12 +636,6 @@ declare const _default: {
             redisHost: string;
             redisDatabase: number;
         };
-        error?: undefined;
-    } | {
-        mysql: boolean;
-        redis: boolean;
-        error: unknown;
-        config?: undefined;
     }>;
     sessionManager: {
         setSession(sessionId: string, userId: number, expiresIn?: number): Promise<{

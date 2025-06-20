@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import EmailVerification from '../components/EmailVerification';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [useEnhancedAuth, setUseEnhancedAuth] = useState(true); // 🆕 默认使用增强认证
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -12,8 +14,41 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+  
+  // 🆕 邮箱验证相关状态
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
 
-  const { login, register, isAuthenticated } = useAuth();
+  const { 
+    login, 
+    register, 
+    enhancedLogin, 
+    enhancedRegister, 
+    isAuthenticated 
+  } = useAuth();
+
+  // 🆕 检查URL参数，支持注册成功后自动填入邮箱
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailFromUrl = urlParams.get('email');
+    const fromRegister = urlParams.get('from') === 'register';
+    
+    if (fromRegister && emailFromUrl) {
+      console.log('检测到注册成功跳转，自动填入邮箱:', emailFromUrl);
+      setIsLogin(true); // 切换到登录模式
+      setFormData(prev => ({
+        ...prev,
+        email: emailFromUrl
+      }));
+      setSuccess('注册成功！请使用注册邮箱登录');
+      
+      // 清理URL参数，保持页面整洁
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
 
   // 填充演示账号
   const fillDemoAccount = () => {
@@ -34,28 +69,20 @@ export default function LoginPage() {
     
     if (isLogin) {
       // 登录验证
-      if (!formData.email.trim()) {
-        errors.email = '请输入用户名或邮箱';
-      }
-      if (!formData.password.trim()) {
-        errors.password = '请输入密码';
-      } else if (formData.password.length < 2) {
-        errors.password = '密码长度至少2位';
-      }
-    } else {
-      // 注册验证
-      if (!formData.username.trim()) {
-        errors.username = '请输入用户名';
-      } else if (formData.username.length < 2) {
-        errors.username = '用户名长度至少2位';
-      }
-      
-      if (!formData.email.trim()) {
-        errors.email = '请输入邮箱';
+      if (useEnhancedAuth) {
+        // 🆕 增强登录验证
+        if (!formData.email.trim()) {
+          errors.email = '请输入邮箱';
+        } else {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(formData.email)) {
+            errors.email = '请输入有效的邮箱地址';
+          }
+        }
       } else {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
-          errors.email = '请输入有效的邮箱地址';
+        // 传统登录验证
+        if (!formData.email.trim()) {
+          errors.email = '请输入用户名或邮箱';
         }
       }
       
@@ -64,15 +91,76 @@ export default function LoginPage() {
       } else if (formData.password.length < 2) {
         errors.password = '密码长度至少2位';
       }
+    } else {
+      // 注册验证
+      if (useEnhancedAuth) {
+        // 🆕 增强注册验证
+        if (!formData.email.trim()) {
+          errors.email = '请输入邮箱';
+        } else {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(formData.email)) {
+            errors.email = '请输入有效的邮箱地址';
+          }
+        }
+        
+        if (!formData.password.trim()) {
+          errors.password = '请输入密码';
+        } else if (formData.password.length < 6) {
+          errors.password = '密码长度至少6位';
+        }
+        
+        // 可选的用户名验证
+        if (formData.username && formData.username.length < 2) {
+          errors.username = '用户名长度至少2位';
+        }
+      } else {
+        // 传统注册验证
+        if (!formData.username.trim()) {
+          errors.username = '请输入用户名';
+        } else if (formData.username.length < 2) {
+          errors.username = '用户名长度至少2位';
+        }
+        
+        if (!formData.email.trim()) {
+          errors.email = '请输入邮箱';
+        } else {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(formData.email)) {
+            errors.email = '请输入有效的邮箱地址';
+          }
+        }
+        
+        if (!formData.password.trim()) {
+          errors.password = '请输入密码';
+        } else if (formData.password.length < 2) {
+          errors.password = '密码长度至少2位';
+        }
+      }
     }
     
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
+  // 🆕 邮箱验证成功回调
+  const handleEmailVerificationSuccess = (token: string, code: string) => {
+    setVerificationToken(token);
+    setVerificationCode(code);
+    setEmailVerified(true);
+    setShowEmailVerification(false);
+    setSuccess('邮箱验证成功！请继续完成注册');
+    console.log('邮箱验证成功，token:', token, 'code:', code);
+  };
+
+  // 🆕 邮箱验证错误回调
+  const handleEmailVerificationError = (error: string) => {
+    setError(error);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('提交登录表单', isLogin ? '登录模式' : '注册模式', formData);
+    console.log('提交登录表单', isLogin ? '登录模式' : '注册模式', '增强认证:', useEnhancedAuth, formData);
     
     // 前端验证
     if (!validateForm()) {
@@ -85,35 +173,110 @@ export default function LoginPage() {
 
     try {
       if (isLogin) {
-        console.log('开始登录流程，使用用户名:', formData.email);
-        const result = await login({
-          username: formData.email, // 使用email字段作为username
-          password: formData.password,
-        });
-        
-        console.log('登录结果:', result);
-        
-        if (result.success) {
-          setSuccess('登录成功！正在跳转...');
-          // 登录成功后，useAuth会自动更新认证状态，App.tsx会自动切换到DashboardPage
+        // 登录流程
+        if (useEnhancedAuth) {
+          // 🆕 使用增强登录
+          console.log('开始增强登录流程，使用邮箱:', formData.email);
+          const result = await enhancedLogin({
+            email: formData.email,
+            password: formData.password,
+          });
+          
+          console.log('增强登录结果:', result);
+          
+          if (result.success) {
+            setSuccess('登录成功！正在跳转...');
+            // 🚀 登录成功后短暂显示成功消息，然后让App.tsx自动处理跳转
+            setTimeout(() => {
+              console.log('登录成功，清除成功消息，让App.tsx显示DashboardPage');
+            }, 500);
+          } else {
+            setError(result.error || '登录失败');
+          }
         } else {
-          setError(result.error || '登录失败');
+          // 传统登录
+          console.log('开始传统登录流程，使用用户名:', formData.email);
+          const result = await login({
+            username: formData.email, // 使用email字段作为username
+            password: formData.password,
+          });
+          
+          console.log('传统登录结果:', result);
+          
+          if (result.success) {
+            setSuccess('登录成功！正在跳转...');
+            // 🚀 登录成功后短暂显示成功消息，然后让App.tsx自动处理跳转
+            setTimeout(() => {
+              console.log('登录成功，清除成功消息，让App.tsx显示DashboardPage');
+            }, 500);
+          } else {
+            setError(result.error || '登录失败');
+          }
         }
       } else {
-        console.log('开始注册流程');
-        const result = await register({
-          email: formData.email,
-          password: formData.password,
-          username: formData.username || formData.email.split('@')[0], // 如果没有用户名，使用邮箱前缀
-        });
-        
-        console.log('注册结果:', result);
-        
-        if (result.success) {
-          setSuccess('注册成功！正在跳转...');
-          // 注册成功后，useAuth会自动更新认证状态，App.tsx会自动切换到DashboardPage
+        // 注册流程
+        if (useEnhancedAuth) {
+          // 🆕 使用增强注册
+          if (!emailVerified) {
+            // 需要先验证邮箱
+            setShowEmailVerification(true);
+            setLoading(false);
+            return;
+          }
+          
+          console.log('开始增强注册流程');
+          const result = await enhancedRegister({
+            token: verificationToken,
+            verify_code: verificationCode,
+            email: formData.email,
+            password: formData.password,
+            username: formData.username || formData.email.split('@')[0],
+          });
+          
+          console.log('增强注册结果:', result);
+          
+          if (result.success) {
+            setSuccess('注册成功！正在跳转到登录界面...');
+            
+            // 🆕 延迟跳转到登录界面并自动填入邮箱
+            setTimeout(() => {
+              console.log('注册成功，跳转到登录界面并填入邮箱:', formData.email);
+              const currentUrl = new URL(window.location.href);
+              const newUrl = `${currentUrl.pathname}?from=register&email=${encodeURIComponent(formData.email)}`;
+              window.location.href = newUrl;
+            }, 1500);
+          } else {
+            setError(result.error || '注册失败');
+            // 如果注册失败，可能需要重新验证邮箱
+            if (result.error?.includes('验证码') || result.error?.includes('过期')) {
+              setEmailVerified(false);
+              setShowEmailVerification(true);
+            }
+          }
         } else {
-          setError(result.error || '注册失败');
+          // 传统注册
+          console.log('开始传统注册流程');
+          const result = await register({
+            email: formData.email,
+            password: formData.password,
+            username: formData.username || formData.email.split('@')[0],
+          });
+          
+          console.log('传统注册结果:', result);
+          
+          if (result.success) {
+            setSuccess('注册成功！正在跳转到登录界面...');
+            
+            // 🆕 延迟跳转到登录界面并自动填入邮箱
+            setTimeout(() => {
+              console.log('注册成功，跳转到登录界面并填入邮箱:', formData.email);
+              const currentUrl = new URL(window.location.href);
+              const newUrl = `${currentUrl.pathname}?from=register&email=${encodeURIComponent(formData.email)}`;
+              window.location.href = newUrl;
+            }, 1500);
+          } else {
+            setError(result.error || '注册失败');
+          }
         }
       }
     } catch (err: any) {
@@ -131,9 +294,27 @@ export default function LoginPage() {
     setSuccess('');
     setValidationErrors({});
     setFormData({ username: '', email: '', password: '' });
+    // 🆕 重置邮箱验证状态
+    setShowEmailVerification(false);
+    setEmailVerified(false);
+    setVerificationToken('');
+    setVerificationCode('');
   };
 
-  // 登录成功后的自动跳转逻辑
+  // 🆕 切换认证模式
+  const toggleAuthMode = () => {
+    setUseEnhancedAuth(!useEnhancedAuth);
+    setError('');
+    setSuccess('');
+    setValidationErrors({});
+    // 重置邮箱验证状态
+    setShowEmailVerification(false);
+    setEmailVerified(false);
+    setVerificationToken('');
+    setVerificationCode('');
+  };
+
+  // 登录成功后的自动跳转逻辑（参考test项目的成功做法）
   useEffect(() => {
     if (isAuthenticated) {
       console.log('检测到登录成功，准备跳转...');
@@ -148,13 +329,7 @@ export default function LoginPage() {
     }
   }, [isAuthenticated]);
 
-  // 手动跳转到配置中心
-  const handleManualRedirect = () => {
-    console.log('手动跳转到配置中心');
-    window.location.reload();
-  };
-
-  // 如果已经登录，显示跳转页面
+  // 🚀 如果已经登录，显示跳转页面（参考test项目的成功做法）
   if (isAuthenticated) {
     return (
       <div className="w-full h-full min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center px-4 py-8">
@@ -175,7 +350,7 @@ export default function LoginPage() {
           {/* 手动跳转按钮 */}
           <div className="space-y-3">
             <button
-              onClick={handleManualRedirect}
+              onClick={() => window.location.reload()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               立即跳转到配置中心
@@ -209,8 +384,35 @@ export default function LoginPage() {
 
         {/* 登录/注册表单 */}
         <div className="bg-[#2d2d2d] rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl sm:shadow-2xl">
+          {/* 🆕 认证模式切换 */}
+          <div className="mb-4 p-3 bg-gray-800/50 border border-gray-600/50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-300">认证模式</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  {useEnhancedAuth 
+                    ? `增强认证 - ${isLogin ? '邮箱登录' : '邮箱验证注册'}` 
+                    : `传统认证 - ${isLogin ? '用户名登录' : '快速注册'}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleAuthMode}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#2d2d2d] ${
+                  useEnhancedAuth ? 'bg-blue-600' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    useEnhancedAuth ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {/* 预设账号提示 */}
-          {isLogin && (
+          {isLogin && !useEnhancedAuth && (
             <div className="mb-4 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-sm">
               <p>可使用预设账号快速登录:</p>
               <div className="flex justify-between items-center mt-1">
@@ -225,6 +427,25 @@ export default function LoginPage() {
                 >
                   一键填充
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* 🆕 增强认证说明 */}
+          {useEnhancedAuth && (
+            <div className="mb-4 bg-purple-500/10 border border-purple-500/20 text-purple-400 px-3 py-2 rounded-lg text-sm">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="font-medium">增强认证模式</p>
+                  <p className="text-xs text-purple-300 mt-1">
+                    {isLogin 
+                      ? '• 使用邮箱登录，支持30位会话ID\n• 自动多端同步登录状态' 
+                      : '• 邮箱验证码注册，更安全\n• 验证码5分钟有效期'}
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -270,18 +491,23 @@ export default function LoginPage() {
             {/* 邮箱/用户名字段 */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
-                {isLogin ? '用户名/邮箱' : '邮箱'} <span className="text-red-400">*</span>
+                {(isLogin && !useEnhancedAuth) ? '用户名/邮箱' : '邮箱'} <span className="text-red-400">*</span>
               </label>
               <input
-                type={isLogin ? "text" : "email"}
+                type={(isLogin && !useEnhancedAuth) ? "text" : "email"}
                 className={`w-full px-3 py-2 sm:px-4 sm:py-3 bg-[#3d3d3d] border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
                   validationErrors.email ? 'border-red-500' : 'border-gray-600'
                 }`}
-                placeholder={isLogin ? "请输入用户名或邮箱" : "请输入邮箱地址"}
+                placeholder={(isLogin && !useEnhancedAuth) ? "请输入用户名或邮箱" : "请输入邮箱地址"}
                 value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  // 🆕 重置邮箱验证状态当邮箱改变时
+                  if (useEnhancedAuth && !isLogin) {
+                    setEmailVerified(false);
+                    setShowEmailVerification(false);
+                  }
+                }}
               />
               {validationErrors.email && (
                 <p className="text-red-400 text-xs mt-1">{validationErrors.email}</p>
@@ -308,6 +534,30 @@ export default function LoginPage() {
                 <p className="text-red-400 text-xs mt-1">{validationErrors.password}</p>
               )}
             </div>
+
+            {/* 🆕 邮箱验证组件 */}
+            {useEnhancedAuth && !isLogin && showEmailVerification && (
+              <EmailVerification
+                email={formData.email}
+                username={formData.username}
+                onVerificationSuccess={handleEmailVerificationSuccess}
+                onError={handleEmailVerificationError}
+                purpose="register"
+                className="border-t border-gray-600 pt-4"
+              />
+            )}
+
+            {/* 🆕 邮箱验证成功提示 */}
+            {useEnhancedAuth && !isLogin && emailVerified && (
+              <div className="p-3 bg-green-900/30 border border-green-600/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm text-green-400">邮箱验证成功，请继续注册</span>
+                </div>
+              </div>
+            )}
 
             {/* 提交按钮 */}
             <button

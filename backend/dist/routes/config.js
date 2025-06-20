@@ -48,7 +48,7 @@ const configValidation = [
 router.get('/', auth_1.authenticateToken, async (req, res) => {
     try {
         const config = await database_1.prisma.userConfig.findUnique({
-            where: { userId: parseInt(req.user.userId) }
+            where: { userId: req.user.userId }
         });
         if (!config) {
             const defaultConfig = await database_1.prisma.userConfig.create({
@@ -259,17 +259,17 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             res.status(401).json({ error: '用户未认证' });
             return;
         }
-        if (req.user.userId !== userId) {
+        if (req.user.userId !== parseInt(userId)) {
             res.status(403).json({ error: '无权访问此用户配置' });
             return;
         }
         const config = await database_1.prisma.userConfig.findUnique({
-            where: { userId }
+            where: { userId: parseInt(userId) }
         });
         if (!config) {
             const defaultConfig = await database_1.prisma.userConfig.create({
                 data: {
-                    userId,
+                    userId: parseInt(userId),
                     programmingModel: 'claude-3-5-sonnet-20241022',
                     multipleChoiceModel: 'claude-3-5-sonnet-20241022',
                     aiModel: 'claude-3-5-sonnet-20241022',
@@ -334,7 +334,7 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
 router.put('/user/:userId', auth_1.authMiddleware, async (req, res) => {
     try {
         const { userId } = req.params;
-        if (!req.user || req.user.userId !== userId) {
+        if (!req.user || req.user.userId !== parseInt(userId)) {
             res.status(403).json({ error: '无权修改此用户配置' });
             return;
         }
@@ -382,10 +382,10 @@ router.put('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             updateData.showCopyButton = req.body.showCopyButton;
         }
         const updatedConfig = await database_1.prisma.userConfig.upsert({
-            where: { userId },
+            where: { userId: parseInt(userId) },
             update: updateData,
             create: {
-                userId,
+                userId: parseInt(userId),
                 programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
                 multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
                 aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',

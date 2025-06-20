@@ -186,7 +186,7 @@ router.get('/verify', auth_1.authMiddleware, async (req, res) => {
             return;
         }
         const user = await database_1.prisma.user.findUnique({
-            where: { id: parseInt(req.user.userId) },
+            where: { id: req.user.userId },
             select: {
                 id: true,
                 username: true,
@@ -220,7 +220,7 @@ router.get('/me', auth_1.authMiddleware, async (req, res) => {
             return;
         }
         const user = await database_1.prisma.user.findUnique({
-            where: { id: parseInt(req.user.userId) },
+            where: { id: req.user.userId },
             select: {
                 id: true,
                 username: true,
@@ -250,7 +250,7 @@ router.post('/refresh', auth_1.authMiddleware, async (req, res) => {
             return;
         }
         const config = (0, database_1.getConfig)();
-        const newToken = jsonwebtoken_1.default.sign({ userId: parseInt(req.user.userId) }, config.security.jwtSecret, { expiresIn: '7d' });
+        const newToken = jsonwebtoken_1.default.sign({ userId: req.user.userId }, config.security.jwtSecret, { expiresIn: '7d' });
         res.json({
             message: 'Token刷新成功',
             token: newToken

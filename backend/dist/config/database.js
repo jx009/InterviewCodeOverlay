@@ -67,10 +67,11 @@ const connectRedis = async () => {
             await exports.redis.connect();
         }
         console.log(`✅ Redis连接成功 (${config.redis.host}:${config.redis.port})`);
+        return true;
     }
     catch (error) {
-        console.error('❌ Redis连接失败:', error);
-        throw error;
+        console.warn('⚠️ Redis连接失败，将在无Redis模式下运行:', error.message);
+        return false;
     }
 };
 exports.connectRedis = connectRedis;
@@ -99,54 +100,79 @@ const disconnectDatabase = async () => {
 };
 exports.disconnectDatabase = disconnectDatabase;
 const checkDatabaseHealth = async () => {
+    let mysqlStatus = false;
+    let redisStatus = false;
     try {
         await exports.prisma.$queryRaw `SELECT 1`;
+        mysqlStatus = true;
+    }
+    catch (error) {
+        console.error('MySQL健康检查失败:', error);
+    }
+    try {
         if (!exports.redis.isOpen) {
             await exports.redis.connect();
         }
         await exports.redis.ping();
-        return {
-            mysql: true,
-            redis: true,
-            config: {
-                mysqlHost: config.mysql.host,
-                mysqlDatabase: config.mysql.database,
-                redisHost: config.redis.host,
-                redisDatabase: config.redis.database
-            }
-        };
+        redisStatus = true;
     }
     catch (error) {
-        console.error('数据库健康检查失败:', error);
-        return { mysql: false, redis: false, error: error };
+        console.warn('Redis健康检查失败:', error.message);
     }
+    return {
+        mysql: mysqlStatus,
+        redis: redisStatus,
+        config: {
+            mysqlHost: config.mysql.host,
+            mysqlDatabase: config.mysql.database,
+            redisHost: config.redis.host,
+            redisDatabase: config.redis.database
+        }
+    };
 };
 exports.checkDatabaseHealth = checkDatabaseHealth;
 exports.sessionManager = {
     async setSession(sessionId, userId, expiresIn = config.session.expiresIn) {
-        const sessionData = {
-            userId,
-            createdAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString()
-        };
-        if (!exports.redis.isOpen) {
-            await exports.redis.connect();
+        try {
+            const sessionData = {
+                userId,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString()
+            };
+            if (!exports.redis.isOpen) {
+                await exports.redis.connect();
+            }
+            await exports.redis.setEx(`${config.redis.keyPrefix}session:${sessionId}`, expiresIn, JSON.stringify(sessionData));
+            return sessionData;
         }
-        await exports.redis.setEx(`${config.redis.keyPrefix}session:${sessionId}`, expiresIn, JSON.stringify(sessionData));
-        return sessionData;
+        catch (error) {
+            console.warn('Redis会话设置失败，使用数据库存储:', error.message);
+            throw new Error('会话存储失败');
+        }
     },
     async getSession(sessionId) {
-        if (!exports.redis.isOpen) {
-            await exports.redis.connect();
+        try {
+            if (!exports.redis.isOpen) {
+                await exports.redis.connect();
+            }
+            const sessionData = await exports.redis.get(`${config.redis.keyPrefix}session:${sessionId}`);
+            return sessionData ? JSON.parse(sessionData) : null;
         }
-        const sessionData = await exports.redis.get(`${config.redis.keyPrefix}session:${sessionId}`);
-        return sessionData ? JSON.parse(sessionData) : null;
+        catch (error) {
+            console.warn('Redis会话获取失败:', error.message);
+            return null;
+        }
     },
     async deleteSession(sessionId) {
-        if (!exports.redis.isOpen) {
-            await exports.redis.connect();
+        try {
+            if (!exports.redis.isOpen) {
+                await exports.redis.connect();
+            }
+            await exports.redis.del(`${config.redis.keyPrefix}session:${sessionId}`);
         }
-        await exports.redis.del(`${config.redis.keyPrefix}session:${sessionId}`);
+        catch (error) {
+            console.warn('Redis会话删除失败:', error.message);
+        }
     },
     async setVerificationCode(email, code, expiresIn = config.email.verification.expiresMinutes * 60) {
         if (!exports.redis.isOpen) {
@@ -174,14 +200,20 @@ exports.reloadConfig = reloadConfig;
 const initializeDatabase = async () => {
     try {
         await (0, exports.connectDatabase)();
-        await (0, exports.connectRedis)();
+        const redisConnected = await (0, exports.connectRedis)();
         const health = await (0, exports.checkDatabaseHealth)();
-        if (health.mysql && health.redis) {
+        if (health.mysql) {
             console.log('🎉 数据库系统初始化完成');
             console.log(`📊 配置信息:`, health.config);
+            if (redisConnected && health.redis) {
+                console.log('✅ Redis已连接，缓存功能可用');
+            }
+            else {
+                console.log('⚠️ Redis未连接，某些功能可能受限（如会话管理、验证码）');
+            }
         }
         else {
-            throw new Error('数据库健康检查失败');
+            throw new Error('MySQL数据库连接失败');
         }
     }
     catch (error) {

@@ -27,7 +27,7 @@ interface UserConfig {
 }
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth()
+  const { user, enhancedLogout } = useAuth()
   const [config, setConfig] = useState<UserConfig | null>(null)
   const [aiModels, setAiModels] = useState<any[]>([])
   const [languages, setLanguages] = useState<string[]>([])
@@ -60,7 +60,7 @@ export default function DashboardPage() {
   }
 
   const handleLogout = async () => {
-    await logout()
+    await enhancedLogout()
   }
 
   const handleConfigUpdate = async (updates: Partial<UserConfig>) => {

@@ -39,7 +39,7 @@ const authMiddleware = (req, res, next) => {
         const token = authHeader.substring(7);
         const config = (0, database_1.getConfig)();
         const decoded = jsonwebtoken_1.default.verify(token, config.security.jwtSecret);
-        req.user = { userId: decoded.userId.toString() };
+        req.user = { userId: decoded.userId };
         next();
     }
     catch (error) {

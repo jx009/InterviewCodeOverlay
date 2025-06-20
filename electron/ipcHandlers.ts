@@ -285,8 +285,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-check-connection", async () => {
     try {
-      // 简化版：检查认证状态作为连接状态
-      const connected = await simpleAuthManager.isAuthenticated()
+      // 🆕 检查后端服务器连接状态
+      const connected = await simpleAuthManager.checkConnection()
       return { connected: connected }
     } catch (error) {
       console.error("Failed to check web connection:", error)
