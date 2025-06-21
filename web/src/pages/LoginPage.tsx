@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import EmailVerification from '../components/EmailVerification';
+import ForgotPasswordPage from './ForgotPasswordPage';
 
 // 🛠️ 添加CSS样式来隐藏浏览器默认的密码显示图标
 const passwordInputStyles = `
@@ -21,6 +22,7 @@ const passwordInputStyles = `
 `;
 
 export default function LoginPage() {
+  const [currentPage, setCurrentPage] = useState<'login' | 'forgot-password'>('login'); // 🆕 页面状态管理
   const [isLogin, setIsLogin] = useState(true);
   const [useEnhancedAuth, setUseEnhancedAuth] = useState(true); // 🆕 默认使用增强认证
   const [formData, setFormData] = useState({
@@ -398,6 +400,11 @@ export default function LoginPage() {
     );
   }
 
+  // 🆕 根据当前页面状态渲染不同内容
+  if (currentPage === 'forgot-password') {
+    return <ForgotPasswordPage onBackToLogin={() => setCurrentPage('login')} />;
+  }
+
   return (
     <div className="w-full h-full min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center px-4 py-8 sm:py-12">
       {/* 🛠️ 注入样式来隐藏浏览器默认图标 */}
@@ -681,6 +688,22 @@ export default function LoginPage() {
                 isLogin ? '登录' : '注册'
               )}
             </button>
+
+            {/* 🆕 忘记密码链接 (仅在登录模式显示) */}
+            {isLogin && (
+              <div className="text-center mt-3">
+                <button
+                  type="button"
+                  className="text-sm text-gray-400 hover:text-blue-400 transition-colors"
+                  onClick={() => {
+                    // 切换到忘记密码页面
+                    setCurrentPage('forgot-password');
+                  }}
+                >
+                  忘记密码？
+                </button>
+              </div>
+            )}
 
             {/* 分割线 */}
             <div className="relative my-4 sm:my-6">

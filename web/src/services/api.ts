@@ -171,6 +171,26 @@ export const authApi = {
     const response = await api.post('/create-shared-session');
     return response.data;
   },
+
+  // 🆕 密码重置API
+  resetPassword: async (resetToken: string, newPassword: string) => {
+    const response = await api.post('/reset_password', { 
+      token: resetToken, 
+      password: newPassword 
+    });
+    return response.data;
+  },
+
+  // 🆕 密码重置专用API
+  sendResetCode: async (email: string) => {
+    const response = await api.post('/send_reset_code', { email });
+    return response.data;
+  },
+
+  verifyResetCode: async (token: string, verify_code: string) => {
+    const response = await api.post('/verify_reset_code', { token, verify_code });
+    return response.data;
+  },
 };
 
 // 配置相关API

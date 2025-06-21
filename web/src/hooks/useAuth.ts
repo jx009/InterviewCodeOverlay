@@ -37,6 +37,8 @@ interface AuthResponse {
   success: boolean;
   error?: string;
   user?: User;
+  token?: string; // 🆕 用于密码重置流程
+  resetToken?: string; // 🆕 用于密码重置流程
 }
 
 export function useAuth() {
@@ -404,6 +406,120 @@ export function useAuth() {
     setError(null);
   };
 
+  // 🆕 忘记密码功能
+  const sendResetCode = async (email: string): Promise<AuthResponse> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('发送密码重置验证码:', email);
+      
+      if (!email.trim()) {
+        throw new Error('请输入邮箱');
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error('请输入有效的邮箱地址');
+      }
+      
+      // 使用专门的密码重置API
+      const response = await authApi.sendResetCode(email);
+      console.log('发送重置验证码API响应:', response);
+      
+      if (response.success) {
+        return { success: true, token: response.token };
+      } else {
+        const errorMsg = response.message || response.error || '发送验证码失败';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    } catch (err: any) {
+      console.error('发送重置验证码错误:', err);
+      const errorMessage = err.message || '网络错误，请稍后重试';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyResetCode = async (token: string, code: string): Promise<AuthResponse> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('验证密码重置验证码');
+      
+      if (!token.trim()) {
+        throw new Error('验证令牌无效');
+      }
+      if (!code.trim()) {
+        throw new Error('请输入验证码');
+      }
+      if (code.length !== 6) {
+        throw new Error('验证码应为6位数字');
+      }
+      
+      // 使用专门的密码重置验证API
+      const response = await authApi.verifyResetCode(token, code);
+      console.log('验证重置验证码API响应:', response);
+      
+      if (response.success) {
+        return { success: true, resetToken: response.resetToken };
+      } else {
+        const errorMsg = response.message || response.error || '验证码验证失败';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    } catch (err: any) {
+      console.error('验证重置验证码错误:', err);
+      const errorMessage = err.message || '网络错误，请稍后重试';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (resetToken: string, newPassword: string): Promise<AuthResponse> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('重置密码');
+      
+      if (!resetToken.trim()) {
+        throw new Error('重置令牌无效');
+      }
+      if (!newPassword.trim()) {
+        throw new Error('请输入新密码');
+      }
+      if (newPassword.length < 6) {
+        throw new Error('密码长度至少6位');
+      }
+      
+      // 调用密码重置API
+      const response = await authApi.resetPassword(resetToken, newPassword);
+      console.log('重置密码API响应:', response);
+      
+      if (response.success) {
+        return { success: true };
+      } else {
+        const errorMsg = response.error || '密码重置失败';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    } catch (err: any) {
+      console.error('重置密码错误:', err);
+      const errorMessage = err.message || '网络错误，请稍后重试';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     user,
     loading,
@@ -418,6 +534,10 @@ export function useAuth() {
     enhancedRegister,
     enhancedLogout,
     checkSessionStatus,
+    // 🆕 忘记密码API
+    sendResetCode,
+    verifyResetCode,
+    resetPassword,
     clearError,
   };
 } 

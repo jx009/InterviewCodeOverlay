@@ -55,9 +55,7 @@ function initEmailService() {
 
 // 生成验证码
 function generateVerificationCode() {
-  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    return '123456'; // 开发环境固定验证码
-  }
+  // 总是生成随机6位数字验证码
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
@@ -691,6 +689,288 @@ app.post('/api/auth/refresh', async (req, res) => {
   } catch (error) {
     console.error('Token refresh error:', error);
     res.status(401).json({ error: '刷新令牌无效' });
+  }
+});
+
+// ============================================
+// 🆕 密码重置API
+// ============================================
+
+// 密码重置邮件模板
+function createPasswordResetEmail(code, email) {
+  return {
+    from: process.env.SMTP_USER,
+    to: email,
+    subject: 'InterviewCodeOverlay - 密码重置验证码',
+    html: `
+      <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">InterviewCodeOverlay</h1>
+          <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">面试代码助手</p>
+        </div>
+        
+        <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
+          <h2 style="color: #333; margin-top: 0;">密码重置验证码</h2>
+          <p style="color: #666; font-size: 16px; line-height: 1.6;">
+            您好！您正在重置 InterviewCodeOverlay 账户密码，请使用以下验证码完成重置：
+          </p>
+          
+          <div style="background: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px dashed #ff6b6b;">
+            <span style="font-size: 32px; font-weight: bold; color: #ff6b6b; letter-spacing: 8px;">${code}</span>
+          </div>
+          
+          <p style="color: #999; font-size: 14px; text-align: center;">
+            验证码有效期为 5 分钟，请及时使用
+          </p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+              这是一封自动发送的邮件，请勿回复<br>
+              如果您没有申请密码重置，请忽略此邮件
+            </p>
+          </div>
+        </div>
+      </div>
+    `
+  };
+}
+
+// API 1: 发送密码重置验证码
+app.post('/api/send_reset_code', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: '邮箱地址不能为空'
+      });
+    }
+    
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: '邮箱格式不正确'
+      });
+    }
+    
+    // 检查邮箱是否已注册（重置密码必须是已注册用户）
+    const user = await db.getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '该邮箱尚未注册，请先注册账户'
+      });
+    }
+    
+    if (!transporter) {
+      return res.status(500).json({
+        success: false,
+        message: 'SMTP服务未配置，无法发送验证码'
+      });
+    }
+    
+    // 生成验证码和token
+    const code = generateVerificationCode();
+    const token = generateToken();
+    
+    // 存储重置token和邮箱、验证码的关系（5分钟有效期）
+    const resetData = {
+      email,
+      code,
+      userId: user.id,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      attempts: 0,
+      purpose: 'password_reset'
+    };
+    
+    sessionStore.set(`reset_token:${token}`, resetData);
+    sessionStore.set(`reset_email:${email}`, { token, code });
+    
+    // 5分钟后自动清理
+    setTimeout(() => {
+      sessionStore.delete(`reset_token:${token}`);
+      sessionStore.delete(`reset_email:${email}`);
+    }, 5 * 60 * 1000);
+    
+    // 发送邮件
+    const mailOptions = createPasswordResetEmail(code, email);
+    await transporter.sendMail(mailOptions);
+    
+    console.log(`✅ 密码重置验证码已发送到 ${email}: ${code}, token: ${token.substring(0, 10)}...`);
+    
+    res.json({
+      success: true,
+      message: '密码重置验证码已发送，请查收邮件',
+      token, // 返回token用于后续重置步骤
+      expiresIn: 300 // 5分钟，单位秒
+    });
+    
+  } catch (error) {
+    console.error('发送密码重置验证码失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '发送验证码失败，请稍后重试',
+      error: error.message
+    });
+  }
+});
+
+// API 2: 验证密码重置验证码
+app.post('/api/verify_reset_code', async (req, res) => {
+  try {
+    const { token, verify_code } = req.body;
+    
+    if (!token || !verify_code) {
+      return res.status(400).json({
+        success: false,
+        message: 'token和验证码不能为空'
+      });
+    }
+    
+    // 验证token获取重置数据
+    const resetData = sessionStore.get(`reset_token:${token}`);
+    if (!resetData) {
+      return res.status(400).json({
+        success: false,
+        message: '重置令牌无效或已过期'
+      });
+    }
+    
+    // 检查过期时间
+    if (new Date() > new Date(resetData.expiresAt)) {
+      sessionStore.delete(`reset_token:${token}`);
+      sessionStore.delete(`reset_email:${resetData.email}`);
+      return res.status(400).json({
+        success: false,
+        message: '验证码已过期，请重新获取'
+      });
+    }
+    
+    // 验证验证码
+    if (resetData.code !== verify_code) {
+      resetData.attempts++;
+      if (resetData.attempts >= 5) {
+        sessionStore.delete(`reset_token:${token}`);
+        sessionStore.delete(`reset_email:${resetData.email}`);
+        return res.status(400).json({
+          success: false,
+          message: '验证码错误次数过多，请重新获取'
+        });
+      }
+      
+      sessionStore.set(`reset_token:${token}`, resetData);
+      return res.status(400).json({
+        success: false,
+        message: `验证码错误，还剩 ${5 - resetData.attempts} 次机会`
+      });
+    }
+    
+    // 生成用于密码重置的特殊token
+    const resetPasswordToken = generateToken();
+    const resetPasswordData = {
+      email: resetData.email,
+      userId: resetData.userId,
+      verified: true,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10分钟有效期
+      purpose: 'password_reset_verified'
+    };
+    
+    sessionStore.set(`reset_password:${resetPasswordToken}`, resetPasswordData);
+    
+    // 清理验证码数据
+    sessionStore.delete(`reset_token:${token}`);
+    sessionStore.delete(`reset_email:${resetData.email}`);
+    
+    console.log(`✅ 密码重置验证码验证成功: ${resetData.email}`);
+    
+    res.json({
+      success: true,
+      message: '验证码验证成功，可以重置密码',
+      resetToken: resetPasswordToken
+    });
+    
+  } catch (error) {
+    console.error('验证密码重置验证码失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '验证码验证失败，请稍后重试'
+    });
+  }
+});
+
+// API 3: 重置密码
+app.post('/api/reset_password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: '重置令牌和新密码不能为空'
+      });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: '密码长度至少6位'
+      });
+    }
+    
+    // 验证重置token
+    const resetPasswordData = sessionStore.get(`reset_password:${token}`);
+    if (!resetPasswordData) {
+      return res.status(400).json({
+        success: false,
+        message: '重置令牌无效或已过期'
+      });
+    }
+    
+    // 检查过期时间
+    if (new Date() > new Date(resetPasswordData.expiresAt)) {
+      sessionStore.delete(`reset_password:${token}`);
+      return res.status(400).json({
+        success: false,
+        message: '重置令牌已过期，请重新开始密码重置流程'
+      });
+    }
+    
+    // 检查是否已验证
+    if (!resetPasswordData.verified) {
+      return res.status(400).json({
+        success: false,
+        message: '请先完成验证码验证'
+      });
+    }
+    
+    // 密码加密
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // 更新用户密码
+    await db.updateUserPassword(resetPasswordData.userId, hashedPassword);
+    
+    // 清理重置数据
+    sessionStore.delete(`reset_password:${token}`);
+    
+    console.log(`✅ 密码重置成功: ${resetPasswordData.email}, 用户ID: ${resetPasswordData.userId}`);
+    
+    res.json({
+      success: true,
+      message: '密码重置成功，请使用新密码登录'
+    });
+    
+  } catch (error) {
+    console.error('密码重置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '密码重置失败，请稍后重试',
+      error: error.message
+    });
   }
 });
 

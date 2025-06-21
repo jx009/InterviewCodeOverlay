@@ -106,17 +106,28 @@ class Database {
 
   async getUserByUsernameOrEmail(identifier) {
     try {
-      return await this.prisma.user.findFirst({
+      const user = await this.prisma.user.findFirst({
         where: {
           OR: [
             { username: identifier },
             { email: identifier }
           ]
-        },
-        include: {
-          config: true
         }
       });
+      return user;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 🆕 更新用户密码
+  async updateUserPassword(userId, hashedPassword) {
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { id: parseInt(userId) },
+        data: { password: hashedPassword }
+      });
+      return updatedUser;
     } catch (error) {
       throw error;
     }
