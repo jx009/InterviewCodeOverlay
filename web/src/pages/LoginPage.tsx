@@ -2,18 +2,38 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import EmailVerification from '../components/EmailVerification';
 
+// 🛠️ 添加CSS样式来隐藏浏览器默认的密码显示图标
+const passwordInputStyles = `
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none !important;
+  }
+  
+  input[type="password"]::-webkit-credentials-auto-fill-button,
+  input[type="password"]::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+  }
+  
+  input[type="text"]::-ms-reveal,
+  input[type="text"]::-ms-clear {
+    display: none !important;
+  }
+`;
+
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [useEnhancedAuth, setUseEnhancedAuth] = useState(true); // 🆕 默认使用增强认证
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    confirmPassword: '', // 🆕 添加确认密码字段
     username: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+  const [showPassword, setShowPassword] = useState(false); // 🆕 添加密码显示状态
   
   // 🆕 邮箱验证相关状态
   const [showEmailVerification, setShowEmailVerification] = useState(false);
@@ -110,6 +130,13 @@ export default function LoginPage() {
           errors.password = '密码长度至少6位';
         }
         
+        // 🆕 确认密码验证
+        if (!formData.confirmPassword.trim()) {
+          errors.confirmPassword = '请确认密码';
+        } else if (formData.password !== formData.confirmPassword) {
+          errors.confirmPassword = '两次输入的密码不一致';
+        }
+        
         // 可选的用户名验证
         if (formData.username && formData.username.length < 2) {
           errors.username = '用户名长度至少2位';
@@ -135,6 +162,13 @@ export default function LoginPage() {
           errors.password = '请输入密码';
         } else if (formData.password.length < 2) {
           errors.password = '密码长度至少2位';
+        }
+        
+        // 🆕 传统注册也需要确认密码验证
+        if (!formData.confirmPassword.trim()) {
+          errors.confirmPassword = '请确认密码';
+        } else if (formData.password !== formData.confirmPassword) {
+          errors.confirmPassword = '两次输入的密码不一致';
         }
       }
     }
@@ -293,7 +327,7 @@ export default function LoginPage() {
     setError('');
     setSuccess('');
     setValidationErrors({});
-    setFormData({ username: '', email: '', password: '' });
+    setFormData({ username: '', email: '', password: '', confirmPassword: '' });
     // 🆕 重置邮箱验证状态
     setShowEmailVerification(false);
     setEmailVerified(false);
@@ -366,6 +400,8 @@ export default function LoginPage() {
 
   return (
     <div className="w-full h-full min-h-screen bg-[#1a1a1a] flex flex-col items-center justify-center px-4 py-8 sm:py-12">
+      {/* 🛠️ 注入样式来隐藏浏览器默认图标 */}
+      <style dangerouslySetInnerHTML={{ __html: passwordInputStyles }} />
       <div className="w-full max-w-md mx-auto">
         {/* Logo 区域 */}
         <div className="text-center mb-6 sm:mb-8">
@@ -519,21 +555,89 @@ export default function LoginPage() {
               <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
                 密码 <span className="text-red-400">*</span>
               </label>
-              <input
-                type="password"
-                className={`w-full px-3 py-2 sm:px-4 sm:py-3 bg-[#3d3d3d] border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                  validationErrors.password ? 'border-red-500' : 'border-gray-600'
-                }`}
-                placeholder="请输入密码"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  className={`w-full px-3 py-2 sm:px-4 sm:py-3 pr-10 bg-[#3d3d3d] border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    validationErrors.password ? 'border-red-500' : 'border-gray-600'
+                  }`}
+                  placeholder="请输入密码"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  style={{
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    appearance: 'none'
+                  }}
+                  autoComplete="current-password"
+                />
+                {/* 🆕 眼睛图标 */}
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-300 transition-colors bg-transparent hover:bg-transparent focus:outline-none"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
               {validationErrors.password && (
                 <p className="text-red-400 text-xs mt-1">{validationErrors.password}</p>
               )}
             </div>
+
+            {/* 🆕 确认密码字段 (仅在注册时显示) */}
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
+                  确认密码 <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="password"
+                  className={`w-full px-3 py-2 sm:px-4 sm:py-3 bg-[#3d3d3d] border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    validationErrors.confirmPassword ? 'border-red-500' : 'border-gray-600'
+                  }`}
+                  placeholder="请再次输入密码"
+                  value={formData.confirmPassword}
+                  onChange={(e) =>
+                    setFormData({ ...formData, confirmPassword: e.target.value })
+                  }
+                />
+                {validationErrors.confirmPassword && (
+                  <p className="text-red-400 text-xs mt-1">{validationErrors.confirmPassword}</p>
+                )}
+                {/* 🆕 密码匹配提示 */}
+                {formData.password && formData.confirmPassword && (
+                  <div className="mt-1">
+                    {formData.password === formData.confirmPassword ? (
+                      <p className="text-green-400 text-xs flex items-center">
+                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        密码匹配
+                      </p>
+                    ) : (
+                      <p className="text-red-400 text-xs flex items-center">
+                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        密码不匹配
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 🆕 邮箱验证组件 */}
             {useEnhancedAuth && !isLogin && showEmailVerification && (
