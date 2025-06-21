@@ -50,7 +50,6 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false)
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isWebAuthOpen, setIsWebAuthOpen] = useState(false)
   const [config, setConfig] = useState({})
 
   // Web Authentication Hook
@@ -60,6 +59,23 @@ function App() {
     loading: authLoading, 
     connectionStatus 
   } = useWebAuth()
+
+  // 🆕 控制认证对话框显示
+  // 当未认证时自动显示登录对话框，认证后自动关闭
+  const [isWebAuthOpen, setIsWebAuthOpen] = useState(false)
+  
+  // 🆕 监听认证状态变化，自动控制对话框显示
+  useEffect(() => {
+    if (isInitialized && !authLoading) {
+      if (!authenticated) {
+        // 未认证时显示登录对话框
+        setIsWebAuthOpen(true)
+      } else {
+        // 已认证时关闭登录对话框
+        setIsWebAuthOpen(false)
+      }
+    }
+  }, [isInitialized, authenticated, authLoading])
 
   // Set unlimited credits
   const updateCredits = useCallback(() => {
@@ -163,14 +179,6 @@ function App() {
       unsubscribers.forEach(unsubscribe => unsubscribe())
     }
   }, [showToast])
-
-  // 简化的认证检查，只在初始化时触发一次
-  useEffect(() => {
-    if (isInitialized && !authLoading && !authenticated) {
-      // 认证状态由后端智能管理，前端不再频繁检查
-      console.log('User not authenticated, auth status managed by backend')
-    }
-  }, [isInitialized, authenticated, authLoading])
 
   // Initialize dropdown handler
   useEffect(() => {
@@ -309,40 +317,70 @@ function App() {
         <ToastContext.Provider value={{ showToast }}>
           <div className="relative">
             {isInitialized ? (
-              // 简化逻辑：直接显示主应用，让后端通知系统处理认证
-              <ClickThroughManager
-                nonClickThroughSelectors={[
-                  // 顶部区域
-                  '.top-area', 
-                  // 交互元素
-                  '.pointer-events-auto',
-                  'button',
-                  'select',
-                  'input',
-                  '.settings-button',
-                  // 设置相关
-                  '.settings-dialog',
-                  '[role="dialog"]',
-                  // 复制按钮
-                  '.absolute.top-2.right-2',
-                  // 其他可能需要交互的元素
-                  'a',
-                  '[role="button"]',
-                  '[role="menuitem"]',
-                  '[role="tab"]',
-                  '[role="switch"]',
-                  '[role="checkbox"]',
-                  '[role="radio"]',
-                  '.react-select__control',
-                  '.react-select__menu'
-                ]}
-              >
-                <SubscribedApp
-                  credits={credits}
-                  currentLanguage={currentLanguage}
-                  setLanguage={updateLanguage}
-                />
-              </ClickThroughManager>
+              // 🆕 修改逻辑：只有在已认证时才显示主应用
+              authenticated ? (
+                <ClickThroughManager
+                  nonClickThroughSelectors={[
+                    // 顶部区域
+                    '.top-area', 
+                    // 交互元素
+                    '.pointer-events-auto',
+                    'button',
+                    'select',
+                    'input',
+                    '.settings-button',
+                    // 设置相关
+                    '.settings-dialog',
+                    '[role="dialog"]',
+                    // 复制按钮
+                    '.absolute.top-2.right-2',
+                    // 其他可能需要交互的元素
+                    'a',
+                    '[role="button"]',
+                    '[role="menuitem"]',
+                    '[role="tab"]',
+                    '[role="switch"]',
+                    '[role="checkbox"]',
+                    '[role="radio"]',
+                    '.react-select__control',
+                    '.react-select__menu'
+                  ]}
+                >
+                  <SubscribedApp
+                    credits={credits}
+                    currentLanguage={currentLanguage}
+                    setLanguage={updateLanguage}
+                  />
+                </ClickThroughManager>
+              ) : (
+                // 🆕 未认证时显示等待登录的界面
+                <div className="min-h-screen bg-black flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    {authLoading ? (
+                      <>
+                        <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
+                        <p className="text-white/60 text-sm">
+                          检查认证状态...
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 border-2 border-white/20 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h2 className="text-white text-lg font-medium mb-2">需要登录</h2>
+                          <p className="text-white/60 text-sm">
+                            请通过Web配置中心登录以使用增强认证功能
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
             ) : (
               <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -364,7 +402,7 @@ function App() {
             config={config}
           />
           
-          {/* Web Authentication Dialog */}
+          {/* 🆕 Web Authentication Dialog - 根据认证状态自动控制显示 */}
           <WebAuthDialog 
             open={isWebAuthOpen}
             onOpenChange={setIsWebAuthOpen}

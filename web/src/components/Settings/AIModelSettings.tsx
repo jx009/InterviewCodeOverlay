@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { configApi } from '../../services/api';
 
 type AIModel = {

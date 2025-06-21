@@ -1,0 +1,69 @@
+{
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "username": "interview_user",
+    "password": "your_secure_password",
+    "database": "interview_coder",
+    "charset": "utf8mb4",
+    "collation": "utf8mb4_unicode_ci",
+    "timezone": "+08:00",
+    "connectionLimit": 10,
+    "acquireTimeout": 60000,
+    "timeout": 60000,
+    "reconnect": true,
+    "ssl": false
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "database": 0,
+    "keyPrefix": "interview_coder:",
+    "retryDelayOnFailover": 100,
+    "maxRetriesPerRequest": 3,
+    "lazyConnect": true,
+    "keepAlive": 30000
+  },
+  "session": {
+    "secret": "your-super-secret-session-key",
+    "expiresIn": 3600,
+    "refreshExpiresIn": 604800,
+    "cookieName": "interview_session",
+    "secure": false,
+    "httpOnly": true,
+    "sameSite": "lax"
+  },
+  "email": {
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "secure": false,
+      "auth": {
+        "user": "your-email@gmail.com",
+        "pass": "your-app-password"
+      }
+    },
+    "from": "your-email@gmail.com",
+    "verification": {
+      "codeLength": 6,
+      "expiresMinutes": 5,
+      "template": "default"
+    }
+  },
+  "security": {
+    "bcryptRounds": 12,
+    "jwtSecret": "your-super-secret-jwt-key",
+    "jwtRefreshSecret": "your-super-secret-refresh-key",
+    "passwordMinLength": 6,
+    "maxLoginAttempts": 5,
+    "lockoutDuration": 900
+  },
+  "app": {
+    "name": "面试代码助手",
+    "version": "1.0.0",
+    "environment": "development",
+    "debug": true,
+    "logLevel": "info"
+  }
+} 

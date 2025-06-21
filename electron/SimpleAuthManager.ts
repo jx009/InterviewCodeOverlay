@@ -800,6 +800,20 @@ export class SimpleAuthManager extends EventEmitter {
     // 清除本地存储
     configHelper.updateConfig({ authToken: null })
     
+    // 🆕 清除共享会话文件
+    try {
+      const path = require('path')
+      const fs = require('fs')
+      const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json')
+      
+      if (fs.existsSync(sharedSessionPath)) {
+        fs.unlinkSync(sharedSessionPath)
+        console.log('🗑️ 共享会话文件已删除')
+      }
+    } catch (error) {
+      console.warn('⚠️ 清除共享会话文件失败:', error)
+    }
+    
     console.log('🗑️ 认证数据已清除')
   }
 }
