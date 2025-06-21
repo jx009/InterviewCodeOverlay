@@ -1,7 +1,14 @@
 {
-  "userId": 1,
-  "username": "123456",
-  "email": "123456@test.com",
-  "createdAt": "2025-06-21T06:49:26.775Z",
-  "expiresAt": "2025-06-22T06:49:26.775Z"
+  "sessionId": "QqmPWgccRfMGzNH6MEMPfzm1We6F39",
+  "userId": 8,
+  "username": "jianxin",
+  "email": "1751940279@qq.com",
+  "user": {
+    "id": "8",
+    "username": "jianxin",
+    "email": "1751940279@qq.com",
+    "createdAt": "2025-06-21T08:22:04.895Z"
+  },
+  "createdAt": "2025-06-21T08:22:04.895Z",
+  "expiresAt": "2025-06-22T08:22:04.895Z"
 }

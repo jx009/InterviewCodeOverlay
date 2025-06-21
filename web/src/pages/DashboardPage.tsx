@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { configApi } from '../services/api'
+import { useState, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { configApi } from '../services/api';
 
 interface UserConfig {
   aiModel: string;
-  programmingModel?: string;    // 编程题专用模型
-  multipleChoiceModel?: string; // 选择题专用模型
+  programmingModel?: string;
+  multipleChoiceModel?: string;
   language: string;
   theme: 'light' | 'dark' | 'system';
   shortcuts: {
@@ -27,7 +27,7 @@ interface UserConfig {
 }
 
 export default function DashboardPage() {
-  const { user, enhancedLogout } = useAuth()
+  const { user, logout } = useAuth()
   const [config, setConfig] = useState<UserConfig | null>(null)
   const [aiModels, setAiModels] = useState<any[]>([])
   const [languages, setLanguages] = useState<string[]>([])
@@ -42,17 +42,17 @@ export default function DashboardPage() {
   const loadInitialData = async () => {
     try {
       setLoading(true)
-      const [configRes, modelsRes, langsRes] = await Promise.all([
+      const [configData, modelsData, languagesData] = await Promise.all([
         configApi.getConfig(),
         configApi.getAIModels(),
         configApi.getLanguages()
       ])
       
-      setConfig(configRes)
-      setAiModels(modelsRes)
-      setLanguages(langsRes)
+      setConfig(configData)
+      setAiModels(modelsData)
+      setLanguages(languagesData)
     } catch (error) {
-      console.error('Failed to load data:', error)
+      console.error('Failed to load initial data:', error)
       setMessage('加载数据失败')
     } finally {
       setLoading(false)
@@ -60,81 +60,93 @@ export default function DashboardPage() {
   }
 
   const handleLogout = async () => {
-    await enhancedLogout()
+    try {
+      await logout()
+      window.location.href = '/'
+    } catch (error) {
+      console.error('登出失败:', error)
+    }
   }
 
-  const handleConfigUpdate = async (updates: Partial<UserConfig>) => {
+  const handleConfigChange = (key: string, value: any) => {
+    if (config) {
+      setConfig({
+        ...config,
+        [key]: value
+      })
+    }
+  }
+
+  const handleNestedConfigChange = (section: string, key: string, value: any) => {
+    if (config) {
+      const currentSection = config[section as keyof UserConfig] as any
+      setConfig({
+        ...config,
+        [section]: {
+          ...currentSection,
+          [key]: value
+        }
+      })
+    }
+  }
+
+  const handleSaveConfig = async () => {
     if (!config) return
-    
+
     try {
       setSaving(true)
-      const updatedConfig = { ...config, ...updates }
-      const result = await configApi.updateConfig(updatedConfig)
-      setConfig(result)
-      setMessage('配置已保存')
+      await configApi.updateConfig(config)
+      setMessage('配置保存成功！')
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
-      console.error('Failed to update config:', error)
-      setMessage('保存失败')
+      console.error('保存配置失败:', error)
+      setMessage('保存配置失败')
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <div className="text-white">加载中...</div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-center">
+          <h2 className="text-2xl font-bold mb-4">未登录</h2>
+          <p>请先登录</p>
+        </div>
       </div>
     )
   }
 
-  if (!config) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
-        <div className="text-red-400">加载配置失败</div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>加载中...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white">
-      {/* Header */}
-      <header className="bg-[#2d2d2d] border-b border-gray-600 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold">Interview Code Overlay</h1>
-              <p className="text-sm text-gray-400">配置中心</p>
-            </div>
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">欢迎，{user.username}！</h1>
+            <p className="text-gray-400">{user.email}</p>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="text-sm">
-              <span className="text-gray-400">欢迎，</span>
-              <span className="text-white font-medium">{user?.username}</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"
-            >
-              退出登录
-            </button>
-          </div>
+          <button
+            onClick={handleLogout}
+            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors"
+          >
+            退出登录
+          </button>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto p-6">
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            message.includes('失败') ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 
-            'bg-green-500/10 border border-green-500/20 text-green-400'
+          <div className={`p-4 rounded-lg mb-6 ${
+            message.includes('成功') ? 'bg-green-600' : 'bg-red-600'
           }`}>
             {message}
           </div>
@@ -142,65 +154,51 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* AI模型配置 */}
-          <div className="bg-[#2d2d2d] rounded-2xl p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              AI模型配置
-            </h2>
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">🤖 AI模型配置</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  编程题模型
-                </label>
+                <label className="block text-sm font-medium mb-2">编程题模型</label>
                 <select
-                  value={config.programmingModel || config.aiModel || 'claude-3-5-sonnet-20241022'}
-                  onChange={(e) => handleConfigUpdate({ programmingModel: e.target.value })}
-                  disabled={saving}
-                  className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                  value={config?.programmingModel || config?.aiModel || ''}
+                  onChange={(e) => handleConfigChange('programmingModel', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
                 >
-                  {aiModels.map(model => (
+                  {aiModels.map((model) => (
                     <option key={model.id} value={model.name}>
-                      {model.displayName} ({model.provider})
+                      {model.displayName || model.name}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">用于代码生成和算法分析</p>
+                <p className="text-sm text-gray-400 mt-1">用于代码生成和算法分析</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  选择题模型
-                </label>
+                <label className="block text-sm font-medium mb-2">选择题模型</label>
                 <select
-                  value={config.multipleChoiceModel || config.aiModel || 'claude-3-5-sonnet-20241022'}
-                  onChange={(e) => handleConfigUpdate({ multipleChoiceModel: e.target.value })}
-                  disabled={saving}
-                  className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                  value={config?.multipleChoiceModel || config?.aiModel || ''}
+                  onChange={(e) => handleConfigChange('multipleChoiceModel', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
                 >
-                  {aiModels.map(model => (
+                  {aiModels.map((model) => (
                     <option key={model.id} value={model.name}>
-                      {model.displayName} ({model.provider})
+                      {model.displayName || model.name}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">用于选择题识别和分析</p>
+                <p className="text-sm text-gray-400 mt-1">用于选择题识别和分析</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  首选编程语言
-                </label>
+                <label className="block text-sm font-medium mb-2">首选编程语言</label>
                 <select
-                  value={config.language || 'python'}
-                  onChange={(e) => handleConfigUpdate({ language: e.target.value })}
-                  disabled={saving}
-                  className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                  value={config?.language || ''}
+                  onChange={(e) => handleConfigChange('language', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
                 >
-                  {languages.map(lang => (
-                    <option key={lang} value={lang.toLowerCase()}>
+                  {languages.map((lang) => (
+                    <option key={lang} value={lang}>
                       {lang}
                     </option>
                   ))}
@@ -210,44 +208,31 @@ export default function DashboardPage() {
           </div>
 
           {/* 显示设置 */}
-          <div className="bg-[#2d2d2d] rounded-2xl p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-              </svg>
-              显示设置
-            </h2>
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">🎨 显示设置</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  窗口透明度: {Math.round((config.display?.opacity || 1.0) * 100)}%
+                <label className="block text-sm font-medium mb-2">
+                  透明度: {Math.round((config?.display?.opacity || 1) * 100)}%
                 </label>
                 <input
                   type="range"
                   min="0.1"
-                  max="1.0"
-                  step="0.05"
-                  value={config.display?.opacity || 1.0}
-                  onChange={(e) => handleConfigUpdate({ 
-                    display: { ...config.display, opacity: parseFloat(e.target.value) }
-                  })}
-                  disabled={saving}
-                  className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                  max="1"
+                  step="0.1"
+                  value={config?.display?.opacity || 1}
+                  onChange={(e) => handleNestedConfigChange('display', 'opacity', parseFloat(e.target.value))}
+                  className="w-full"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  窗口位置
-                </label>
+                <label className="block text-sm font-medium mb-2">窗口位置</label>
                 <select
-                  value={config.display?.position || 'top-right'}
-                  onChange={(e) => handleConfigUpdate({ 
-                    display: { ...config.display, position: e.target.value as any }
-                  })}
-                  disabled={saving}
-                  className="w-full px-4 py-3 bg-[#3d3d3d] border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                  value={config?.display?.position || 'top-right'}
+                  onChange={(e) => handleNestedConfigChange('display', 'position', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
                 >
                   <option value="top-left">左上角</option>
                   <option value="top-right">右上角</option>
@@ -256,123 +241,132 @@ export default function DashboardPage() {
                 </select>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">自动隐藏</span>
+              <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  checked={config.display?.autoHide || false}
-                  onChange={(e) => handleConfigUpdate({ 
-                    display: { ...config.display, autoHide: e.target.checked }
-                  })}
-                  disabled={saving}
-                  className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                  id="autoHide"
+                  checked={config?.display?.autoHide || false}
+                  onChange={(e) => handleNestedConfigChange('display', 'autoHide', e.target.checked)}
+                  className="rounded"
+                />
+                <label htmlFor="autoHide" className="text-sm">自动隐藏</label>
+              </div>
+
+              {config?.display?.autoHide && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    隐藏延迟: {config?.display?.hideDelay || 3000}ms
+                  </label>
+                  <input
+                    type="range"
+                    min="1000"
+                    max="10000"
+                    step="500"
+                    value={config?.display?.hideDelay || 3000}
+                    onChange={(e) => handleNestedConfigChange('display', 'hideDelay', parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 快捷键设置 */}
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">⌨️ 快捷键设置</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">截图快捷键</label>
+                <input
+                  type="text"
+                  value={config?.shortcuts?.takeScreenshot || ''}
+                  onChange={(e) => handleNestedConfigChange('shortcuts', 'takeScreenshot', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  placeholder="例如: Ctrl+Shift+S"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">打开队列快捷键</label>
+                <input
+                  type="text"
+                  value={config?.shortcuts?.openQueue || ''}
+                  onChange={(e) => handleNestedConfigChange('shortcuts', 'openQueue', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  placeholder="例如: Ctrl+Shift+Q"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">打开设置快捷键</label>
+                <input
+                  type="text"
+                  value={config?.shortcuts?.openSettings || ''}
+                  onChange={(e) => handleNestedConfigChange('shortcuts', 'openSettings', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  placeholder="例如: Ctrl+Shift+,"
                 />
               </div>
             </div>
           </div>
 
           {/* 处理设置 */}
-          <div className="bg-[#2d2d2d] rounded-2xl p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              处理设置
-            </h2>
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">⚙️ 处理设置</h2>
             
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">自动处理截图</span>
+              <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  checked={config.processing?.autoProcess || false}
-                  onChange={(e) => handleConfigUpdate({ 
-                    processing: { ...config.processing, autoProcess: e.target.checked }
-                  })}
-                  disabled={saving}
-                  className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                  id="autoProcess"
+                  checked={config?.processing?.autoProcess || false}
+                  onChange={(e) => handleNestedConfigChange('processing', 'autoProcess', e.target.checked)}
+                  className="rounded"
                 />
+                <label htmlFor="autoProcess" className="text-sm">自动处理截图</label>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">保存截图</span>
+              <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  checked={config.processing?.saveScreenshots || false}
-                  onChange={(e) => handleConfigUpdate({ 
-                    processing: { ...config.processing, saveScreenshots: e.target.checked }
-                  })}
-                  disabled={saving}
-                  className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                  id="saveScreenshots"
+                  checked={config?.processing?.saveScreenshots || false}
+                  onChange={(e) => handleNestedConfigChange('processing', 'saveScreenshots', e.target.checked)}
+                  className="rounded"
                 />
+                <label htmlFor="saveScreenshots" className="text-sm">保存截图</label>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  压缩级别: {Math.round((config.processing?.compressionLevel || 0.8) * 100)}%
+                <label className="block text-sm font-medium mb-2">
+                  压缩级别: {config?.processing?.compressionLevel || 80}%
                 </label>
                 <input
                   type="range"
-                  min="0.1"
-                  max="1.0"
-                  step="0.1"
-                  value={config.processing?.compressionLevel || 0.8}
-                  onChange={(e) => handleConfigUpdate({ 
-                    processing: { ...config.processing, compressionLevel: parseFloat(e.target.value) }
-                  })}
-                  disabled={saving}
-                  className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                  min="10"
+                  max="100"
+                  step="10"
+                  value={config?.processing?.compressionLevel || 80}
+                  onChange={(e) => handleNestedConfigChange('processing', 'compressionLevel', parseInt(e.target.value))}
+                  className="w-full"
                 />
               </div>
-            </div>
-          </div>
-
-          {/* 主题设置 */}
-          <div className="bg-[#2d2d2d] rounded-2xl p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z" />
-              </svg>
-              主题设置
-            </h2>
-            
-            <div className="space-y-3">
-              {[
-                { value: 'light', label: '浅色主题' },
-                { value: 'dark', label: '深色主题' },
-                { value: 'system', label: '跟随系统' }
-              ].map(theme => (
-                <div
-                  key={theme.value}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors border ${
-                    (config.theme || 'system') === theme.value
-                      ? 'border-blue-500 bg-blue-500/10'
-                      : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700/30'
-                  }`}
-                  onClick={() => !saving && handleConfigUpdate({ theme: theme.value as any })}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-3 h-3 rounded-full ${
-                        (config.theme || 'system') === theme.value ? 'bg-blue-500' : 'bg-gray-500'
-                      }`}
-                    />
-                    <span className="font-medium">{theme.label}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
 
-        {/* 保存状态 */}
-        {saving && (
-          <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
-            正在保存...
-          </div>
-        )}
-      </main>
+        {/* 保存按钮 */}
+        <div className="mt-8 text-center">
+          <button
+            onClick={handleSaveConfig}
+            disabled={saving}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-8 py-3 rounded-lg font-medium transition-colors"
+          >
+            {saving ? '保存中...' : '保存配置'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 } 

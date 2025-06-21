@@ -257,10 +257,14 @@ app.get('/auth/error', (req, res) => {
 // 🆕 增强认证中间件（支持sessionId认证）
 const authenticateSession = async (req, res, next) => {
   try {
+    console.log(`🔐 认证中间件检查 ${req.method} ${req.path}`);
+    
     // 支持从Cookie或请求头获取sessionId
     const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+    console.log('📋 请求中的sessionId:', sessionId ? sessionId.substring(0, 10) + '...' : '无');
     
     if (!sessionId) {
+      console.log('❌ 未找到sessionId');
       return res.status(401).json({ 
         success: false,
         message: '未登录' 
@@ -268,8 +272,10 @@ const authenticateSession = async (req, res, next) => {
     }
     
     const sessionData = await SessionStore.get(`session:${sessionId}`);
+    console.log('🗄️ 从存储中获取会话数据:', sessionData ? '存在' : '不存在');
     
     if (!sessionData) {
+      console.log('❌ 会话数据不存在或已过期');
       return res.status(401).json({ 
         success: false,
         message: '会话已过期' 
@@ -280,16 +286,18 @@ const authenticateSession = async (req, res, next) => {
     sessionData.lastActivity = new Date().toISOString();
     await SessionStore.set(`session:${sessionId}`, sessionData);
     
-    // 将用户信息添加到请求对象
+    // 将用户信息和sessionId添加到请求对象
     req.user = {
       userId: sessionData.userId,
       username: sessionData.username,
       email: sessionData.email
     };
+    req.sessionId = sessionId; // 🆕 添加sessionId到请求对象
     
+    console.log(`✅ 认证成功: ${sessionData.username} (${sessionData.email})`);
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
+    console.error('❌ 认证中间件错误:', error);
     return res.status(500).json({ 
       success: false,
       message: '认证服务异常' 
@@ -730,14 +738,22 @@ app.post('/api/create-shared-session', authenticateSession, async (req, res) => 
     const userId = req.user.userId;
     const username = req.user.username;
     const email = req.user.email;
+    const sessionId = req.sessionId; // 🆕 获取当前会话ID
     
-    console.log(`🔄 创建增强认证共享会话，用户: ${username}`);
+    console.log(`🔄 创建增强认证共享会话，用户: ${username}, 会话ID: ${sessionId}`);
     
-    // 创建共享会话数据
+    // 🆕 创建共享会话数据，包含sessionId
     const sharedSessionData = {
+      sessionId, // 🆕 添加sessionId字段供Electron客户端使用
       userId,
       username,
       email,
+      user: { // 🆕 添加完整的用户对象
+        id: userId.toString(),
+        username,
+        email,
+        createdAt: new Date().toISOString()
+      },
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24小时
     };
@@ -747,6 +763,11 @@ app.post('/api/create-shared-session', authenticateSession, async (req, res) => 
     fs.writeFileSync(sharedSessionPath, JSON.stringify(sharedSessionData, null, 2));
     
     console.log(`✅ 增强认证共享会话已创建: ${sharedSessionPath}`);
+    console.log(`📋 共享会话数据:`, {
+      sessionId: sessionId.substring(0, 10) + '...',
+      username,
+      email
+    });
     
     res.json({
       success: true,

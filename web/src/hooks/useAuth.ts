@@ -93,13 +93,24 @@ export function useAuth() {
         localStorage.setItem('sessionId', response.sessionId);
         setUser(response.user);
         console.log('登录成功，用户信息:', response.user);
+        console.log('🔑 已保存sessionId:', response.sessionId.substring(0, 10) + '...');
         
         // 创建共享会话供Electron客户端使用
         try {
-          await authApi.createSharedSession();
-          console.log('✅ 共享会话已创建，Electron客户端可以同步登录状态');
-        } catch (error) {
-          console.warn('⚠️ 创建共享会话失败，但不影响Web端登录:', error);
+          console.log('🔄 开始创建共享会话...');
+          
+          // 确保使用正确的sessionId调用API
+          const createResponse = await authApi.createSharedSession();
+          console.log('✅ 共享会话创建响应:', createResponse);
+          
+          if (createResponse.success) {
+            console.log('✅ 共享会话已创建，Electron客户端可以同步登录状态');
+          } else {
+            console.error('❌ 创建共享会话失败:', createResponse.message);
+          }
+        } catch (error: any) {
+          console.error('❌ 创建共享会话失败:', error);
+          console.error('错误详情:', error.response?.data || error.message);
         }
         
         return { success: true, user: response.user };

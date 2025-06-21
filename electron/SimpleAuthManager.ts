@@ -402,11 +402,28 @@ export class SimpleAuthManager extends EventEmitter {
       const fs = require('fs')
       const path = require('path')
       
-      // shared-session.json应该在应用根目录
-      const sharedSessionPath = path.join(process.cwd(), 'shared-session.json')
-      console.log('🔍 检查共享会话文件:', sharedSessionPath)
+      // 🆕 修复路径问题：shared-session.json在项目根目录
+      // 尝试多个可能的路径
+      const possiblePaths = [
+        path.join(process.cwd(), 'shared-session.json'),
+        path.join(__dirname, '..', 'shared-session.json'),
+        path.join(__dirname, '..', '..', 'shared-session.json'),
+        path.join(process.resourcesPath || '', '..', 'shared-session.json')
+      ]
       
-      if (!fs.existsSync(sharedSessionPath)) {
+      let sharedSessionPath: string | null = null
+      for (const possiblePath of possiblePaths) {
+        console.log('🔍 检查路径:', possiblePath)
+        if (fs.existsSync(possiblePath)) {
+          sharedSessionPath = possiblePath
+          console.log('✅ 找到共享会话文件:', sharedSessionPath)
+          break
+        }
+      }
+      
+      console.log('🔍 最终使用的共享会话文件路径:', sharedSessionPath)
+      
+      if (!sharedSessionPath) {
         console.log('📋 未找到共享会话文件')
         return
       }
@@ -665,8 +682,8 @@ export class SimpleAuthManager extends EventEmitter {
         }
       })
 
-      // 登录URL
-      const loginUrl = `${this.apiBaseUrl.replace('3001', '3000')}/login?mode=oauth&client=electron`
+      // 登录URL - 指向后端提供的登录页面
+      const loginUrl = `${this.apiBaseUrl}/login?mode=oauth&client=electron`
       
       console.log('🌐 打开登录窗口:', loginUrl)
       authWindow.loadURL(loginUrl)
@@ -686,9 +703,32 @@ export class SimpleAuthManager extends EventEmitter {
 
       authWindow.webContents.on('will-navigate', handleNavigation)
       authWindow.webContents.on('did-navigate', handleNavigation)
+      
+      // 🆕 定期检查localStorage中的sessionId（每500ms检查一次）
+      const checkSessionInterval = setInterval(() => {
+        if (authWindow.isDestroyed()) {
+          clearInterval(checkSessionInterval)
+          return
+        }
+        
+        authWindow.webContents.executeJavaScript(`
+          localStorage.getItem('sessionId')
+        `).then((sessionId) => {
+          if (sessionId) {
+            console.log('✅ 定期检查发现登录成功，获取到sessionId')
+            clearInterval(checkSessionInterval)
+            if (timeoutId) clearTimeout(timeoutId)
+            authWindow.close()
+            resolve(sessionId)
+          }
+        }).catch((error) => {
+          // 忽略执行JavaScript的错误，可能是页面还没加载完成
+        })
+      }, 500)
 
       // 窗口关闭时取消登录
       authWindow.on('closed', () => {
+        clearInterval(checkSessionInterval)
         clearTimeout(timeoutId)
         if (!resolve.toString().includes('called')) { // 简单检查是否已经resolved
           console.log('🚪 登录窗口被用户关闭')
@@ -717,9 +757,12 @@ export class SimpleAuthManager extends EventEmitter {
   ): void {
     console.log('🔍 检查URL:', url)
     
-    // 🆕 检查是否跳转到了配置管理页面（登录成功的标志）
-    if (url.includes('localhost:3000') && !url.includes('/login')) {
-      console.log('✅ 检测到登录成功，用户已跳转到配置管理页面')
+    // 🆕 检查是否登录成功（检查多种可能的成功标志）
+    const isLoginSuccess = url.includes('localhost:3000') && !url.includes('/login');
+    const isBackendSuccess = url.includes('localhost:3001') && !url.includes('/login');
+    
+    if (isLoginSuccess || isBackendSuccess) {
+      console.log('✅ 检测到登录成功，页面URL:', url)
       
       // 从localStorage获取sessionId
       authWindow.webContents.executeJavaScript(`

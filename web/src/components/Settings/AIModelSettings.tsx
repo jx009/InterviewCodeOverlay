@@ -42,15 +42,16 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
         
         // 使用本地模拟数据
         const mockModels = [
-          { id: 1, name: 'gpt-4o', displayName: 'GPT-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
-          { id: 2, name: 'claude-3-opus', displayName: 'Claude 3 Opus', provider: 'anthropic', description: 'Anthropic的高级模型，逻辑推理能力强' },
-          { id: 3, name: 'claude-3-sonnet', displayName: 'Claude 3 Sonnet', provider: 'anthropic', description: '平衡能力和速度，适合选择题分析' },
-          { id: 4, name: 'claude-3-5-sonnet-20241022', displayName: 'Claude 3.5 Sonnet', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
-          { id: 5, name: 'gemini-pro', displayName: 'Gemini Pro', provider: 'google', description: 'Google的高级AI模型' },
+          { id: 1, name: 'chatgpt-4o-latest', displayName: 'ChatGPT 4o Latest', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
+          { id: 2, name: 'claude-opus-4-20250514-thinking', displayName: 'Claude Opus 4 Thinking', provider: 'anthropic', description: 'Anthropic的高级思维模型，逻辑推理能力强' },
+          { id: 3, name: 'claude-3-7-sonnet-20250219', displayName: 'Claude 3.7 Sonnet', provider: 'anthropic', description: '平衡能力和速度，适合选择题分析' },
+          { id: 4, name: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
+          { id: 5, name: 'gemini-2.5-flash-preview-04-17', displayName: 'Gemini 2.5 Flash', provider: 'google', description: 'Google的高速AI模型' },
+          { id: 6, name: 'gemini-2.5-pro-preview-06-05', displayName: 'Gemini 2.5 Pro', provider: 'google', description: 'Google的专业AI模型' },
         ];
         setModels(mockModels);
-        setProgrammingModel('claude-3-5-sonnet-20241022');
-        setMultipleChoiceModel('claude-3-5-sonnet-20241022');
+        setProgrammingModel('gemini-2.5-flash-preview-04-17');
+        setMultipleChoiceModel('gemini-2.5-flash-preview-04-17');
       }
     };
     

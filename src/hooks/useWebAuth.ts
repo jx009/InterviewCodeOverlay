@@ -204,8 +204,8 @@ export function useWebAuth() {
     
     initializeAuth()
     
-    // 监听认证状态变化事件（如果有的话）
-    const handleAuthStatus = (event: any, status: any) => {
+    // 监听认证状态变化事件
+    const handleAuthStatus = (status: { authenticated: boolean; user: any }) => {
       console.log('🔄 Auth status changed:', status)
       setAuthStatus({
         authenticated: status.authenticated,
@@ -220,14 +220,13 @@ export function useWebAuth() {
       }
     }
     
-    if (window.electronAPI?.onAuthStatusChanged) {
-      window.electronAPI.onAuthStatusChanged(handleAuthStatus)
-    }
+    // 使用正确的事件监听方法
+    const unsubscribeAuthStatus = window.electronAPI?.onWebAuthStatus?.(handleAuthStatus)
     
     // 清理函数
     return () => {
-      if (window.electronAPI?.removeAuthStatusListener) {
-        window.electronAPI.removeAuthStatusListener(handleAuthStatus)
+      if (unsubscribeAuthStatus) {
+        unsubscribeAuthStatus()
       }
     }
   }, [checkAuthStatus, checkConnection, syncConfig])
