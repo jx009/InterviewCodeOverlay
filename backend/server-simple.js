@@ -4,6 +4,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const Redis = require('ioredis');
+const fs = require('fs');
+const path = require('path');
 const Database = require('./database');
 
 // 创建数据库实例
@@ -32,7 +35,122 @@ const aiModels = [
 
 // 🆕 增强认证相关配置
 let transporter = null;
-const sessionStore = new Map(); // 简单内存存储，生产环境应该使用Redis
+let redisClient = null;
+let sessionStore = new Map(); // 内存存储作为fallback
+
+// 加载配置文件
+function loadConfig() {
+  try {
+    const configPath = path.join(__dirname, 'config', 'database-config.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    return JSON.parse(configData);
+  } catch (error) {
+    console.log('⚠️ 配置文件加载失败，使用默认配置');
+    return null;
+  }
+}
+
+// 初始化Redis连接
+async function initRedis() {
+  console.log('🔄 开始初始化Redis连接...');
+  const config = loadConfig();
+  
+  if (!config) {
+    console.log('⚠️ 配置文件加载失败，使用内存存储');
+    return;
+  }
+  
+  if (!config.redis) {
+    console.log('⚠️ Redis配置不存在，使用内存存储');
+    return;
+  }
+  
+  console.log('📋 Redis配置:', {
+    host: config.redis.host,
+    port: config.redis.port,
+    database: config.redis.database
+  });
+
+  try {
+    redisClient = new Redis({
+      host: config.redis.host,
+      port: config.redis.port,
+      password: config.redis.password || undefined,
+      db: config.redis.database || 0,
+      keyPrefix: config.redis.keyPrefix || 'interview_coder:',
+      retryDelayOnFailover: config.redis.retryDelayOnFailover || 100,
+      maxRetriesPerRequest: config.redis.maxRetriesPerRequest || 3,
+      lazyConnect: config.redis.lazyConnect || true,
+      keepAlive: config.redis.keepAlive || 30000
+    });
+
+    // 测试连接
+    await redisClient.ping();
+    console.log('✅ Redis连接成功');
+    
+    // 替换内存存储
+    sessionStore = {
+      get: async (key) => {
+        try {
+          const data = await redisClient.get(key);
+          return data ? JSON.parse(data) : null;
+        } catch (error) {
+          console.error('Redis get error:', error);
+          return null;
+        }
+      },
+      set: async (key, value, ttl = 3600) => {
+        try {
+          await redisClient.setex(key, ttl, JSON.stringify(value));
+          return true;
+        } catch (error) {
+          console.error('Redis set error:', error);
+          return false;
+        }
+      },
+      delete: async (key) => {
+        try {
+          await redisClient.del(key);
+          return true;
+        } catch (error) {
+          console.error('Redis delete error:', error);
+          return false;
+        }
+      }
+    };
+    
+  } catch (error) {
+    console.error('❌ Redis连接失败:', error.message);
+    console.log('⚠️ 使用内存存储作为fallback');
+  }
+}
+
+// 统一的会话存储助手函数
+const SessionStore = {
+  async get(key) {
+    if (typeof sessionStore.get === 'function' && sessionStore.get.constructor.name === 'AsyncFunction') {
+      return await sessionStore.get(key);
+    } else {
+      return sessionStore.get(key);
+    }
+  },
+  
+  async set(key, value, ttl = 3600) {
+    if (typeof sessionStore.set === 'function' && sessionStore.set.constructor.name === 'AsyncFunction') {
+      return await sessionStore.set(key, value, ttl);
+    } else {
+      return sessionStore.set(key, value);
+    }
+  },
+  
+  async delete(key) {
+    if (typeof sessionStore.delete === 'function' && sessionStore.delete.constructor.name === 'AsyncFunction') {
+      return await sessionStore.delete(key);
+    } else {
+      return sessionStore.delete(key);
+    }
+  }
+};
 
 // 初始化邮件服务
 require('dotenv').config();
@@ -106,8 +224,13 @@ function createVerificationEmail(code, email) {
   };
 }
 
-// 初始化邮件服务
-initEmailService();
+// 初始化服务
+async function initializeServices() {
+  initEmailService();
+  await initRedis();
+}
+
+initializeServices();
 
 // 中间件
 app.use(cors({
@@ -117,7 +240,6 @@ app.use(cors({
 app.use(express.json());
 
 // 静态文件服务
-const path = require('path');
 app.use(express.static(path.join(__dirname, 'public')));
 
 // OAuth登录页面路由
@@ -137,38 +259,46 @@ app.get('/auth/error', (req, res) => {
 });
 
 // 🆕 增强认证中间件（支持sessionId认证）
-const authenticateSession = (req, res, next) => {
-  // 支持从Cookie或请求头获取sessionId
-  const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
-  
-  if (!sessionId) {
-    return res.status(401).json({ 
+const authenticateSession = async (req, res, next) => {
+  try {
+    // 支持从Cookie或请求头获取sessionId
+    const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
+    
+    if (!sessionId) {
+      return res.status(401).json({ 
+        success: false,
+        message: '未登录' 
+      });
+    }
+    
+    const sessionData = await SessionStore.get(`session:${sessionId}`);
+    
+    if (!sessionData) {
+      return res.status(401).json({ 
+        success: false,
+        message: '会话已过期' 
+      });
+    }
+    
+    // 更新最后活动时间
+    sessionData.lastActivity = new Date().toISOString();
+    await SessionStore.set(`session:${sessionId}`, sessionData);
+    
+    // 将用户信息添加到请求对象
+    req.user = {
+      userId: sessionData.userId,
+      username: sessionData.username,
+      email: sessionData.email
+    };
+    
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return res.status(500).json({ 
       success: false,
-      message: '未登录' 
+      message: '认证服务异常' 
     });
   }
-  
-  const sessionData = sessionStore.get(`session:${sessionId}`);
-  
-  if (!sessionData) {
-    return res.status(401).json({ 
-      success: false,
-      message: '会话已过期' 
-    });
-  }
-  
-  // 更新最后活动时间
-  sessionData.lastActivity = new Date().toISOString();
-  sessionStore.set(`session:${sessionId}`, sessionData);
-  
-  // 将用户信息添加到请求对象
-  req.user = {
-    userId: sessionData.userId,
-    username: sessionData.username,
-    email: sessionData.email
-  };
-  
-  next();
 };
 
 // 📱 传统认证中间件（保持兼容性，后续会删除）
@@ -787,13 +917,13 @@ app.post('/api/send_reset_code', async (req, res) => {
       purpose: 'password_reset'
     };
     
-    sessionStore.set(`reset_token:${token}`, resetData);
-    sessionStore.set(`reset_email:${email}`, { token, code });
+    await SessionStore.set(`reset_token:${token}`, resetData, 300); // 5分钟TTL
+    await SessionStore.set(`reset_email:${email}`, { token, code }, 300);
     
-    // 5分钟后自动清理
-    setTimeout(() => {
-      sessionStore.delete(`reset_token:${token}`);
-      sessionStore.delete(`reset_email:${email}`);
+    // 5分钟后自动清理（Redis TTL会自动处理，这里保留作为fallback）
+    setTimeout(async () => {
+      await SessionStore.delete(`reset_token:${token}`);
+      await SessionStore.delete(`reset_email:${email}`);
     }, 5 * 60 * 1000);
     
     // 发送邮件
@@ -832,7 +962,7 @@ app.post('/api/verify_reset_code', async (req, res) => {
     }
     
     // 验证token获取重置数据
-    const resetData = sessionStore.get(`reset_token:${token}`);
+    const resetData = await SessionStore.get(`reset_token:${token}`);
     if (!resetData) {
       return res.status(400).json({
         success: false,
@@ -842,8 +972,8 @@ app.post('/api/verify_reset_code', async (req, res) => {
     
     // 检查过期时间
     if (new Date() > new Date(resetData.expiresAt)) {
-      sessionStore.delete(`reset_token:${token}`);
-      sessionStore.delete(`reset_email:${resetData.email}`);
+      await SessionStore.delete(`reset_token:${token}`);
+      await SessionStore.delete(`reset_email:${resetData.email}`);
       return res.status(400).json({
         success: false,
         message: '验证码已过期，请重新获取'
@@ -854,15 +984,15 @@ app.post('/api/verify_reset_code', async (req, res) => {
     if (resetData.code !== verify_code) {
       resetData.attempts++;
       if (resetData.attempts >= 5) {
-        sessionStore.delete(`reset_token:${token}`);
-        sessionStore.delete(`reset_email:${resetData.email}`);
+        await SessionStore.delete(`reset_token:${token}`);
+        await SessionStore.delete(`reset_email:${resetData.email}`);
         return res.status(400).json({
           success: false,
           message: '验证码错误次数过多，请重新获取'
         });
       }
       
-      sessionStore.set(`reset_token:${token}`, resetData);
+      await SessionStore.set(`reset_token:${token}`, resetData, 300);
       return res.status(400).json({
         success: false,
         message: `验证码错误，还剩 ${5 - resetData.attempts} 次机会`
@@ -880,11 +1010,11 @@ app.post('/api/verify_reset_code', async (req, res) => {
       purpose: 'password_reset_verified'
     };
     
-    sessionStore.set(`reset_password:${resetPasswordToken}`, resetPasswordData);
+    await SessionStore.set(`reset_password:${resetPasswordToken}`, resetPasswordData, 600); // 10分钟TTL
     
     // 清理验证码数据
-    sessionStore.delete(`reset_token:${token}`);
-    sessionStore.delete(`reset_email:${resetData.email}`);
+    await SessionStore.delete(`reset_token:${token}`);
+    await SessionStore.delete(`reset_email:${resetData.email}`);
     
     console.log(`✅ 密码重置验证码验证成功: ${resetData.email}`);
     
@@ -923,7 +1053,7 @@ app.post('/api/reset_password', async (req, res) => {
     }
     
     // 验证重置token
-    const resetPasswordData = sessionStore.get(`reset_password:${token}`);
+    const resetPasswordData = await SessionStore.get(`reset_password:${token}`);
     if (!resetPasswordData) {
       return res.status(400).json({
         success: false,
@@ -933,7 +1063,7 @@ app.post('/api/reset_password', async (req, res) => {
     
     // 检查过期时间
     if (new Date() > new Date(resetPasswordData.expiresAt)) {
-      sessionStore.delete(`reset_password:${token}`);
+      await SessionStore.delete(`reset_password:${token}`);
       return res.status(400).json({
         success: false,
         message: '重置令牌已过期，请重新开始密码重置流程'
@@ -955,7 +1085,7 @@ app.post('/api/reset_password', async (req, res) => {
     await db.updateUserPassword(resetPasswordData.userId, hashedPassword);
     
     // 清理重置数据
-    sessionStore.delete(`reset_password:${token}`);
+    await SessionStore.delete(`reset_password:${token}`);
     
     console.log(`✅ 密码重置成功: ${resetPasswordData.email}, 用户ID: ${resetPasswordData.userId}`);
     
@@ -1218,8 +1348,8 @@ app.post('/api/user_register', async (req, res) => {
     
     // 清理内存中的验证数据（失败不影响注册结果）
     try {
-      sessionStore.delete(`verify_token:${token}`);
-      sessionStore.delete(`verify_email:${email}`);
+      await SessionStore.delete(`verify_token:${token}`);
+      await SessionStore.delete(`verify_email:${email}`);
       console.log(`✅ 内存验证数据清理成功`);
     } catch (memoryError) {
       console.warn(`⚠️ 内存清理失败，但不影响注册结果:`, memoryError.message);
@@ -1289,7 +1419,7 @@ app.post('/api/login', async (req, res) => {
     };
     
     // 设置会话数据（7天有效期）
-    sessionStore.set(`session:${sessionId}`, sessionData);
+    await SessionStore.set(`session:${sessionId}`, sessionData, 604800); // 7天TTL
     
     console.log(`✅ 用户登录成功: ${user.username} (${email}), Session: ${sessionId}`);
     
@@ -1327,11 +1457,11 @@ app.post('/api/logout', async (req, res) => {
       });
     }
     
-    const sessionData = sessionStore.get(`session:${sessionId}`);
+    const sessionData = await SessionStore.get(`session:${sessionId}`);
     
     if (sessionData) {
       // 删除会话数据
-      sessionStore.delete(`session:${sessionId}`);
+      await SessionStore.delete(`session:${sessionId}`);
       
       console.log(`✅ 用户登出: ${sessionData.username}, Session: ${sessionId}`);
     }
@@ -1364,7 +1494,7 @@ app.get('/api/session_status', async (req, res) => {
       });
     }
     
-    const sessionData = sessionStore.get(`session:${sessionId}`);
+    const sessionData = await SessionStore.get(`session:${sessionId}`);
     
     if (!sessionData) {
       return res.status(401).json({
@@ -1375,7 +1505,7 @@ app.get('/api/session_status', async (req, res) => {
     
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
-    sessionStore.set(`session:${sessionId}`, sessionData);
+    await SessionStore.set(`session:${sessionId}`, sessionData, 604800);
     
     res.json({
       success: true,
