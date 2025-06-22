@@ -54,6 +54,17 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      // 先调用登出API
+      await webLogout();
+      // 然后打开web退出页面
+      window.electronAPI?.openLink('http://localhost:3001/logout');
+    } catch (error) {
+      console.error('登出失败:', error);
+    }
+  };
+
   const handleOpenConfig = () => {
     window.electronAPI?.openLink('http://localhost:3000/dashboard');
   };
@@ -124,7 +135,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </Button>
                   <Button 
                     variant="outline"
-                    onClick={webLogout}
+                    onClick={handleLogout}
                     className="text-gray-600 hover:text-gray-800"
                   >
                     登出

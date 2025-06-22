@@ -455,17 +455,28 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                         </div>
                       </div>
 
-                      {/* API Key Settings */}
-                      <div className="mb-3 px-2 space-y-1">
-                        <div className="flex items-center justify-between text-[13px] font-medium text-white/90">
-                          <span>OpenAI API Settings</span>
-                          <button
-                            className="bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-[11px]"
-                            onClick={() => window.electronAPI.openSettingsPortal()}
+                      {/* 添加Web登录按钮 */}
+                      <div className="mb-3 px-2">
+                        <button
+                          className="flex items-center gap-2 w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-3 py-2 rounded text-[11px] font-medium transition-colors"
+                          onClick={() => window.electronAPI.openLink('http://localhost:3001/login')}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="w-3 h-3"
                           >
-                            Settings
-                          </button>
-                        </div>
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                          前往Web配置中心
+                        </button>
                       </div>
 
                       <button
