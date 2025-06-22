@@ -143,7 +143,6 @@ function bind(fn, thisArg) {
 }
 const { toString } = Object.prototype;
 const { getPrototypeOf } = Object;
-const { iterator, toStringTag } = Symbol;
 const kindOf = /* @__PURE__ */ ((cache) => (thing) => {
   const str2 = toString.call(thing);
   return cache[str2] || (cache[str2] = str2.slice(8, -1).toLowerCase());
@@ -178,7 +177,7 @@ const isPlainObject$1 = (val) => {
     return false;
   }
   const prototype2 = getPrototypeOf(val);
-  return (prototype2 === null || prototype2 === Object.prototype || Object.getPrototypeOf(prototype2) === null) && !(toStringTag in val) && !(iterator in val);
+  return (prototype2 === null || prototype2 === Object.prototype || Object.getPrototypeOf(prototype2) === null) && !(Symbol.toStringTag in val) && !(Symbol.iterator in val);
 };
 const isDate = kindOfTest("Date");
 const isFile$1 = kindOfTest("File");
@@ -325,10 +324,10 @@ const isTypedArray = /* @__PURE__ */ ((TypedArray) => {
   };
 })(typeof Uint8Array !== "undefined" && getPrototypeOf(Uint8Array));
 const forEachEntry = (obj, fn) => {
-  const generator = obj && obj[iterator];
-  const _iterator = generator.call(obj);
+  const generator = obj && obj[Symbol.iterator];
+  const iterator = generator.call(obj);
   let result;
-  while ((result = _iterator.next()) && !result.done) {
+  while ((result = iterator.next()) && !result.done) {
     const pair = result.value;
     fn.call(obj, pair[0], pair[1]);
   }
@@ -398,7 +397,7 @@ const toFiniteNumber = (value, defaultValue) => {
   return value != null && Number.isFinite(value = +value) ? value : defaultValue;
 };
 function isSpecCompliantForm(thing) {
-  return !!(thing && isFunction$2(thing.append) && thing[toStringTag] === "FormData" && thing[iterator]);
+  return !!(thing && isFunction$2(thing.append) && thing[Symbol.toStringTag] === "FormData" && thing[Symbol.iterator]);
 }
 const toJSONObject = (obj) => {
   const stack = new Array(10);
@@ -444,7 +443,6 @@ const _setImmediate = ((setImmediateSupported, postMessageSupported) => {
   isFunction$2(_global.postMessage)
 );
 const asap = typeof queueMicrotask !== "undefined" ? queueMicrotask.bind(_global) : typeof process !== "undefined" && process.nextTick || _setImmediate;
-const isIterable = (thing) => thing != null && isFunction$2(thing[iterator]);
 const utils$5 = {
   isArray,
   isArrayBuffer,
@@ -501,8 +499,7 @@ const utils$5 = {
   isAsyncFn,
   isThenable,
   setImmediate: _setImmediate,
-  asap,
-  isIterable
+  asap
 };
 function AxiosError$1(message, code, config, request, response) {
   Error.call(this);
@@ -3299,9 +3296,9 @@ function requireIterate() {
   hasRequiredIterate = 1;
   var async = requireAsync(), abort = requireAbort();
   iterate_1 = iterate;
-  function iterate(list, iterator2, state2, callback) {
+  function iterate(list, iterator, state2, callback) {
     var key = state2["keyedList"] ? state2["keyedList"][state2.index] : state2.index;
-    state2.jobs[key] = runJob(iterator2, key, list[key], function(error2, output) {
+    state2.jobs[key] = runJob(iterator, key, list[key], function(error2, output) {
       if (!(key in state2.jobs)) {
         return;
       }
@@ -3314,12 +3311,12 @@ function requireIterate() {
       callback(error2, state2.results);
     });
   }
-  function runJob(iterator2, key, item, callback) {
+  function runJob(iterator, key, item, callback) {
     var aborter;
-    if (iterator2.length == 2) {
-      aborter = iterator2(item, async(callback));
+    if (iterator.length == 2) {
+      aborter = iterator(item, async(callback));
     } else {
-      aborter = iterator2(item, key, async(callback));
+      aborter = iterator(item, key, async(callback));
     }
     return aborter;
   }
@@ -3372,10 +3369,10 @@ function requireParallel() {
   hasRequiredParallel = 1;
   var iterate = requireIterate(), initState = requireState(), terminator = requireTerminator();
   parallel_1 = parallel;
-  function parallel(list, iterator2, callback) {
+  function parallel(list, iterator, callback) {
     var state2 = initState(list);
     while (state2.index < (state2["keyedList"] || list).length) {
-      iterate(list, iterator2, state2, function(error2, result) {
+      iterate(list, iterator, state2, function(error2, result) {
         if (error2) {
           callback(error2, result);
           return;
@@ -3400,16 +3397,16 @@ function requireSerialOrdered() {
   serialOrdered.exports = serialOrdered$1;
   serialOrdered.exports.ascending = ascending;
   serialOrdered.exports.descending = descending;
-  function serialOrdered$1(list, iterator2, sortMethod, callback) {
+  function serialOrdered$1(list, iterator, sortMethod, callback) {
     var state2 = initState(list, sortMethod);
-    iterate(list, iterator2, state2, function iteratorHandler(error2, result) {
+    iterate(list, iterator, state2, function iteratorHandler(error2, result) {
       if (error2) {
         callback(error2, result);
         return;
       }
       state2.index++;
       if (state2.index < (state2["keyedList"] || list).length) {
-        iterate(list, iterator2, state2, iteratorHandler);
+        iterate(list, iterator, state2, iteratorHandler);
         return;
       }
       callback(null, state2.results);
@@ -3431,8 +3428,8 @@ function requireSerial() {
   hasRequiredSerial = 1;
   var serialOrdered2 = requireSerialOrdered();
   serial_1 = serial;
-  function serial(list, iterator2, callback) {
-    return serialOrdered2(list, iterator2, null, callback);
+  function serial(list, iterator, callback) {
+    return serialOrdered2(list, iterator, null, callback);
   }
   return serial_1;
 }
@@ -4271,23 +4268,23 @@ function requireEsSetTostringtag() {
   var hasToStringTag = requireShams()();
   var hasOwn2 = /* @__PURE__ */ requireHasown();
   var $TypeError = /* @__PURE__ */ requireType$1();
-  var toStringTag2 = hasToStringTag ? Symbol.toStringTag : null;
+  var toStringTag = hasToStringTag ? Symbol.toStringTag : null;
   esSetTostringtag = function setToStringTag(object2, value) {
     var overrideIfSet = arguments.length > 2 && !!arguments[2] && arguments[2].force;
     var nonConfigurable = arguments.length > 2 && !!arguments[2] && arguments[2].nonConfigurable;
     if (typeof overrideIfSet !== "undefined" && typeof overrideIfSet !== "boolean" || typeof nonConfigurable !== "undefined" && typeof nonConfigurable !== "boolean") {
       throw new $TypeError("if provided, the `overrideIfSet` and `nonConfigurable` options must be booleans");
     }
-    if (toStringTag2 && (overrideIfSet || !hasOwn2(object2, toStringTag2))) {
+    if (toStringTag && (overrideIfSet || !hasOwn2(object2, toStringTag))) {
       if ($defineProperty) {
-        $defineProperty(object2, toStringTag2, {
+        $defineProperty(object2, toStringTag, {
           configurable: !nonConfigurable,
           enumerable: false,
           value,
           writable: false
         });
       } else {
-        object2[toStringTag2] = value;
+        object2[toStringTag] = value;
       }
     }
   };
@@ -4670,9 +4667,6 @@ function toFormData$1(obj, formData, options) {
     if (value === null) return "";
     if (utils$5.isDate(value)) {
       return value.toISOString();
-    }
-    if (utils$5.isBoolean(value)) {
-      return value.toString();
     }
     if (!useBlob && utils$5.isBlob(value)) {
       throw new AxiosError$1("Blob is not supported. Use a Buffer instead.");
@@ -5194,15 +5188,10 @@ let AxiosHeaders$1 = class AxiosHeaders {
       setHeaders(header, valueOrRewrite);
     } else if (utils$5.isString(header) && (header = header.trim()) && !isValidHeaderName(header)) {
       setHeaders(parseHeaders(header), valueOrRewrite);
-    } else if (utils$5.isObject(header) && utils$5.isIterable(header)) {
-      let obj = {}, dest, key;
-      for (const entry of header) {
-        if (!utils$5.isArray(entry)) {
-          throw TypeError("Object iterator must return a key-value pair");
-        }
-        obj[key = entry[0]] = (dest = obj[key]) ? utils$5.isArray(dest) ? [...dest, entry[1]] : [dest, entry[1]] : entry[1];
+    } else if (utils$5.isHeaders(header)) {
+      for (const [key, value] of header.entries()) {
+        setHeader(value, key, rewrite);
       }
-      setHeaders(obj, valueOrRewrite);
     } else {
       header != null && setHeader(valueOrRewrite, header, rewrite);
     }
@@ -5305,9 +5294,6 @@ let AxiosHeaders$1 = class AxiosHeaders {
   }
   toString() {
     return Object.entries(this.toJSON()).map(([header, value]) => header + ": " + value).join("\n");
-  }
-  getSetCookie() {
-    return this.get("set-cookie") || [];
   }
   get [Symbol.toStringTag]() {
     return "AxiosHeaders";
@@ -6754,7 +6740,7 @@ function requireFollowRedirects() {
 }
 var followRedirectsExports = requireFollowRedirects();
 const followRedirects = /* @__PURE__ */ getDefaultExportFromCjs(followRedirectsExports);
-const VERSION$2 = "1.10.0";
+const VERSION$2 = "1.8.4";
 function parseProtocol(url) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
   return match && match[1] || "";
@@ -6961,7 +6947,7 @@ const formDataToStream = (form, headersHandler, options) => {
     throw Error("boundary must be 10-70 characters long");
   }
   const boundaryBytes = textEncoder.encode("--" + boundary + CRLF);
-  const footerBytes = textEncoder.encode("--" + boundary + "--" + CRLF);
+  const footerBytes = textEncoder.encode("--" + boundary + "--" + CRLF + CRLF);
   let contentLength = footerBytes.byteLength;
   const parts = Array.from(form.entries()).map(([name, value]) => {
     const part = new FormDataPart(name, value);
@@ -7955,7 +7941,7 @@ const readStream = async function* (stream) {
   }
 };
 const trackStream = (stream, chunkSize, onProgress, onFinish) => {
-  const iterator2 = readBytes(stream, chunkSize);
+  const iterator = readBytes(stream, chunkSize);
   let bytes = 0;
   let done;
   let _onFinish = (e2) => {
@@ -7967,7 +7953,7 @@ const trackStream = (stream, chunkSize, onProgress, onFinish) => {
   return new ReadableStream({
     async pull(controller) {
       try {
-        const { done: done2, value } = await iterator2.next();
+        const { done: done2, value } = await iterator.next();
         if (done2) {
           _onFinish();
           controller.close();
@@ -7986,7 +7972,7 @@ const trackStream = (stream, chunkSize, onProgress, onFinish) => {
     },
     cancel(reason) {
       _onFinish(reason);
-      return iterator2.return();
+      return iterator.return();
     }
   }, {
     highWaterMark: 2
@@ -8108,7 +8094,7 @@ const fetchAdapter = isFetchSupported && (async (config) => {
       duplex: "half",
       credentials: isCredentialsSupported ? withCredentials : void 0
     });
-    let response = await fetch(request, fetchOptions);
+    let response = await fetch(request);
     const isStreamResponse = supportsResponseStream && (responseType === "stream" || responseType === "response");
     if (supportsResponseStream && (onDownloadProgress || isStreamResponse && unsubscribe)) {
       const options = {};
@@ -8143,7 +8129,7 @@ const fetchAdapter = isFetchSupported && (async (config) => {
     });
   } catch (err) {
     unsubscribe && unsubscribe();
-    if (err && err.name === "TypeError" && /Load failed|fetch/i.test(err.message)) {
+    if (err && err.name === "TypeError" && /fetch/i.test(err.message)) {
       throw Object.assign(
         new AxiosError$1("Network Error", AxiosError$1.ERR_NETWORK, config, request),
         {
@@ -8314,7 +8300,7 @@ const validator = {
 const validators = validator.validators;
 let Axios$1 = class Axios {
   constructor(instanceConfig) {
-    this.defaults = instanceConfig || {};
+    this.defaults = instanceConfig;
     this.interceptors = {
       request: new InterceptorManager(),
       response: new InterceptorManager()
@@ -12446,13 +12432,13 @@ function getHeaders(headers) {
 }
 const INTERNAL = Symbol("internal");
 function createHeadersIterator(target, kind2) {
-  const iterator2 = Object.create(HeadersIteratorPrototype);
-  iterator2[INTERNAL] = {
+  const iterator = Object.create(HeadersIteratorPrototype);
+  iterator[INTERNAL] = {
     target,
     kind: kind2,
     index: 0
   };
-  return iterator2;
+  return iterator;
 }
 const HeadersIteratorPrototype = Object.setPrototypeOf({
   next() {
@@ -14751,17 +14737,17 @@ let Blob$1 = class Blob3 {
     return view.buffer;
   }
   stream() {
-    const iterator2 = consumeBlobParts(__classPrivateFieldGet$a(this, _Blob_parts, "f"), true);
+    const iterator = consumeBlobParts(__classPrivateFieldGet$a(this, _Blob_parts, "f"), true);
     return new ReadableStream$1({
       async pull(controller) {
-        const { value, done } = await iterator2.next();
+        const { value, done } = await iterator.next();
         if (done) {
           return queueMicrotask(() => controller.close());
         }
         controller.enqueue(value);
       },
       async cancel() {
-        await iterator2.return();
+        await iterator.return();
       }
     });
   }
@@ -16160,7 +16146,7 @@ class MultipartBody {
 }
 let fileFromPathWarned = false;
 async function fileFromPath(path2, ...args) {
-  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-Dvo8cl-C.js"));
+  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-BgQdg1Lk.js"));
   if (!fileFromPathWarned) {
     console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path2)}) instead`);
     fileFromPathWarned = true;
@@ -16444,13 +16430,13 @@ function ReadableStreamToAsyncIterable(stream) {
   };
 }
 class Stream {
-  constructor(iterator2, controller) {
-    this.iterator = iterator2;
+  constructor(iterator, controller) {
+    this.iterator = iterator;
     this.controller = controller;
   }
   static fromSSEResponse(response, controller) {
     let consumed = false;
-    async function* iterator2() {
+    async function* iterator() {
       if (consumed) {
         throw new Error("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
       }
@@ -16502,7 +16488,7 @@ class Stream {
           controller.abort();
       }
     }
-    return new Stream(iterator2, controller);
+    return new Stream(iterator, controller);
   }
   /**
    * Generates a Stream from a newline-separated ReadableStream
@@ -16522,7 +16508,7 @@ class Stream {
         yield line;
       }
     }
-    async function* iterator2() {
+    async function* iterator() {
       if (consumed) {
         throw new Error("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
       }
@@ -16545,7 +16531,7 @@ class Stream {
           controller.abort();
       }
     }
-    return new Stream(iterator2, controller);
+    return new Stream(iterator, controller);
   }
   [Symbol.asyncIterator]() {
     return this.iterator();
@@ -16557,12 +16543,12 @@ class Stream {
   tee() {
     const left = [];
     const right = [];
-    const iterator2 = this.iterator();
+    const iterator = this.iterator();
     const teeIterator = (queue) => {
       return {
         next: () => {
           if (queue.length === 0) {
-            const result = iterator2.next();
+            const result = iterator.next();
             left.push(result);
             right.push(result);
           }
@@ -16627,9 +16613,9 @@ async function* _iterSSEMessages(response, controller) {
       yield sse;
   }
 }
-async function* iterSSEChunks(iterator2) {
+async function* iterSSEChunks(iterator) {
   let data = new Uint8Array();
-  for await (const chunk of iterator2) {
+  for await (const chunk of iterator) {
     if (chunk == null) {
       continue;
     }
@@ -21230,8 +21216,8 @@ class FileBatches extends APIResource {
     const client = this._client;
     const fileIterator = files.values();
     const allFileIds = [...fileIds];
-    async function processFiles(iterator2) {
-      for (let item of iterator2) {
+    async function processFiles(iterator) {
+      for (let item of iterator) {
         const fileObj = await client.files.create({ file: item, purpose: "assistants" }, options);
         allFileIds.push(fileObj.id);
       }
@@ -33337,17 +33323,17 @@ function requireLoader() {
     }
     return state2.documents;
   }
-  function loadAll(input, iterator2, options) {
-    if (iterator2 !== null && typeof iterator2 === "object" && typeof options === "undefined") {
-      options = iterator2;
-      iterator2 = null;
+  function loadAll(input, iterator, options) {
+    if (iterator !== null && typeof iterator === "object" && typeof options === "undefined") {
+      options = iterator;
+      iterator = null;
     }
     var documents = loadDocuments(input, options);
-    if (typeof iterator2 !== "function") {
+    if (typeof iterator !== "function") {
       return documents;
     }
     for (var index = 0, length = documents.length; index < length; index += 1) {
-      iterator2(documents[index]);
+      iterator(documents[index]);
     }
   }
   function load(input, options) {
@@ -43730,4 +43716,4 @@ exports.showMainWindow = showMainWindow;
 exports.state = state;
 exports.takeScreenshot = takeScreenshot;
 exports.toggleMainWindow = toggleMainWindow;
-//# sourceMappingURL=main-uohSqRqp.js.map
+//# sourceMappingURL=main-De8eTBgd.js.map

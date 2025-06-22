@@ -2,7 +2,7 @@
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 const require$$0 = require("fs");
 const require$$1 = require("path");
-const main = require("./main-uohSqRqp.js");
+const main = require("./main-De8eTBgd.js");
 /*! node-domexception. MIT License. Jimmy Wärting <https://jimmy.warting.se/opensource> */
 var nodeDomexception;
 var hasRequiredNodeDomexception;
@@ -103,4 +103,4 @@ async function fileFromPath(path, filenameOrOptions, options) {
 }
 exports.isFile = main.isFile;
 exports.fileFromPath = fileFromPath;
-//# sourceMappingURL=fileFromPath-Dvo8cl-C.js.map
+//# sourceMappingURL=fileFromPath-BgQdg1Lk.js.map
