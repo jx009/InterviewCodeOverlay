@@ -6,18 +6,18 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  email     String?  @unique
-  password  String
+  id        Int      @id @default(autoincrement())
+  username  String   @unique @db.VarChar(50)
+  email     String?  @unique @db.VarChar(100)
+  password  String   @db.VarChar(255)
   isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   config    UserConfig?
@@ -28,84 +28,113 @@ model User {
 }
 
 model UserConfig {
-  id               String   @id @default(cuid())
-  userId           String   @unique
+  id               Int      @id @default(autoincrement())
+  userId           Int      @unique @map("user_id")
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // 简化的AI模型设置（Cursor式）
-  aiModel          String   @default("claude-3-5-sonnet-20241022") // 统一AI模型
+  // 分离的AI模型设置
+  programmingModel     String   @default("claude-3-5-sonnet-20241022") @db.VarChar(100) @map("programming_model")
+  multipleChoiceModel  String   @default("claude-3-5-sonnet-20241022") @db.VarChar(100) @map("multiple_choice_model")
+  
+  // 简化的AI模型设置（保持向后兼容）
+  aiModel          String?  @default("claude-3-5-sonnet-20241022") @db.VarChar(100) @map("ai_model")
   
   // 原有的AI Model Settings（保持兼容性）
-  selectedProvider String   @default("claude") // claude, gemini, openai
-  extractionModel  String   @default("claude-3-7-sonnet-20250219")
-  solutionModel    String   @default("claude-3-7-sonnet-20250219")
-  debuggingModel   String   @default("claude-3-7-sonnet-20250219")
+  selectedProvider String   @default("claude") @db.VarChar(50) @map("selected_provider")
+  extractionModel  String?  @default("claude-3-7-sonnet-20250219") @db.VarChar(100) @map("extraction_model")
+  solutionModel    String?  @default("claude-3-7-sonnet-20250219") @db.VarChar(100) @map("solution_model")
+  debuggingModel   String?  @default("claude-3-7-sonnet-20250219") @db.VarChar(100) @map("debugging_model")
   
   // Language Settings
-  language         String   @default("python")
+  language         String   @default("python") @db.VarChar(50)
   
   // UI Settings
-  theme            String   @default("system") // light, dark, system
+  theme            String   @default("system") @db.VarChar(20) // light, dark, system
   opacity          Float    @default(1.0)
-  showCopyButton   Boolean  @default(true)
+  showCopyButton   Boolean  @default(true) @map("show_copy_button")
   
   // 快捷键设置（JSON字符串）
-  shortcuts        String?  @default("{\"takeScreenshot\":\"Ctrl+Shift+S\",\"openQueue\":\"Ctrl+Shift+Q\",\"openSettings\":\"Ctrl+Shift+,\"}")
+  shortcuts        String?  @db.Text
   
   // 显示设置（JSON字符串）
-  display          String?  @default("{\"opacity\":1.0,\"position\":\"top-right\",\"autoHide\":false,\"hideDelay\":3000}")
+  display          String?  @db.Text
   
   // 处理设置（JSON字符串）
-  processing       String?  @default("{\"autoProcess\":false,\"saveScreenshots\":true,\"compressionLevel\":80}")
+  processing       String?  @db.Text
   
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("user_configs")
 }
 
 model UserSession {
-  id           String   @id @default(cuid())
-  userId       String
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token        String   @unique
-  refreshToken String   @unique
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  isActive     Boolean  @default(true)
+  token        String   @unique @db.VarChar(255)
+  refreshToken String   @unique @db.VarChar(255) @map("refresh_token")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  isActive     Boolean  @default(true) @map("is_active")
 
   @@map("user_sessions")
 }
 
 model UsageRecord {
-  id          String   @id @default(cuid())
-  userId      String
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  action      String   // "extraction", "solution", "debugging"
-  model       String   // 使用的具体模型
-  provider    String   // AI提供商
-  tokensUsed  Int?     // 使用的token数量
+  action      String   @db.VarChar(50) // "extraction", "solution", "debugging"
+  model       String   @db.VarChar(100) // 使用的具体模型
+  provider    String   @db.VarChar(50) // AI提供商
+  tokensUsed  Int?     @map("tokens_used") // 使用的token数量
   success     Boolean  @default(true)
-  errorMsg    String?
+  errorMsg    String?  @db.Text @map("error_msg")
   
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("usage_records")
 }
 
 // AI模型定义表 - 用于管理支持的模型
 model AIModel {
-  id          String   @id @default(cuid())
-  modelId     String   @unique // claude-3-7-sonnet-20250219
-  name        String   // Claude 3.7 Sonnet
-  provider    String   // claude, gemini, openai
-  category    String   // extraction, solution, debugging, general
-  isActive    Boolean  @default(true)
+  id          Int      @id @default(autoincrement())
+  modelId     String   @unique @db.VarChar(100) @map("model_id") // claude-3-7-sonnet-20250219
+  name        String   @db.VarChar(100) // Claude 3.7 Sonnet
+  provider    String   @db.VarChar(50) // claude, gemini, openai
+  category    String   @db.VarChar(50) // extraction, solution, debugging, general
+  isActive    Boolean  @default(true) @map("is_active")
   priority    Int      @default(0) // 排序优先级
   
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("ai_models")
+}
+
+// 邮箱验证码表 - 用于注册验证
+model EmailVerificationCode {
+  id          Int      @id @default(autoincrement())
+  email       String   @db.VarChar(100)
+  code        String   @db.VarChar(10) // 验证码
+  token       String   @unique @db.VarChar(255) // 验证令牌
+  expiresAt   DateTime @map("expires_at")
+  isUsed      Boolean  @default(false) @map("is_used")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("email_verification_codes")
+}
+
+// Redis会话存储备份表（可选）
+model RedisSession {
+  id          Int      @id @default(autoincrement())
+  sessionId   String   @unique @db.VarChar(100) @map("session_id")
+  userId      Int?     @map("user_id")
+  data        String   @db.Text // JSON字符串
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("redis_sessions")
 } 

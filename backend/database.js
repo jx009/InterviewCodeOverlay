@@ -1,86 +1,24 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 class Database {
   constructor() {
-    this.dbPath = path.join(__dirname, 'interview_overlay.db');
-    this.db = null;
+    this.prisma = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    });
     this.init();
   }
 
   async init() {
     try {
-      this.db = new sqlite3.Database(this.dbPath, (err) => {
-        if (err) {
-          console.error('数据库连接失败:', err.message);
-        } else {
-          console.log('✅ SQLite数据库连接成功');
-        }
-      });
-
-      await this.createTables();
+      await this.prisma.$connect();
+      console.log('✅ MySQL数据库连接成功');
       await this.seedDefaultData();
     } catch (error) {
-      console.error('数据库初始化失败:', error);
+      console.error('❌ 数据库初始化失败:', error);
+      throw error;
     }
-  }
-
-  async createTables() {
-    return new Promise((resolve, reject) => {
-      const createUserTable = `
-        CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          username TEXT UNIQUE NOT NULL,
-          email TEXT UNIQUE NOT NULL,
-          password TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `;
-
-      const createConfigTable = `
-        CREATE TABLE IF NOT EXISTS user_configs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
-          ai_model TEXT DEFAULT 'claude-sonnet-4-20250514',
-          language TEXT DEFAULT 'python',
-          theme TEXT DEFAULT 'dark',
-          shortcuts TEXT DEFAULT '{"takeScreenshot":"Ctrl+H","openQueue":"Ctrl+Q","openSettings":"Ctrl+S"}',
-          display TEXT DEFAULT '{"opacity":0.9,"position":"top-right","autoHide":false,"hideDelay":3000}',
-          processing TEXT DEFAULT '{"autoProcess":true,"saveScreenshots":true,"compressionLevel":0.8}',
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-      `;
-
-      const createTokenTable = `
-        CREATE TABLE IF NOT EXISTS refresh_tokens (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
-          token TEXT NOT NULL,
-          expires_at DATETIME NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-      `;
-
-      this.db.serialize(() => {
-        this.db.run(createUserTable, (err) => {
-          if (err) console.error('创建用户表失败:', err);
-        });
-        
-        this.db.run(createConfigTable, (err) => {
-          if (err) console.error('创建配置表失败:', err);
-        });
-        
-        this.db.run(createTokenTable, (err) => {
-          if (err) console.error('创建令牌表失败:', err);
-          else resolve();
-        });
-      });
-    });
   }
 
   async seedDefaultData() {
@@ -102,254 +40,308 @@ class Database {
 
   // 用户管理方法
   async createUser(userData) {
-    return new Promise((resolve, reject) => {
+    try {
       const { username, email, password } = userData;
-      const query = `INSERT INTO users (username, email, password) VALUES (?, ?, ?)`;
       
-      this.db.run(query, [username, email, password], function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          // 为新用户创建默认配置
-          const userId = this.lastID;
-          const configQuery = `INSERT INTO user_configs (user_id) VALUES (?)`;
-          
-          this.db.run(configQuery, [userId], (configErr) => {
-            if (configErr) {
-              console.error('创建默认配置失败:', configErr);
+      const user = await this.prisma.user.create({
+        data: {
+          username,
+          email,
+          password,
+          config: {
+            create: {
+              // 创建默认配置
             }
-          });
-          
-          resolve({ id: userId, username, email });
+          }
+        },
+        include: {
+          config: true
         }
       });
-    });
+      
+      return user;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getUserByEmail(email) {
-    return new Promise((resolve, reject) => {
-      const query = `SELECT * FROM users WHERE email = ?`;
-      this.db.get(query, [email], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
+    try {
+      return await this.prisma.user.findUnique({
+        where: { email },
+        include: {
+          config: true
         }
       });
-    });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getUserByUsername(username) {
-    return new Promise((resolve, reject) => {
-      const query = `SELECT * FROM users WHERE username = ?`;
-      this.db.get(query, [username], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
+    try {
+      return await this.prisma.user.findUnique({
+        where: { username },
+        include: {
+          config: true
         }
       });
-    });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getUserById(id) {
-    return new Promise((resolve, reject) => {
-      const query = `SELECT * FROM users WHERE id = ?`;
-      this.db.get(query, [id], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
+    try {
+      return await this.prisma.user.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          config: true
         }
       });
-    });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async getUserByUsernameOrEmail(identifier) {
-    return new Promise((resolve, reject) => {
-      const query = `SELECT * FROM users WHERE username = ? OR email = ?`;
-      this.db.get(query, [identifier, identifier], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: identifier },
+            { email: identifier }
+          ]
         }
       });
-    });
+      return user;
+    } catch (error) {
+      throw error;
+    }
   }
 
-  // 配置管理方法
-  async getUserConfig(userId) {
-    return new Promise((resolve, reject) => {
-      const query = `SELECT * FROM user_configs WHERE user_id = ?`;
-      this.db.get(query, [userId], (err, row) => {
-        if (err) {
-          reject(err);
-        } else if (row) {
-          // 解析JSON字段
-          const config = {
-            aiModel: row.ai_model,
-            language: row.language,
-            theme: row.theme,
-            shortcuts: JSON.parse(row.shortcuts),
-            display: JSON.parse(row.display),
-            processing: JSON.parse(row.processing)
-          };
-          resolve(config);
-        } else {
-          // 如果没有配置，创建默认配置
-          this.createDefaultConfig(userId).then(resolve).catch(reject);
-        }
+  // 🆕 更新用户密码
+  async updateUserPassword(userId, hashedPassword) {
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { id: parseInt(userId) },
+        data: { password: hashedPassword }
       });
-    });
+      return updatedUser;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getUserConfig(userId) {
+    try {
+      let config = await this.prisma.userConfig.findUnique({
+        where: { userId: parseInt(userId) }
+      });
+
+      if (!config) {
+        config = await this.createDefaultConfig(parseInt(userId));
+      }
+
+      // 转换JSON字符串为对象
+      return {
+        ...config,
+        shortcuts: config.shortcuts ? JSON.parse(config.shortcuts) : {
+          takeScreenshot: 'F1',
+          openQueue: 'F2',
+          openSettings: 'F3'
+        },
+        display: config.display ? JSON.parse(config.display) : {
+          opacity: 1.0,
+          position: 'top-right',
+          autoHide: false,
+          hideDelay: 3000
+        },
+        processing: config.processing ? JSON.parse(config.processing) : {
+          autoProcess: true,
+          saveScreenshots: false,
+          compressionLevel: 0.8
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   async createDefaultConfig(userId) {
-    return new Promise((resolve, reject) => {
-      const defaultConfig = {
-        aiModel: 'claude-sonnet-4-20250514',
-        language: 'python',
-        theme: 'dark',
-        shortcuts: { takeScreenshot: 'Ctrl+H', openQueue: 'Ctrl+Q', openSettings: 'Ctrl+S' },
-        display: { opacity: 0.9, position: 'top-right', autoHide: false, hideDelay: 3000 },
-        processing: { autoProcess: true, saveScreenshots: true, compressionLevel: 0.8 }
-      };
-
-      const query = `
-        INSERT INTO user_configs (user_id, ai_model, language, theme, shortcuts, display, processing) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `;
-      
-      this.db.run(query, [
-        userId,
-        defaultConfig.aiModel,
-        defaultConfig.language,
-        defaultConfig.theme,
-        JSON.stringify(defaultConfig.shortcuts),
-        JSON.stringify(defaultConfig.display),
-        JSON.stringify(defaultConfig.processing)
-      ], function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(defaultConfig);
+    try {
+      return await this.prisma.userConfig.create({
+        data: {
+          userId: parseInt(userId)
         }
       });
-    });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async updateUserConfig(userId, configUpdate) {
-    return new Promise((resolve, reject) => {
-      // 先获取当前配置
-      this.getUserConfig(userId).then(currentConfig => {
-        const updatedConfig = { ...currentConfig, ...configUpdate };
-        
-        const query = `
-          UPDATE user_configs 
-          SET ai_model = ?, language = ?, theme = ?, shortcuts = ?, display = ?, processing = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE user_id = ?
-        `;
-        
-        this.db.run(query, [
-          updatedConfig.aiModel,
-          updatedConfig.language,
-          updatedConfig.theme,
-          JSON.stringify(updatedConfig.shortcuts),
-          JSON.stringify(updatedConfig.display),
-          JSON.stringify(updatedConfig.processing),
-          userId
-        ], function(err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(updatedConfig);
-          }
-        });
-      }).catch(reject);
-    });
-  }
+    try {
+      // 将对象字段转换为JSON字符串
+      const processedUpdate = { ...configUpdate };
+      if (processedUpdate.shortcuts && typeof processedUpdate.shortcuts === 'object') {
+        processedUpdate.shortcuts = JSON.stringify(processedUpdate.shortcuts);
+      }
+      if (processedUpdate.display && typeof processedUpdate.display === 'object') {
+        processedUpdate.display = JSON.stringify(processedUpdate.display);
+      }
+      if (processedUpdate.processing && typeof processedUpdate.processing === 'object') {
+        processedUpdate.processing = JSON.stringify(processedUpdate.processing);
+      }
 
-  // 刷新令牌管理
-  async storeRefreshToken(userId, token, expiresAt) {
-    return new Promise((resolve, reject) => {
-      const query = `INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)`;
-      this.db.run(query, [userId, token, expiresAt], function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(this.lastID);
+      const result = await this.prisma.userConfig.upsert({
+        where: { userId: parseInt(userId) },
+        update: processedUpdate,
+        create: {
+          userId: parseInt(userId),
+          ...processedUpdate
         }
       });
-    });
+
+      // 返回时重新解析JSON字段
+      return {
+        ...result,
+        shortcuts: result.shortcuts ? JSON.parse(result.shortcuts) : {
+          takeScreenshot: 'F1',
+          openQueue: 'F2',
+          openSettings: 'F3'
+        },
+        display: result.display ? JSON.parse(result.display) : {
+          opacity: 1.0,
+          position: 'top-right',
+          autoHide: false,
+          hideDelay: 3000
+        },
+        processing: result.processing ? JSON.parse(result.processing) : {
+          autoProcess: true,
+          saveScreenshots: false,
+          compressionLevel: 0.8
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async storeRefreshToken(userId, token, expiresAt) {
+    try {
+      return await this.prisma.userSession.create({
+        data: {
+          userId: parseInt(userId),
+          token: crypto.randomUUID(),
+          refreshToken: token,
+          expiresAt: new Date(expiresAt)
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
   }
 
   async validateRefreshToken(token) {
-    return new Promise((resolve, reject) => {
-      const query = `
-        SELECT rt.*, u.id as userId, u.email, u.username 
-        FROM refresh_tokens rt 
-        JOIN users u ON rt.user_id = u.id 
-        WHERE rt.token = ? AND rt.expires_at > datetime('now')
-      `;
-      this.db.get(query, [token], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
+    try {
+      const session = await this.prisma.userSession.findUnique({
+        where: { 
+          refreshToken: token,
+          isActive: true
+        },
+        include: {
+          user: true
         }
       });
-    });
+
+      if (!session || session.expiresAt < new Date()) {
+        return null;
+      }
+
+      return session;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async deleteRefreshToken(token) {
-    return new Promise((resolve, reject) => {
-      const query = `DELETE FROM refresh_tokens WHERE token = ?`;
-      this.db.run(query, [token], function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(this.changes);
-        }
+    try {
+      await this.prisma.userSession.updateMany({
+        where: { refreshToken: token },
+        data: { isActive: false }
       });
-    });
+    } catch (error) {
+      throw error;
+    }
   }
 
-  // 清理过期令牌
   async cleanupExpiredTokens() {
-    return new Promise((resolve, reject) => {
-      const query = `DELETE FROM refresh_tokens WHERE expires_at <= datetime('now')`;
-      this.db.run(query, function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          if (this.changes > 0) {
-            console.log(`🧹 清理了 ${this.changes} 个过期令牌`);
+    try {
+      await this.prisma.userSession.updateMany({
+        where: {
+          expiresAt: {
+            lt: new Date()
           }
-          resolve(this.changes);
+        },
+        data: {
+          isActive: false
         }
       });
-    });
+    } catch (error) {
+      console.error('清理过期令牌失败:', error);
+    }
+  }
+
+  // 邮箱验证码相关方法
+  async storeEmailVerificationCode(email, code, token, expiresAt) {
+    try {
+      return await this.prisma.emailVerificationCode.create({
+        data: {
+          email,
+          code,
+          token,
+          expiresAt: new Date(expiresAt)
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async verifyEmailCode(token, code) {
+    try {
+      const verification = await this.prisma.emailVerificationCode.findUnique({
+        where: { 
+          token,
+          isUsed: false
+        }
+      });
+
+      if (!verification || verification.expiresAt < new Date() || verification.code !== code) {
+        return null;
+      }
+
+      // 标记为已使用
+      await this.prisma.emailVerificationCode.update({
+        where: { id: verification.id },
+        data: { isUsed: true }
+      });
+
+      return verification;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async close() {
-    if (this.db) {
-      this.db.close((err) => {
-        if (err) {
-          console.error('数据库关闭失败:', err.message);
-        } else {
-          console.log('数据库连接已关闭');
-        }
-      });
+    try {
+      await this.prisma.$disconnect();
+      console.log('✅ 数据库连接已关闭');
+    } catch (error) {
+      console.error('❌ 关闭数据库连接失败:', error);
     }
   }
 }
 
-// 创建数据库实例
-const db = new Database();
-
-// 定期清理过期令牌（每小时一次）
-setInterval(() => {
-  db.cleanupExpiredTokens().catch(console.error);
-}, 60 * 60 * 1000);
-
-module.exports = db; 
+module.exports = Database; 

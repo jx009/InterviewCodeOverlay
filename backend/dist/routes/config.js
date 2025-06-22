@@ -12,6 +12,14 @@ const configValidation = [
         .optional()
         .isIn(['claude', 'gemini', 'openai'])
         .withMessage('无效的AI服务提供商'),
+    (0, express_validator_1.body)('programmingModel')
+        .optional()
+        .isString()
+        .withMessage('编程题模型必须是字符串'),
+    (0, express_validator_1.body)('multipleChoiceModel')
+        .optional()
+        .isString()
+        .withMessage('选择题模型必须是字符串'),
     (0, express_validator_1.body)('extractionModel')
         .optional()
         .isString()
@@ -46,6 +54,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
             const defaultConfig = await database_1.prisma.userConfig.create({
                 data: {
                     userId: req.user.userId,
+                    programmingModel: 'claude-3-5-sonnet-20241022',
+                    multipleChoiceModel: 'claude-3-5-sonnet-20241022',
                     selectedProvider: 'claude',
                     extractionModel: 'claude-3-7-sonnet-20250219',
                     solutionModel: 'claude-3-7-sonnet-20250219',
@@ -54,6 +64,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
                 }
             });
             return response_1.ResponseUtils.success(res, {
+                programmingModel: defaultConfig.programmingModel,
+                multipleChoiceModel: defaultConfig.multipleChoiceModel,
                 selectedProvider: defaultConfig.selectedProvider,
                 extractionModel: defaultConfig.extractionModel,
                 solutionModel: defaultConfig.solutionModel,
@@ -64,6 +76,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
             });
         }
         response_1.ResponseUtils.success(res, {
+            programmingModel: config.programmingModel,
+            multipleChoiceModel: config.multipleChoiceModel,
             selectedProvider: config.selectedProvider,
             extractionModel: config.extractionModel,
             solutionModel: config.solutionModel,
@@ -85,6 +99,12 @@ router.put('/', auth_1.authenticateToken, configValidation, async (req, res) => 
             return response_1.ResponseUtils.validationError(res, errors.array().map(err => err.msg));
         }
         const updateData = {};
+        if (req.body.programmingModel !== undefined) {
+            updateData.programmingModel = req.body.programmingModel;
+        }
+        if (req.body.multipleChoiceModel !== undefined) {
+            updateData.multipleChoiceModel = req.body.multipleChoiceModel;
+        }
         if (req.body.selectedProvider !== undefined) {
             updateData.selectedProvider = req.body.selectedProvider;
         }
@@ -111,6 +131,8 @@ router.put('/', auth_1.authenticateToken, configValidation, async (req, res) => 
             update: updateData,
             create: {
                 userId: req.user.userId,
+                programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
+                multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
                 selectedProvider: updateData.selectedProvider || 'claude',
                 extractionModel: updateData.extractionModel || 'claude-3-7-sonnet-20250219',
                 solutionModel: updateData.solutionModel || 'claude-3-7-sonnet-20250219',
@@ -121,6 +143,8 @@ router.put('/', auth_1.authenticateToken, configValidation, async (req, res) => 
             }
         });
         response_1.ResponseUtils.success(res, {
+            programmingModel: updatedConfig.programmingModel,
+            multipleChoiceModel: updatedConfig.multipleChoiceModel,
             selectedProvider: updatedConfig.selectedProvider,
             extractionModel: updatedConfig.extractionModel,
             solutionModel: updatedConfig.solutionModel,
@@ -193,6 +217,8 @@ router.get('/languages', auth_1.authenticateToken, async (req, res) => {
 router.post('/reset', auth_1.authenticateToken, async (req, res) => {
     try {
         const defaultConfig = {
+            programmingModel: 'claude-3-5-sonnet-20241022',
+            multipleChoiceModel: 'claude-3-5-sonnet-20241022',
             selectedProvider: 'claude',
             extractionModel: 'claude-3-7-sonnet-20250219',
             solutionModel: 'claude-3-7-sonnet-20250219',
@@ -210,6 +236,8 @@ router.post('/reset', auth_1.authenticateToken, async (req, res) => {
             }
         });
         response_1.ResponseUtils.success(res, {
+            programmingModel: updatedConfig.programmingModel,
+            multipleChoiceModel: updatedConfig.multipleChoiceModel,
             selectedProvider: updatedConfig.selectedProvider,
             extractionModel: updatedConfig.extractionModel,
             solutionModel: updatedConfig.solutionModel,
@@ -231,17 +259,19 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             res.status(401).json({ error: '用户未认证' });
             return;
         }
-        if (req.user.userId !== userId) {
+        if (req.user.userId !== parseInt(userId)) {
             res.status(403).json({ error: '无权访问此用户配置' });
             return;
         }
         const config = await database_1.prisma.userConfig.findUnique({
-            where: { userId }
+            where: { userId: parseInt(userId) }
         });
         if (!config) {
             const defaultConfig = await database_1.prisma.userConfig.create({
                 data: {
-                    userId,
+                    userId: parseInt(userId),
+                    programmingModel: 'claude-3-5-sonnet-20241022',
+                    multipleChoiceModel: 'claude-3-5-sonnet-20241022',
                     aiModel: 'claude-3-5-sonnet-20241022',
                     selectedProvider: 'claude',
                     extractionModel: 'claude-3-7-sonnet-20250219',
@@ -252,6 +282,8 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
                 }
             });
             res.json({
+                programmingModel: defaultConfig.programmingModel,
+                multipleChoiceModel: defaultConfig.multipleChoiceModel,
                 aiModel: defaultConfig.aiModel,
                 language: defaultConfig.language,
                 theme: defaultConfig.theme,
@@ -278,6 +310,8 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             console.warn('解析配置JSON字段失败:', error);
         }
         res.json({
+            programmingModel: config.programmingModel,
+            multipleChoiceModel: config.multipleChoiceModel,
             aiModel: config.aiModel,
             language: config.language,
             theme: config.theme,
@@ -300,11 +334,17 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
 router.put('/user/:userId', auth_1.authMiddleware, async (req, res) => {
     try {
         const { userId } = req.params;
-        if (!req.user || req.user.userId !== userId) {
+        if (!req.user || req.user.userId !== parseInt(userId)) {
             res.status(403).json({ error: '无权修改此用户配置' });
             return;
         }
         const updateData = {};
+        if (req.body.programmingModel !== undefined) {
+            updateData.programmingModel = req.body.programmingModel;
+        }
+        if (req.body.multipleChoiceModel !== undefined) {
+            updateData.multipleChoiceModel = req.body.multipleChoiceModel;
+        }
         if (req.body.aiModel !== undefined) {
             updateData.aiModel = req.body.aiModel;
         }
@@ -342,10 +382,12 @@ router.put('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             updateData.showCopyButton = req.body.showCopyButton;
         }
         const updatedConfig = await database_1.prisma.userConfig.upsert({
-            where: { userId },
+            where: { userId: parseInt(userId) },
             update: updateData,
             create: {
-                userId,
+                userId: parseInt(userId),
+                programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
+                multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
                 aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',
                 language: updateData.language || 'python',
                 theme: updateData.theme || 'system',
@@ -363,6 +405,8 @@ router.put('/user/:userId', auth_1.authMiddleware, async (req, res) => {
         res.json({
             message: '配置更新成功',
             config: {
+                programmingModel: updatedConfig.programmingModel,
+                multipleChoiceModel: updatedConfig.multipleChoiceModel,
                 aiModel: updatedConfig.aiModel,
                 language: updatedConfig.language,
                 theme: updatedConfig.theme,

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client"
 import { useToast } from "../../contexts/toast"
 import { LanguageSelector } from "../shared/LanguageSelector"
 import { COMMAND_KEY } from "../../utils/platform"
+import { useWebAuth } from "../../hooks/useWebAuth"
 
 interface QueueCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
@@ -23,6 +24,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const { showToast } = useToast()
+  
+  // 🆕 使用增强认证
+  const { logout: webLogout, loading: authLoading } = useWebAuth()
 
   // Extract the repeated language selection logic into a separate function
   const extractLanguagesAndUpdate = (direction?: 'next' | 'prev') => {
@@ -82,26 +86,26 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     onTooltipVisibilityChange(isTooltipVisible, tooltipHeight)
   }, [isTooltipVisible])
 
+  // 🆕 修改为使用增强认证的退出登录
   const handleSignOut = async () => {
+    console.log('🚪 QueueCommands handleSignOut 被调用');
     try {
-      // Clear any local storage or electron-specific data
-      localStorage.clear();
-      sessionStorage.clear();
+      showToast('正在登出...', '请稍等', 'loading');
+      console.log('📞 调用 webLogout...');
+      const result = await webLogout();
+      console.log('📋 webLogout 结果:', result);
       
-      // Clear the API key in the configuration
-      await window.electronAPI.updateConfig({
-        apiKey: '',
-      });
-      
-      showToast('Success', 'Logged out successfully', 'success');
-      
-      // Reload the app after a short delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    } catch (err) {
-      // 减少控制台输出
-      showToast('Error', 'Failed to log out', 'error');
+      if (result.success) {
+        console.log('✅ 登出成功');
+        showToast('登出成功', '已成功退出登录', 'success');
+        // 不需要手动刷新，App.tsx会自动处理界面切换
+      } else {
+        console.log('❌ 登出失败:', result.error);
+        showToast('登出失败', result.error || '请重试', 'error');
+      }
+    } catch (error) {
+      console.error('❌ 登出异常:', error);
+      showToast('登出失败', '网络错误，请重试', 'error');
     }
   }
 
@@ -466,25 +470,34 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
                       <button
                         onClick={handleSignOut}
-                        className="flex items-center gap-2 text-[11px] text-red-400 hover:text-red-300 transition-colors w-full"
+                        disabled={authLoading}
+                        className={`flex items-center gap-2 text-[11px] transition-colors w-full ${
+                          authLoading 
+                            ? 'text-red-400/50 cursor-not-allowed' 
+                            : 'text-red-400 hover:text-red-300'
+                        }`}
                       >
                         <div className="w-4 h-4 flex items-center justify-center">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-3 h-3"
-                          >
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                            <polyline points="16 17 21 12 16 7" />
-                            <line x1="21" y1="12" x2="9" y2="12" />
-                          </svg>
+                          {authLoading ? (
+                            <div className="w-3 h-3 border border-red-400/50 border-t-red-400 rounded-full animate-spin"></div>
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-3 h-3"
+                            >
+                              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                              <polyline points="16 17 21 12 16 7" />
+                              <line x1="21" y1="12" x2="9" y2="12" />
+                            </svg>
+                          )}
                         </div>
-                        Log Out
+                        {authLoading ? '登出中...' : 'Log Out'}
                       </button>
                     </div>
                   </div>

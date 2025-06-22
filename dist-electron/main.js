@@ -597,23 +597,46 @@ function hideMainWindow() {
 }
 function showMainWindow() {
     if (!state.mainWindow?.isDestroyed()) {
-        if (state.windowPosition && state.windowSize) {
-            state.mainWindow.setBounds({
-                ...state.windowPosition,
-                ...state.windowSize
+        try {
+            // 确保窗口位置在屏幕范围内
+            const { screen } = require('electron');
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const workArea = primaryDisplay.workArea;
+            if (state.windowPosition && state.windowSize) {
+                const { x, y } = state.windowPosition;
+                const { width, height } = state.windowSize;
+                // 检查窗口是否在屏幕范围内
+                const adjustedX = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width));
+                const adjustedY = Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height));
+                state.mainWindow.setBounds({
+                    x: adjustedX,
+                    y: adjustedY,
+                    width,
+                    height
+                });
+                // 更新状态
+                state.currentX = adjustedX;
+                state.currentY = adjustedY;
+            }
+            state.mainWindow.setIgnoreMouseEvents(false);
+            state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+            state.mainWindow.setVisibleOnAllWorkspaces(true, {
+                visibleOnFullScreen: true
             });
+            state.mainWindow.setContentProtection(true);
+            state.mainWindow.setOpacity(0); // Set opacity to 0 before showing
+            state.mainWindow.showInactive(); // Use showInactive instead of show+focus
+            state.mainWindow.setOpacity(1); // Then set opacity to 1 after showing
+            state.isWindowVisible = true;
+            console.log(`Window shown at position (${state.currentX}, ${state.currentY}), opacity set to 1`);
         }
-        state.mainWindow.setIgnoreMouseEvents(false);
-        state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
-        state.mainWindow.setVisibleOnAllWorkspaces(true, {
-            visibleOnFullScreen: true
-        });
-        state.mainWindow.setContentProtection(true);
-        state.mainWindow.setOpacity(0); // Set opacity to 0 before showing
-        state.mainWindow.showInactive(); // Use showInactive instead of show+focus
-        state.mainWindow.setOpacity(1); // Then set opacity to 1 after showing
-        state.isWindowVisible = true;
-        console.log('Window shown with showInactive(), opacity set to 1');
+        catch (error) {
+            console.error('Error showing main window:', error);
+            // 简单回退方案
+            state.mainWindow.setOpacity(1);
+            state.mainWindow.showInactive();
+            state.isWindowVisible = true;
+        }
     }
 }
 function toggleMainWindow() {
@@ -646,12 +669,26 @@ function moveWindowVertical(updateFn) {
         maxDownLimit,
         screenHeight: state.screenHeight,
         windowHeight: state.windowSize?.height,
-        currentY: state.currentY
+        currentY: state.currentY,
+        step: state.step
     });
-    // Only update if within bounds
-    if (newY >= maxUpLimit && newY <= maxDownLimit) {
+    // 确保窗口可见且响应
+    if (state.mainWindow.getOpacity() === 0) {
+        console.log("Window was hidden, making it visible for movement");
+        state.mainWindow.setOpacity(1);
+        state.mainWindow.setIgnoreMouseEvents(false);
+        state.isWindowVisible = true;
+    }
+    // Only update if within bounds, or if we're trying to move the window back on screen
+    const isMovingBackOnScreen = (state.currentY < 0 && newY > state.currentY) ||
+        (state.currentY > state.screenHeight && newY < state.currentY);
+    if ((newY >= maxUpLimit && newY <= maxDownLimit) || isMovingBackOnScreen) {
         state.currentY = newY;
         state.mainWindow.setPosition(Math.round(state.currentX), Math.round(state.currentY));
+        console.log(`Window moved to position: (${Math.round(state.currentX)}, ${Math.round(state.currentY)})`);
+    }
+    else {
+        console.log(`Movement blocked - would move outside bounds. Current: ${state.currentY}, Attempted: ${newY}`);
     }
 }
 // Window dimension functions

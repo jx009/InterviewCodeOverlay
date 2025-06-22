@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InterviewCodeOverlay - 登录</title>
+    <title>登录 - InterviewCodeOverlay</title>
     <style>
         * {
             margin: 0;
@@ -24,7 +24,7 @@
             background: white;
             padding: 2rem;
             border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 400px;
         }
@@ -36,7 +36,7 @@
         
         .logo h1 {
             color: #333;
-            font-size: 1.5rem;
+            font-size: 2rem;
             margin-bottom: 0.5rem;
         }
         
@@ -46,26 +46,26 @@
         }
         
         .form-group {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
         
-        label {
+        .form-group label {
             display: block;
             margin-bottom: 0.5rem;
             color: #333;
             font-weight: 500;
         }
         
-        input {
+        .form-group input {
             width: 100%;
             padding: 0.75rem;
-            border: 1px solid #ddd;
+            border: 2px solid #e1e5e9;
             border-radius: 5px;
             font-size: 1rem;
             transition: border-color 0.3s;
         }
         
-        input:focus {
+        .form-group input:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -80,7 +80,6 @@
             font-size: 1rem;
             cursor: pointer;
             transition: background 0.3s;
-            margin-bottom: 1rem;
         }
         
         .btn:hover {
@@ -96,7 +95,6 @@
             text-align: center;
             margin: 1.5rem 0;
             position: relative;
-            color: #666;
         }
         
         .divider::before {
@@ -106,15 +104,13 @@
             left: 0;
             right: 0;
             height: 1px;
-            background: #ddd;
-            z-index: 1;
+            background: #e1e5e9;
         }
         
         .divider span {
             background: white;
             padding: 0 1rem;
-            position: relative;
-            z-index: 2;
+            color: #666;
         }
         
         .oauth-btn {
@@ -203,7 +199,7 @@
     </div>
 
     <script>
-        const API_BASE = window.location.origin.replace('3000', '3001');
+        const API_BASE = window.location.origin;
         
         // 检查是否是OAuth模式
         const urlParams = new URLSearchParams(window.location.search);
@@ -243,31 +239,38 @@
             loginBtn.textContent = '登录中...';
             
             try {
-                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                const response = await fetch(`${API_BASE}/api/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ email: username, password })
                 });
                 
                 const data = await response.json();
                 
-                if (response.ok) {
+                if (response.ok && data.success) {
                     showSuccess('登录成功！');
                     
+                    // 保存sessionId到localStorage
+                    localStorage.setItem('sessionId', data.sessionId);
+                    
                     if (isOAuthMode && client === 'electron') {
-                        // 重定向到成功页面，带上token
-                        window.location.href = `/auth/success?token=${data.token}`;
+                        // Electron模式，延时关闭窗口让客户端有时间获取sessionId
+                        console.log('登录成功，sessionId已保存到localStorage，即将关闭窗口');
+                        setTimeout(() => {
+                            console.log('关闭登录窗口');
+                            window.close();
+                        }, 1500);
                     } else {
-                        // 普通Web登录
-                        localStorage.setItem('authToken', data.token);
-                        window.location.href = '/dashboard';
+                        // 普通Web登录，跳转到前端页面
+                        window.location.href = 'http://localhost:3000';
                     }
                 } else {
-                    showError(data.error || '登录失败');
+                    showError(data.message || '登录失败');
                 }
             } catch (error) {
+                console.error('登录错误:', error);
                 showError('网络错误，请重试');
             } finally {
                 loginBtn.disabled = false;
@@ -277,38 +280,7 @@
         
         // 处理OAuth登录
         async function handleOAuth(provider) {
-            try {
-                // 简化的OAuth处理 - 直接调用后端
-                const response = await fetch(`${API_BASE}/api/auth/oauth/callback`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        code: 'demo_code', 
-                        provider: provider 
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showSuccess(`${provider} 登录成功！`);
-                    
-                    if (isOAuthMode && client === 'electron') {
-                        // 重定向到成功页面，带上token
-                        window.location.href = `/auth/success?token=${data.token}`;
-                    } else {
-                        // 普通Web登录
-                        localStorage.setItem('authToken', data.token);
-                        window.location.href = '/dashboard';
-                    }
-                } else {
-                    showError(data.error || `${provider} 登录失败`);
-                }
-            } catch (error) {
-                showError('网络错误，请重试');
-            }
+            showError(`${provider} 登录功能暂未实现，请使用邮箱密码登录`);
         }
         
         // 显示注册表单

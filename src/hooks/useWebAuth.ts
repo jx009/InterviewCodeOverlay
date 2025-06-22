@@ -132,11 +132,17 @@ export function useWebAuth() {
 
   // 登出
   const logout = useCallback(async () => {
+    console.log('🔐 useWebAuth logout 函数被调用');
     try {
+      console.log('📝 设置加载状态为 true');
       setAuthStatus(prev => ({ ...prev, loading: true }))
+      
+      console.log('📞 调用 window.electronAPI.webAuthLogout()');
       const result = await window.electronAPI.webAuthLogout()
+      console.log('📋 IPC 调用结果:', result);
       
       if (result.success) {
+        console.log('✅ IPC 返回成功，更新本地状态');
         setAuthStatus({
           authenticated: false,
           user: null,
@@ -145,6 +151,7 @@ export function useWebAuth() {
         })
         setWebConfig(null)
       } else {
+        console.log('❌ IPC 返回失败:', result.error);
         setAuthStatus(prev => ({
           ...prev,
           loading: false,
@@ -152,9 +159,10 @@ export function useWebAuth() {
         }))
       }
       
+      console.log('📤 返回结果给调用者:', result);
       return result
     } catch (error) {
-      console.error('Logout failed:', error)
+      console.error('❌ useWebAuth logout 异常:', error)
       setAuthStatus(prev => ({
         ...prev,
         loading: false,
@@ -196,8 +204,8 @@ export function useWebAuth() {
     
     initializeAuth()
     
-    // 监听认证状态变化事件（如果有的话）
-    const handleAuthStatus = (event: any, status: any) => {
+    // 监听认证状态变化事件
+    const handleAuthStatus = (status: { authenticated: boolean; user: any }) => {
       console.log('🔄 Auth status changed:', status)
       setAuthStatus({
         authenticated: status.authenticated,
@@ -212,14 +220,13 @@ export function useWebAuth() {
       }
     }
     
-    if (window.electronAPI?.onAuthStatusChanged) {
-      window.electronAPI.onAuthStatusChanged(handleAuthStatus)
-    }
+    // 使用正确的事件监听方法
+    const unsubscribeAuthStatus = window.electronAPI?.onWebAuthStatus?.(handleAuthStatus)
     
     // 清理函数
     return () => {
-      if (window.electronAPI?.removeAuthStatusListener) {
-        window.electronAPI.removeAuthStatusListener(handleAuthStatus)
+      if (unsubscribeAuthStatus) {
+        unsubscribeAuthStatus()
       }
     }
   }, [checkAuthStatus, checkConnection, syncConfig])

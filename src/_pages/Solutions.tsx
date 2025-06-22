@@ -6,7 +6,7 @@ import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism"
 
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue"
 
-import { ProblemStatementData } from "../types/solutions"
+import { ProblemStatementData, SolutionData, MultipleChoiceAnswer } from "../types/solutions"
 import SolutionCommands from "../components/Solutions/SolutionCommands"
 import Debug from "./Debug"
 import { useToast } from "../contexts/toast"
@@ -184,6 +184,55 @@ export const ComplexitySection = ({
   );
 }
 
+// 选择题答案显示组件
+export const MultipleChoiceSection = ({
+  answers,
+  isLoading
+}: {
+  answers: Array<{
+    question_number: string;
+    answer: string;
+    reasoning?: string;
+  }> | null;
+  isLoading: boolean;
+}) => {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-[13px] font-medium text-white tracking-wide">
+        Answers
+      </h2>
+      {isLoading ? (
+        <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
+          Analyzing multiple choice questions...
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {answers?.map((answer, index) => (
+            <div key={index} className="text-[13px] leading-[1.4] text-gray-100 bg-white/5 rounded-md p-3">
+              <div className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-green-400/80 mt-2 shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <strong>题目 {answer.question_number}:</strong>
+                    <span className="bg-green-500/20 text-green-300 px-2 py-0.5 rounded text-xs font-semibold">
+                      {answer.answer}
+                    </span>
+                  </div>
+                  {answer.reasoning && (
+                    <div className="text-gray-300 text-xs mt-1">
+                      {answer.reasoning}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface SolutionsProps {
   setView: (view: "queue" | "solutions" | "debug") => void
   credits: number
@@ -210,6 +259,7 @@ const Solutions: React.FC<SolutionsProps> = ({
   const [spaceComplexityData, setSpaceComplexityData] = useState<string | null>(
     null
   )
+  const [multipleChoiceAnswers, setMultipleChoiceAnswers] = useState<MultipleChoiceAnswer[] | null>(null)
 
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const [tooltipHeight, setTooltipHeight] = useState(0)
@@ -347,19 +397,29 @@ const Solutions: React.FC<SolutionsProps> = ({
           console.warn("Received empty or invalid solution data")
           return
         }
-        console.log({ data })
-        const solutionData = {
-          code: data.code,
-          thoughts: data.thoughts,
-          time_complexity: data.time_complexity,
-          space_complexity: data.space_complexity
-        }
+        console.log("📨 接收到解决方案数据:", { data })
 
-        queryClient.setQueryData(["solution"], solutionData)
-        setSolutionData(solutionData.code || null)
-        setThoughtsData(solutionData.thoughts || null)
-        setTimeComplexityData(solutionData.time_complexity || null)
-        setSpaceComplexityData(solutionData.space_complexity || null)
+        // 保存原始数据到查询缓存，包含类型信息
+        queryClient.setQueryData(["solution"], data)
+
+        // 根据数据类型设置状态
+        if (data.type === 'multiple_choice') {
+          // 选择题数据处理
+          console.log("🎯 处理选择题数据")
+          setSolutionData(null) // 选择题不显示代码
+          setThoughtsData(data.thoughts || null)
+          setTimeComplexityData(null) // 选择题不显示复杂度
+          setSpaceComplexityData(null)
+          setMultipleChoiceAnswers(data.answers || null)
+        } else {
+          // 编程题数据处理
+          console.log("💻 处理编程题数据")
+          setSolutionData(data.code || null)
+          setThoughtsData(data.thoughts || null)
+          setTimeComplexityData(data.time_complexity || null)
+          setSpaceComplexityData(data.space_complexity || null)
+          setMultipleChoiceAnswers(null)
+        }
 
         // Fetch latest screenshots when solution is successful
         const fetchScreenshots = async () => {
@@ -431,17 +491,24 @@ const Solutions: React.FC<SolutionsProps> = ({
         )
       }
       if (event?.query.queryKey[0] === "solution") {
-        const solution = queryClient.getQueryData(["solution"]) as {
-          code: string
-          thoughts: string[]
-          time_complexity: string
-          space_complexity: string
-        } | null
+        const solution = queryClient.getQueryData(["solution"]) as SolutionData | null
 
-        setSolutionData(solution?.code ?? null)
-        setThoughtsData(solution?.thoughts ?? null)
-        setTimeComplexityData(solution?.time_complexity ?? null)
-        setSpaceComplexityData(solution?.space_complexity ?? null)
+        // 根据解决方案类型处理不同的数据
+        if (solution?.type === 'multiple_choice') {
+          // 选择题：不显示代码，显示答案
+          setSolutionData(null)
+          setThoughtsData(solution?.thoughts ?? null)
+          setTimeComplexityData(null)
+          setSpaceComplexityData(null)
+          setMultipleChoiceAnswers(solution?.answers ?? null)
+        } else {
+          // 编程题：显示代码和复杂度
+          setSolutionData(solution?.code ?? null)
+          setThoughtsData(solution?.thoughts ?? null)
+          setTimeComplexityData(solution?.time_complexity ?? null)
+          setSpaceComplexityData(solution?.space_complexity ?? null)
+          setMultipleChoiceAnswers(null)
+        }
       }
     })
     return () => unsubscribe()
@@ -495,7 +562,7 @@ const Solutions: React.FC<SolutionsProps> = ({
         <div ref={contentRef} className="relative">
           <div className="space-y-3 px-4 py-3">
           {/* Conditionally render the screenshot queue if solutionData is available */}
-          {solutionData && (
+          {(solutionData || multipleChoiceAnswers) && (
             <div className="bg-transparent w-fit top-area">
               <div className="pb-3">
                 <div className="space-y-3 w-fit">
@@ -513,7 +580,7 @@ const Solutions: React.FC<SolutionsProps> = ({
           <div className="top-area">
             <SolutionCommands
               onTooltipVisibilityChange={handleTooltipVisibilityChange}
-              isProcessing={!problemStatementData || !solutionData}
+              isProcessing={!problemStatementData || (!solutionData && !multipleChoiceAnswers)}
               extraScreenshots={extraScreenshots}
               credits={credits}
               currentLanguage={currentLanguage}
@@ -525,7 +592,7 @@ const Solutions: React.FC<SolutionsProps> = ({
           <div className="w-full text-sm text-black bg-black/60 rounded-md pointer-events-none main-content">
             <div className="rounded-lg overflow-hidden">
               <div className="px-4 py-3 space-y-4 max-w-full">
-                {!solutionData && (
+                {!solutionData && !multipleChoiceAnswers && (
                   <>
                     <ContentSection
                       title="Problem Statement"
@@ -542,7 +609,7 @@ const Solutions: React.FC<SolutionsProps> = ({
                   </>
                 )}
 
-                {solutionData && (
+                {(solutionData || multipleChoiceAnswers) && (
                   <>
                     <ContentSection
                       title={`My Thoughts (${COMMAND_KEY} + Arrow keys to scroll)`}
@@ -566,18 +633,31 @@ const Solutions: React.FC<SolutionsProps> = ({
                       isLoading={!thoughtsData}
                     />
 
-                    <SolutionSection
-                      title="Solution"
-                      content={solutionData}
-                      isLoading={!solutionData}
-                      currentLanguage={currentLanguage}
-                    />
+                    {/* 编程题显示代码和复杂度 */}
+                    {solutionData && (
+                      <>
+                        <SolutionSection
+                          title="Solution"
+                          content={solutionData}
+                          isLoading={!solutionData}
+                          currentLanguage={currentLanguage}
+                        />
 
-                    <ComplexitySection
-                      timeComplexity={timeComplexityData}
-                      spaceComplexity={spaceComplexityData}
-                      isLoading={!timeComplexityData || !spaceComplexityData}
-                    />
+                        <ComplexitySection
+                          timeComplexity={timeComplexityData}
+                          spaceComplexity={spaceComplexityData}
+                          isLoading={!timeComplexityData || !spaceComplexityData}
+                        />
+                      </>
+                    )}
+
+                    {/* 选择题显示答案 */}
+                    {multipleChoiceAnswers && multipleChoiceAnswers.length > 0 && (
+                      <MultipleChoiceSection
+                        answers={multipleChoiceAnswers}
+                        isLoading={!multipleChoiceAnswers}
+                      />
+                    )}
                   </>
                 )}
               </div>
