@@ -246,7 +246,46 @@ class ConfigLoader {
     for (const field of requiredFields) {
       const value = this.getNestedProperty(config, field);
       if (!value) {
-        throw new Error(`缺少必要的配置项: ${field}`);
+        throw new Error(`🔒 安全错误: 缺少必要的配置项: ${field}`);
+      }
+    }
+
+    // 🔒 安全验证：检查JWT密钥强度
+    const jwtSecret = config.security.jwtSecret;
+    const insecurePatterns = [
+      'your-super-secret-jwt-key',
+      'default-secret-key',
+      'REPLACE_WITH',
+      'your-secret',
+      'jwt-secret',
+      'interview_coder_jwt'
+    ];
+
+    if (jwtSecret.length < 32) {
+      throw new Error(`🔒 安全错误: JWT密钥长度过短（${jwtSecret.length}字符），至少需要32字符`);
+    }
+
+    for (const pattern of insecurePatterns) {
+      if (jwtSecret.includes(pattern)) {
+        throw new Error(`🔒 安全错误: 检测到不安全的JWT密钥！请使用强随机密钥替换默认值。\n生成方法: node -e "console.log(require('crypto').randomBytes(64).toString('base64'))"`);
+      }
+    }
+
+    // 🔒 验证JWT刷新密钥
+    if (config.security.jwtRefreshSecret) {
+      const refreshSecret = config.security.jwtRefreshSecret;
+      if (refreshSecret.length < 32) {
+        throw new Error(`🔒 安全错误: JWT刷新密钥长度过短（${refreshSecret.length}字符），至少需要32字符`);
+      }
+      
+      for (const pattern of insecurePatterns) {
+        if (refreshSecret.includes(pattern)) {
+          throw new Error(`🔒 安全错误: 检测到不安全的JWT刷新密钥！请使用强随机密钥替换默认值。`);
+        }
+      }
+
+      if (jwtSecret === refreshSecret) {
+        throw new Error(`🔒 安全错误: JWT密钥和刷新密钥不能相同！`);
       }
     }
 
@@ -259,7 +298,7 @@ class ConfigLoader {
       throw new Error('Redis端口号无效');
     }
 
-    console.log('✅ 配置验证通过');
+    console.log('✅ 配置验证通过（包括安全检查）');
   }
 
   private getNestedProperty(obj: any, path: string): any {

@@ -2,8 +2,8 @@
   "mysql": {
     "host": "localhost",
     "port": 3306,
-    "username": "interview_user",
-    "password": "your_secure_password",
+    "username": "root",
+    "password": "YOUR_MYSQL_PASSWORD_HERE",
     "database": "interview_coder",
     "charset": "utf8mb4",
     "collation": "utf8mb4_unicode_ci",
@@ -26,7 +26,7 @@
     "keepAlive": 30000
   },
   "session": {
-    "secret": "your-super-secret-session-key",
+    "secret": "CHANGE_THIS_TO_A_LONG_RANDOM_STRING",
     "expiresIn": 3600,
     "refreshExpiresIn": 604800,
     "cookieName": "interview_session",
@@ -40,11 +40,11 @@
       "port": 587,
       "secure": false,
       "auth": {
-        "user": "your-email@gmail.com",
-        "pass": "your-app-password"
+        "user": "your-email@example.com",
+        "pass": "your-app-password-here"
       }
     },
-    "from": "your-email@gmail.com",
+    "from": "your-email@example.com",
     "verification": {
       "codeLength": 6,
       "expiresMinutes": 5,
@@ -53,8 +53,8 @@
   },
   "security": {
     "bcryptRounds": 12,
-    "jwtSecret": "your-super-secret-jwt-key",
-    "jwtRefreshSecret": "your-super-secret-refresh-key",
+    "jwtSecret": "REPLACE_WITH_SUPER_LONG_RANDOM_JWT_SECRET",
+    "jwtRefreshSecret": "REPLACE_WITH_DIFFERENT_LONG_RANDOM_REFRESH_SECRET",
     "passwordMinLength": 6,
     "maxLoginAttempts": 5,
     "lockoutDuration": 900
