@@ -592,47 +592,78 @@ class SimpleAuthManager extends events_1.EventEmitter {
             const loginUrl = `${this.apiBaseUrl}/login?mode=oauth&client=electron`;
             console.log('🌐 打开登录窗口:', loginUrl);
             authWindow.loadURL(loginUrl);
-            // 设置超时处理（30秒）
+            // 设置超时处理（60秒 - 增加超时时间）
             const timeoutId = setTimeout(() => {
                 if (!authWindow.isDestroyed()) {
+                    console.log('⏰ 登录超时，关闭窗口');
                     authWindow.close();
                     reject(new Error('登录超时，请重试'));
                 }
-            }, 30000);
-            // 监听URL变化，捕获回调
+            }, 60000);
+            // 标记是否已经处理了登录结果
+            let isHandled = false;
+            // 🔧 只监听 did-navigate，避免重复触发
             const handleNavigation = (event, navigationUrl) => {
-                this.handleOAuthCallback(navigationUrl, authWindow, resolve, reject, timeoutId);
+                if (!isHandled) {
+                    this.handleOAuthCallback(navigationUrl, authWindow, (token) => {
+                        isHandled = true;
+                        clearTimeout(timeoutId);
+                        resolve(token);
+                    }, (error) => {
+                        isHandled = true;
+                        clearTimeout(timeoutId);
+                        reject(error);
+                    });
+                }
             };
-            authWindow.webContents.on('will-navigate', handleNavigation);
+            // 🔧 只使用 did-navigate，避免重复监听
             authWindow.webContents.on('did-navigate', handleNavigation);
-            // 🆕 定期检查localStorage中的sessionId（每500ms检查一次）
-            const checkSessionInterval = setInterval(() => {
-                if (authWindow.isDestroyed()) {
+            // 🔧 减少检查频率，增加验证逻辑（每2秒检查一次）
+            const checkSessionInterval = setInterval(async () => {
+                if (authWindow.isDestroyed() || isHandled) {
                     clearInterval(checkSessionInterval);
                     return;
                 }
-                authWindow.webContents.executeJavaScript(`
-          localStorage.getItem('sessionId')
-        `).then((sessionId) => {
-                    if (sessionId) {
-                        console.log('✅ 定期检查发现登录成功，获取到sessionId');
-                        clearInterval(checkSessionInterval);
-                        if (timeoutId)
-                            clearTimeout(timeoutId);
-                        authWindow.close();
-                        resolve(sessionId);
+                try {
+                    const sessionId = await authWindow.webContents.executeJavaScript(`
+            localStorage.getItem('sessionId')
+          `);
+                    if (sessionId && sessionId.length > 10) {
+                        console.log('🔍 定期检查发现sessionId，开始验证...');
+                        // 🔧 先验证sessionId再关闭窗口
+                        const isValid = await this.quickValidateSessionId(sessionId);
+                        if (isValid) {
+                            console.log('✅ 定期检查发现有效登录');
+                            clearInterval(checkSessionInterval);
+                            isHandled = true;
+                            if (timeoutId)
+                                clearTimeout(timeoutId);
+                            // 延迟关闭窗口，让用户看到成功页面
+                            setTimeout(() => {
+                                if (!authWindow.isDestroyed()) {
+                                    authWindow.close();
+                                }
+                                resolve(sessionId);
+                            }, 1500);
+                        }
+                        else {
+                            console.log('❌ 定期检查：sessionId验证失败，继续等待...');
+                        }
                     }
-                }).catch((error) => {
-                    // 忽略执行JavaScript的错误，可能是页面还没加载完成
-                });
-            }, 500);
+                }
+                catch (error) {
+                    // 忽略检查错误，继续等待
+                    console.log('🔍 定期检查遇到错误，继续等待:', error.message);
+                }
+            }, 2000); // 🔧 增加检查间隔到2秒
             // 窗口关闭时取消登录
             authWindow.on('closed', () => {
                 clearInterval(checkSessionInterval);
                 clearTimeout(timeoutId);
-                if (!resolve.toString().includes('called')) { // 简单检查是否已经resolved
+                if (!isHandled) { // 使用isHandled标记避免重复处理
                     console.log('🚪 登录窗口被用户关闭');
                     this.emit('login-cancelled');
+                    isHandled = true;
                     reject(new Error('登录被取消'));
                 }
             });
@@ -644,71 +675,97 @@ class SimpleAuthManager extends events_1.EventEmitter {
         });
     }
     /**
-     * 🆕 处理OAuth回调（适配增强认证）
+     * 🆕 处理OAuth回调（适配增强认证） - 修复版本
      */
     handleOAuthCallback(url, authWindow, resolve, reject, timeoutId) {
         console.log('🔍 检查URL:', url);
-        // 🆕 检查是否登录成功（检查多种可能的成功标志）
-        const isLoginSuccess = url.includes('localhost:3000') && !url.includes('/login');
-        const isBackendSuccess = url.includes('localhost:3001') && !url.includes('/login');
-        if (isLoginSuccess || isBackendSuccess) {
-            console.log('✅ 检测到登录成功，页面URL:', url);
-            // 从localStorage获取sessionId
-            authWindow.webContents.executeJavaScript(`
-        localStorage.getItem('sessionId')
-      `).then((sessionId) => {
-                if (sessionId) {
-                    console.log('✅ 从Web端获取到sessionId');
-                    if (timeoutId)
-                        clearTimeout(timeoutId);
-                    authWindow.close();
-                    resolve(sessionId);
-                }
-                else {
-                    console.log('❌ 未能从Web端获取sessionId，尝试等待...');
-                    // 等待一下再重试
-                    setTimeout(() => {
-                        authWindow.webContents.executeJavaScript(`
-              localStorage.getItem('sessionId')
-            `).then((retrySessionId) => {
-                            if (retrySessionId) {
-                                console.log('✅ 重试成功，获取到sessionId');
-                                if (timeoutId)
-                                    clearTimeout(timeoutId);
-                                authWindow.close();
-                                resolve(retrySessionId);
-                            }
-                            else {
-                                console.log('❌ 重试失败，无法获取sessionId');
-                                if (timeoutId)
-                                    clearTimeout(timeoutId);
-                                authWindow.close();
-                                reject(new Error('无法获取登录会话'));
-                            }
-                        }).catch((error) => {
-                            console.error('❌ 重试获取sessionId失败:', error);
-                            if (timeoutId)
-                                clearTimeout(timeoutId);
-                            authWindow.close();
-                            reject(new Error('获取登录会话失败'));
-                        });
-                    }, 2000);
-                }
-            }).catch((error) => {
-                console.error('❌ 获取sessionId失败:', error);
-                if (timeoutId)
-                    clearTimeout(timeoutId);
-                authWindow.close();
-                reject(new Error('获取登录会话失败'));
-            });
+        // 🔧 更精确的成功页面判断
+        const isLoginSuccess = (url.includes('/dashboard') ||
+            url.includes('/success') ||
+            url.includes('?auth=success') ||
+            url.includes('#auth-success') ||
+            url.includes('/auth-success') ||
+            (url.includes('localhost:3000') && !url.includes('/login') && !url.includes('/register')));
+        const isBackendRedirect = url.includes('/api/auth/callback');
+        if (isLoginSuccess || isBackendRedirect) {
+            console.log('✅ 检测到可能的登录成功页面:', url);
+            // 🔧 使用新的验证方法
+            this.validateAndGetSessionId(authWindow, resolve, reject, timeoutId);
         }
-        // 检查是否是登录错误页面
-        else if (url.includes('/login') && url.includes('error')) {
-            console.error('❌ OAuth登录失败');
+        else if (url.includes('/login') && (url.includes('error') || url.includes('failed'))) {
+            console.error('❌ 检测到登录失败页面:', url);
             if (timeoutId)
                 clearTimeout(timeoutId);
             authWindow.close();
-            reject(new Error('OAuth登录失败'));
+            reject(new Error('登录失败'));
+        }
+        // 🔧 忽略其他URL变化，避免误判
+    }
+    /**
+     * 🔧 新增：验证并获取SessionId
+     */
+    async validateAndGetSessionId(authWindow, resolve, reject, timeoutId) {
+        try {
+            console.log('🔍 开始验证SessionId...');
+            // 等待一下，确保页面完全加载
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            // 获取sessionId
+            const sessionId = await authWindow.webContents.executeJavaScript(`
+        localStorage.getItem('sessionId')
+      `);
+            console.log('🔍 获取到的sessionId:', sessionId ? `${sessionId.substring(0, 10)}...` : 'null');
+            if (sessionId && sessionId.length > 10) { // 基本长度检查
+                console.log('✅ SessionId格式检查通过，开始API验证...');
+                // 🔧 验证sessionId是否真的有效
+                const isValid = await this.quickValidateSessionId(sessionId);
+                if (isValid) {
+                    console.log('✅ SessionId API验证成功');
+                    if (timeoutId)
+                        clearTimeout(timeoutId);
+                    // 延迟关闭，让用户看到成功提示
+                    setTimeout(() => {
+                        if (!authWindow.isDestroyed()) {
+                            authWindow.close();
+                        }
+                        resolve(sessionId);
+                    }, 1500);
+                }
+                else {
+                    console.log('❌ SessionId API验证失败，继续等待用户完成登录...');
+                    // 不关闭窗口，继续等待
+                }
+            }
+            else {
+                console.log('❌ SessionId无效或为空，继续等待用户完成登录...');
+                // 不关闭窗口，继续等待
+            }
+        }
+        catch (error) {
+            console.error('❌ 验证SessionId过程中出错:', error);
+            // 不要立即关闭窗口，给用户更多时间
+        }
+    }
+    /**
+     * 🔧 新增：快速验证sessionId有效性
+     */
+    async quickValidateSessionId(sessionId) {
+        try {
+            console.log('🔍 快速验证SessionId...');
+            const tempClient = axios_1.default.create({
+                baseURL: this.apiBaseUrl,
+                timeout: 5000,
+                headers: {
+                    'X-Session-Id': sessionId
+                }
+            });
+            const response = await tempClient.get('/api/session_status');
+            const isValid = response.data && response.data.success && response.data.user;
+            console.log('🔍 快速验证结果:', isValid ? '有效' : '无效');
+            return isValid;
+        }
+        catch (error) {
+            console.log('🔍 快速验证失败:', error.message);
+            return false;
         }
     }
     /**
