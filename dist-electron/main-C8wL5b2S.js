@@ -8777,14 +8777,14 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     return "登录失败，请稍后重试";
   }
   /**
-   * 核心方法2：登出
+   * 🆕 核心方法2：登出（适配增强认证）
    */
   async logout() {
     try {
       console.log("🚪 正在登出...");
       if (this.token) {
         try {
-          await this.apiClient.post("/api/auth/logout");
+          await this.apiClient.post("/api/logout");
         } catch (error2) {
           console.warn("服务器登出请求失败，但继续本地登出");
         }
@@ -8842,22 +8842,33 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
    * 刷新用户配置（带缓存机制）
    */
   async refreshUserConfig(forceRefresh = false) {
+    var _a2;
     if (!this.token || !this.user) {
+      console.log("❌ 无法刷新配置：缺少token或用户信息");
       return null;
     }
     const now = Date.now();
-    const cacheValid = now - this.configCacheExpiry < 5 * 60 * 1e3;
+    const cacheAge = now - this.configCacheExpiry;
+    const cacheValid = cacheAge < 5 * 60 * 1e3;
+    console.log(`📋 配置缓存状态检查:`);
+    console.log(`  - 强制刷新: ${forceRefresh}`);
+    console.log(`  - 缓存年龄: ${Math.round(cacheAge / 1e3)}秒`);
+    console.log(`  - 缓存有效: ${cacheValid}`);
+    console.log(`  - 当前有配置: ${!!this.userConfig}`);
     if (!forceRefresh && cacheValid && this.userConfig) {
       console.log("📋 使用缓存的用户配置");
+      console.log(`📋 缓存配置详情: multipleChoiceModel=${this.userConfig.multipleChoiceModel}`);
       return this.userConfig;
     }
+    console.log(`🔄 开始${forceRefresh ? "强制" : "自动"}刷新配置...`);
     try {
       await this.fetchUserConfig();
       this.configCacheExpiry = now;
-      console.log("📋 配置已刷新并缓存");
+      console.log("✅ 配置已刷新并缓存");
+      console.log(`📋 新配置详情: multipleChoiceModel=${(_a2 = this.userConfig) == null ? void 0 : _a2.multipleChoiceModel}`);
       return this.userConfig;
     } catch (error2) {
-      console.error("刷新用户配置失败:", error2);
+      console.error("❌ 刷新用户配置失败:", error2);
       if (this.userConfig) {
         console.log("📋 刷新失败，使用缓存配置");
         return this.userConfig;
@@ -8900,16 +8911,17 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * 检查Web端会话状态
+   * 🆕 检查Web端会话状态（适配增强认证）
    */
   async checkWebSession() {
     try {
-      const response = await this.apiClient.get("/api/auth/web-session-status");
-      if (response.data.hasActiveSession) {
-        console.log("✅ 检测到活跃的Web会话:", response.data.user.username);
+      console.log("🔍 检查共享会话文件...");
+      this.loadTokenFromSharedSession();
+      if (this.token) {
+        console.log("✅ 从共享会话文件找到sessionId");
         return true;
       } else {
-        console.log("❌ 没有活跃的Web会话");
+        console.log("❌ 共享会话文件中没有sessionId");
         return false;
       }
     } catch (error2) {
@@ -8959,9 +8971,23 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     try {
       const fs2 = require("fs");
       const path2 = require("path");
-      const sharedSessionPath = path2.join(process.cwd(), "shared-session.json");
-      console.log("🔍 检查共享会话文件:", sharedSessionPath);
-      if (!fs2.existsSync(sharedSessionPath)) {
+      const possiblePaths = [
+        path2.join(process.cwd(), "shared-session.json"),
+        path2.join(__dirname, "..", "shared-session.json"),
+        path2.join(__dirname, "..", "..", "shared-session.json"),
+        path2.join(process.resourcesPath || "", "..", "shared-session.json")
+      ];
+      let sharedSessionPath = null;
+      for (const possiblePath of possiblePaths) {
+        console.log("🔍 检查路径:", possiblePath);
+        if (fs2.existsSync(possiblePath)) {
+          sharedSessionPath = possiblePath;
+          console.log("✅ 找到共享会话文件:", sharedSessionPath);
+          break;
+        }
+      }
+      console.log("🔍 最终使用的共享会话文件路径:", sharedSessionPath);
+      if (!sharedSessionPath) {
         console.log("📋 未找到共享会话文件");
         return;
       }
@@ -8978,18 +9004,21 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
         fs2.unlinkSync(sharedSessionPath);
         return;
       }
-      if (sharedSession.accessToken) {
-        this.token = sharedSession.accessToken;
+      if (sharedSession.sessionId) {
+        this.token = sharedSession.sessionId;
         this.user = sharedSession.user;
         this.setupApiClient();
         configHelper.updateConfig({ authToken: this.token });
-        console.log("✅ 从共享会话成功加载token");
+        console.log("✅ 从共享会话成功加载sessionId");
         console.log("👤 用户:", (_b = this.user) == null ? void 0 : _b.username);
-        console.log("📋 Token长度:", this.token.length);
-        console.log("📋 Token前缀:", this.token.substring(0, 20) + "...");
+        console.log("📋 SessionId长度:", this.token.length);
+        console.log("📋 SessionId前缀:", this.token.substring(0, 10) + "...");
         this.emit("authenticated", this.user);
       } else {
-        console.log("❌ 共享会话文件中没有accessToken");
+        console.log("❌ 共享会话文件中没有sessionId");
+        if (sharedSession.accessToken) {
+          console.log("⚠️ 发现旧的accessToken，但增强认证需要sessionId");
+        }
       }
     } catch (error2) {
       console.error("❌ 从共享会话加载token失败:", error2);
@@ -9017,57 +9046,69 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * 设置API客户端的认证头
+   * 🆕 设置API客户端的认证头（适配增强认证）
    */
   setupApiClient() {
     if (this.token) {
-      this.apiClient.defaults.headers.common["Authorization"] = `Bearer ${this.token}`;
+      this.apiClient.defaults.headers.common["X-Session-Id"] = this.token;
+      delete this.apiClient.defaults.headers.common["Authorization"];
     }
   }
   /**
-   * 验证token有效性
+   * 🆕 验证sessionId有效性（适配增强认证）
    */
   async verifyToken() {
     if (!this.token) {
-      throw new Error("没有token");
+      throw new Error("没有sessionId");
     }
-    console.log("🔍 开始验证token...");
-    console.log("🔑 Token长度:", this.token.length);
-    console.log("🔑 Token前缀:", this.token.substring(0, 20) + "...");
-    console.log("🌐 API地址:", `${this.apiBaseUrl}/api/auth/me`);
-    console.log("📤 请求头:", this.apiClient.defaults.headers.common["Authorization"]);
+    console.log("🔍 开始验证sessionId...");
+    console.log("🔑 SessionId长度:", this.token.length);
+    console.log("🔑 SessionId前缀:", this.token.substring(0, 10) + "...");
+    console.log("🌐 API地址:", `${this.apiBaseUrl}/api/session_status`);
+    console.log("📤 请求头:", this.apiClient.defaults.headers.common["X-Session-Id"]);
     try {
-      const response = await this.apiClient.get("/api/auth/me");
+      const response = await this.apiClient.get("/api/session_status");
       console.log("📥 响应状态:", response.status);
       console.log("📥 响应数据:", response.data);
-      if (response.data && response.data.id) {
-        this.user = response.data;
-        console.log("✅ Token验证成功");
+      if (response.data && response.data.success && response.data.user) {
+        this.user = response.data.user;
+        console.log("✅ SessionId验证成功");
       } else {
         console.log("❌ 响应数据格式不正确:", response.data);
-        throw new Error("Token验证失败 - 响应数据无效");
+        throw new Error("SessionId验证失败 - 响应数据无效");
       }
     } catch (error2) {
-      console.log("❌ Token验证请求失败:");
+      console.log("❌ SessionId验证请求失败:");
       console.log("  - 错误类型:", error2.constructor.name);
       console.log("  - 错误消息:", error2.message);
       if (error2.response) {
         console.log("  - 响应状态:", error2.response.status);
         console.log("  - 响应数据:", error2.response.data);
+        if (error2.response.status === 401) {
+          console.log("🔄 SessionId已过期，需要重新登录");
+          this.clearAuthData();
+        }
       } else if (error2.request) {
         console.log("  - 请求失败，无响应");
         console.log("  - 请求详情:", error2.request);
       }
-      throw new Error(`Token验证失败: ${error2.message}`);
+      throw new Error(`SessionId验证失败: ${error2.message}`);
     }
   }
   /**
-   * 获取用户信息
+   * 🆕 增强认证不支持刷新，此方法已废弃
+   */
+  async tryRefreshToken() {
+    console.log("🚫 增强认证不支持token刷新，需要重新登录");
+    return false;
+  }
+  /**
+   * 🆕 获取用户信息（适配增强认证）
    */
   async fetchUserInfo() {
-    const response = await this.apiClient.get("/api/auth/me");
-    if (response.data && response.data.id) {
-      this.user = response.data;
+    const response = await this.apiClient.get("/api/session_status");
+    if (response.data && response.data.success && response.data.user) {
+      this.user = response.data.user;
       console.log(`📋 获取用户信息: ${this.user.username}`);
     } else {
       throw new Error("获取用户信息失败");
@@ -9080,12 +9121,18 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     if (!this.user) {
       throw new Error("没有用户信息");
     }
-    console.log("📋 获取用户配置...");
+    console.log("📋 正在从后端获取用户配置...");
+    console.log("🌐 请求URL:", `${this.apiBaseUrl}/api/config`);
     try {
       const response = await this.apiClient.get("/api/config");
+      console.log("📥 后端配置响应状态:", response.status);
+      console.log("📥 后端返回的原始配置数据:", JSON.stringify(response.data, null, 2));
       if (response.data) {
         this.userConfig = {
-          aiModel: response.data.aiModel || "claude-3-5-sonnet-20241022",
+          // 兼容新旧模型字段
+          aiModel: response.data.aiModel || response.data.programmingModel || "claude-3-5-sonnet-20241022",
+          programmingModel: response.data.programmingModel || response.data.aiModel || "claude-3-5-sonnet-20241022",
+          multipleChoiceModel: response.data.multipleChoiceModel || response.data.aiModel || "claude-3-5-sonnet-20241022",
           language: response.data.language || "python",
           theme: response.data.theme || "system",
           shortcuts: response.data.shortcuts || {
@@ -9105,7 +9152,11 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
             compressionLevel: 80
           }
         };
-        console.log("✅ 用户配置获取成功:", this.userConfig.aiModel, this.userConfig.language);
+        console.log("✅ 用户配置构建成功:");
+        console.log(`  - aiModel: ${this.userConfig.aiModel}`);
+        console.log(`  - programmingModel: ${this.userConfig.programmingModel}`);
+        console.log(`  - multipleChoiceModel: ${this.userConfig.multipleChoiceModel}`);
+        console.log(`  - language: ${this.userConfig.language}`);
       } else {
         throw new Error("API返回空数据");
       }
@@ -9114,6 +9165,8 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
       console.log("🔧 使用默认配置...");
       this.userConfig = {
         aiModel: "claude-3-5-sonnet-20241022",
+        programmingModel: "claude-3-5-sonnet-20241022",
+        multipleChoiceModel: "claude-3-5-sonnet-20241022",
         language: "python",
         theme: "system",
         shortcuts: {
@@ -9154,7 +9207,7 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
           contextIsolation: true
         }
       });
-      const loginUrl = `${this.apiBaseUrl.replace("3001", "3000")}/login?mode=oauth&client=electron`;
+      const loginUrl = `${this.apiBaseUrl}/login?mode=oauth&client=electron`;
       console.log("🌐 打开登录窗口:", loginUrl);
       authWindow.loadURL(loginUrl);
       const timeoutId = setTimeout(() => {
@@ -9168,7 +9221,26 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
       };
       authWindow.webContents.on("will-navigate", handleNavigation);
       authWindow.webContents.on("did-navigate", handleNavigation);
+      const checkSessionInterval = setInterval(() => {
+        if (authWindow.isDestroyed()) {
+          clearInterval(checkSessionInterval);
+          return;
+        }
+        authWindow.webContents.executeJavaScript(`
+          localStorage.getItem('sessionId')
+        `).then((sessionId) => {
+          if (sessionId) {
+            console.log("✅ 定期检查发现登录成功，获取到sessionId");
+            clearInterval(checkSessionInterval);
+            if (timeoutId) clearTimeout(timeoutId);
+            authWindow.close();
+            resolve(sessionId);
+          }
+        }).catch((error2) => {
+        });
+      }, 500);
       authWindow.on("closed", () => {
+        clearInterval(checkSessionInterval);
         clearTimeout(timeoutId);
         if (!resolve.toString().includes("called")) {
           console.log("🚪 登录窗口被用户关闭");
@@ -9183,33 +9255,55 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     });
   }
   /**
-   * 处理OAuth回调（内部方法）
+   * 🆕 处理OAuth回调（适配增强认证）
    */
   handleOAuthCallback(url, authWindow, resolve, reject, timeoutId) {
-    if (url.includes("/auth/success")) {
-      try {
-        const urlObj = new URL(url);
-        const token = urlObj.searchParams.get("token");
-        if (token) {
-          console.log("✅ OAuth登录成功，获取到token");
+    console.log("🔍 检查URL:", url);
+    const isLoginSuccess = url.includes("localhost:3000") && !url.includes("/login");
+    const isBackendSuccess = url.includes("localhost:3001") && !url.includes("/login");
+    if (isLoginSuccess || isBackendSuccess) {
+      console.log("✅ 检测到登录成功，页面URL:", url);
+      authWindow.webContents.executeJavaScript(`
+        localStorage.getItem('sessionId')
+      `).then((sessionId) => {
+        if (sessionId) {
+          console.log("✅ 从Web端获取到sessionId");
           if (timeoutId) clearTimeout(timeoutId);
           authWindow.close();
-          setTimeout(() => {
-            console.log("🔄 登录成功，刷新共享会话状态...");
-            this.loadTokenFromSharedSession();
-          }, 1e3);
-          resolve(token);
+          resolve(sessionId);
         } else {
-          throw new Error("回调URL中没有token");
+          console.log("❌ 未能从Web端获取sessionId，尝试等待...");
+          setTimeout(() => {
+            authWindow.webContents.executeJavaScript(`
+              localStorage.getItem('sessionId')
+            `).then((retrySessionId) => {
+              if (retrySessionId) {
+                console.log("✅ 重试成功，获取到sessionId");
+                if (timeoutId) clearTimeout(timeoutId);
+                authWindow.close();
+                resolve(retrySessionId);
+              } else {
+                console.log("❌ 重试失败，无法获取sessionId");
+                if (timeoutId) clearTimeout(timeoutId);
+                authWindow.close();
+                reject(new Error("无法获取登录会话"));
+              }
+            }).catch((error2) => {
+              console.error("❌ 重试获取sessionId失败:", error2);
+              if (timeoutId) clearTimeout(timeoutId);
+              authWindow.close();
+              reject(new Error("获取登录会话失败"));
+            });
+          }, 2e3);
         }
-      } catch (error2) {
-        console.error("解析OAuth回调失败:", error2);
+      }).catch((error2) => {
+        console.error("❌ 获取sessionId失败:", error2);
         if (timeoutId) clearTimeout(timeoutId);
         authWindow.close();
-        reject(new Error("OAuth回调解析失败"));
-      }
-    } else if (url.includes("/auth/error")) {
-      console.error("OAuth登录失败");
+        reject(new Error("获取登录会话失败"));
+      });
+    } else if (url.includes("/login") && url.includes("error")) {
+      console.error("❌ OAuth登录失败");
       if (timeoutId) clearTimeout(timeoutId);
       authWindow.close();
       reject(new Error("OAuth登录失败"));
@@ -9228,14 +9322,26 @@ class SimpleAuthManager extends require$$0$1.EventEmitter {
     }
   }
   /**
-   * 清除认证数据
+   * 🆕 清除认证数据（适配增强认证）
    */
   clearAuthData() {
     this.token = null;
     this.user = null;
     this.userConfig = null;
     delete this.apiClient.defaults.headers.common["Authorization"];
+    delete this.apiClient.defaults.headers.common["X-Session-Id"];
     configHelper.updateConfig({ authToken: null });
+    try {
+      const path2 = require("path");
+      const fs2 = require("fs");
+      const sharedSessionPath = path2.join(__dirname, "..", "shared-session.json");
+      if (fs2.existsSync(sharedSessionPath)) {
+        fs2.unlinkSync(sharedSessionPath);
+        console.log("🗑️ 共享会话文件已删除");
+      }
+    } catch (error2) {
+      console.warn("⚠️ 清除共享会话文件失败:", error2);
+    }
     console.log("🗑️ 认证数据已清除");
   }
 }
@@ -9469,7 +9575,7 @@ function initializeIpcHandlers(deps) {
   });
   require$$1$1.ipcMain.handle("web-check-connection", async () => {
     try {
-      const connected = await simpleAuthManager.isAuthenticated();
+      const connected = await simpleAuthManager.checkConnection();
       return { connected };
     } catch (error2) {
       console.error("Failed to check web connection:", error2);
@@ -16146,7 +16252,7 @@ class MultipartBody {
 }
 let fileFromPathWarned = false;
 async function fileFromPath(path2, ...args) {
-  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-BgQdg1Lk.js"));
+  const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => require("./fileFromPath-DfOfktr_.js"));
   if (!fileFromPathWarned) {
     console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path2)}) instead`);
     fileFromPathWarned = true;
@@ -21456,16 +21562,31 @@ class SimpleProcessingHelper {
     const mainWindow = this.deps.getMainWindow();
     if (!mainWindow) return;
     console.log("🚀 开始AI处理流程...");
+    console.log("🔐 执行认证检查...");
     const isAuthenticated = await simpleAuthManager.isAuthenticated();
+    console.log("🔐 认证检查结果:", isAuthenticated);
     if (!isAuthenticated) {
       console.log("❌ 用户未认证，必须登录");
       await this.showLoginDialog();
       return;
     }
+    console.log("👤 获取用户信息...");
     const user = simpleAuthManager.getCurrentUser();
+    console.log("👤 用户信息:", user ? `${user.username} (${user.id})` : "null");
+    console.log("⚙️ 获取用户配置...");
+    console.log("🔄 强制刷新用户配置以获取最新设置...");
+    await simpleAuthManager.refreshUserConfig(true);
     const userConfig = simpleAuthManager.getUserConfig();
+    console.log("⚙️ 用户配置:", userConfig ? {
+      aiModel: userConfig.aiModel,
+      programmingModel: userConfig.programmingModel,
+      multipleChoiceModel: userConfig.multipleChoiceModel,
+      language: userConfig.language
+    } : "null");
     if (!user || !userConfig) {
       console.log("❌ 用户信息或配置获取失败，需要重新登录");
+      console.log("  - 用户信息存在:", !!user);
+      console.log("  - 用户配置存在:", !!userConfig);
       await this.showLoginDialog();
       return;
     }
@@ -21591,7 +21712,7 @@ class SimpleProcessingHelper {
       console.log("✅ AI处理成功");
       mainWindow.webContents.send(
         this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
-        result.data
+        "data" in result ? result.data : null
       );
       this.deps.setView("solutions");
     } catch (error2) {
@@ -21690,77 +21811,37 @@ class SimpleProcessingHelper {
       }
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
-          message: "正在从截图中分析题目...",
-          progress: 20
+          message: "正在识别题目类型...",
+          progress: 10
         });
       }
       const imageDataList = screenshots.map((screenshot2) => screenshot2.data);
-      const extractionModel = userConfig.aiModel || "claude-3-5-sonnet-20241022";
-      const messages = [
-        {
-          role: "system",
-          content: '你是一个编程题目解释助手。请严格按照要求分析编程题目的截图，提取所有相关信息。\n\n重要要求：\n1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记\n2. JSON必须包含以下字段：problem_statement, constraints, example_input, example_output\n3. 如果某个字段无法从截图中获取，请设置为空字符串\n4. 确保返回的是有效的JSON格式\n\n示例输出格式：\n{"problem_statement":"题目描述","constraints":"约束条件","example_input":"示例输入","example_output":"示例输出"}'
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `从这些截图中提取编程题目详情、输入描述、输出描述以及示例，以严格的JSON格式返回。我们将使用${language}语言来解决这个问题。请确保返回的是有效的JSON格式，不要包含任何其他文本。`
-            },
-            ...imageDataList.map((data) => ({
-              type: "image_url",
-              image_url: { url: `data:image/png;base64,${data}` }
-            }))
-          ]
-        }
-      ];
-      const extractionResponse = await this.ismaqueClient.chat.completions.create({
-        model: extractionModel,
-        messages,
-        max_tokens: 4e3,
-        temperature: 0.1
-      }, { signal });
-      let problemInfo;
-      try {
-        const responseText = extractionResponse.choices[0].message.content;
-        console.log("AI提取响应:", responseText);
-        let jsonText = responseText.trim();
-        jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-        const jsonStart = jsonText.indexOf("{");
-        const jsonEnd = jsonText.lastIndexOf("}");
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-          jsonText = jsonText.substring(jsonStart, jsonEnd + 1);
-        }
-        problemInfo = JSON.parse(jsonText);
-        problemInfo = {
-          problem_statement: problemInfo.problem_statement || "无法从截图中提取题目描述",
-          constraints: problemInfo.constraints || "无法从截图中提取约束条件",
-          example_input: problemInfo.example_input || "无法从截图中提取示例输入",
-          example_output: problemInfo.example_output || "无法从截图中提取示例输出"
-        };
-        console.log("✅ 题目信息提取成功:", problemInfo);
-      } catch (error2) {
-        console.error("解析AI响应失败:", error2);
-        return {
-          success: false,
-          error: `解析题目信息失败：${error2.message}`
-        };
+      const questionType = await this.identifyQuestionType(imageDataList, userConfig, signal);
+      if (mainWindow) {
+        mainWindow.webContents.send("processing-status", {
+          message: `检测到${questionType === "programming" ? "编程题" : "选择题"}，正在提取题目信息...`,
+          progress: 20
+        });
       }
+      const problemInfo = await this.extractProblemInfo(imageDataList, questionType, userConfig, language, signal);
+      if (!problemInfo.success) {
+        return problemInfo;
+      }
+      console.log("✅ 题目信息提取成功:", problemInfo.data);
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
           message: "正在生成解决方案...",
           progress: 60
         });
       }
-      this.deps.setProblemInfo(problemInfo);
+      this.deps.setProblemInfo(problemInfo.data);
       if (mainWindow) {
         mainWindow.webContents.send(
           this.deps.PROCESSING_EVENTS.PROBLEM_EXTRACTED,
-          problemInfo
+          problemInfo.data
         );
       }
-      const solutionsResult = await this.generateSolutions(userConfig, language, problemInfo, signal);
+      const solutionsResult = await this.generateSolutions(userConfig, language, problemInfo.data, signal);
       if (solutionsResult.success) {
         this.screenshotHelper.clearExtraScreenshotQueue();
         if (mainWindow) {
@@ -21798,8 +21879,28 @@ class SimpleProcessingHelper {
           error: "AI客户端未初始化"
         };
       }
-      const solutionModel = userConfig.aiModel || "claude-3-5-sonnet-20241022";
-      const promptText = `
+      if (problemInfo.type === "multiple_choice") {
+        return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal);
+      } else {
+        return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal);
+      }
+    } catch (error2) {
+      if (error2.name === "AbortError") {
+        return {
+          success: false,
+          error: "处理已被用户取消"
+        };
+      }
+      console.error("生成解决方案错误:", error2);
+      return { success: false, error: error2.message || "生成解决方案失败" };
+    }
+  }
+  /**
+   * 生成编程题解决方案
+   */
+  async generateProgrammingSolutions(userConfig, language, problemInfo, signal) {
+    const solutionModel = userConfig.programmingModel || userConfig.aiModel || "claude-3-5-sonnet-20241022";
+    const promptText = `
 为以下编程题目生成详细的解决方案：
 
 题目描述：
@@ -21830,60 +21931,164 @@ ${problemInfo.example_output || "未提供示例输出。"}
 - 代码必须是完整的、可以直接复制粘贴到在线判题系统运行的格式
 - 包含适当的导入语句和必要的库引用
 `;
-      const solutionResponse = await this.ismaqueClient.chat.completions.create({
-        model: solutionModel,
-        messages: [
-          { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
-          { role: "user", content: promptText }
-        ],
-        max_tokens: 4e3,
-        temperature: 0.2
-      }, { signal });
-      const responseContent = solutionResponse.choices[0].message.content;
-      const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/);
-      const code = codeMatch ? codeMatch[1].trim() : responseContent;
-      const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i;
-      const thoughtsMatch = responseContent.match(thoughtsRegex);
-      let thoughts = [];
-      if (thoughtsMatch && thoughtsMatch[1]) {
-        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g);
-        if (bulletPoints) {
-          thoughts = bulletPoints.map(
-            (point) => point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, "").trim()
-          ).filter(Boolean);
-        } else {
-          thoughts = thoughtsMatch[1].split("\n").map((line) => line.trim()).filter(Boolean);
-        }
+    const solutionResponse = await this.ismaqueClient.chat.completions.create({
+      model: solutionModel,
+      messages: [
+        { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
+        { role: "user", content: promptText }
+      ],
+      max_tokens: 4e3,
+      temperature: 0.2
+    }, { signal });
+    const responseContent = solutionResponse.choices[0].message.content;
+    const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/);
+    const code = codeMatch ? codeMatch[1].trim() : responseContent;
+    const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i;
+    const thoughtsMatch = responseContent.match(thoughtsRegex);
+    let thoughts = [];
+    if (thoughtsMatch && thoughtsMatch[1]) {
+      const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g);
+      if (bulletPoints) {
+        thoughts = bulletPoints.map(
+          (point) => point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, "").trim()
+        ).filter(Boolean);
+      } else {
+        thoughts = thoughtsMatch[1].split("\n").map((line) => line.trim()).filter(Boolean);
       }
-      const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i;
-      const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i;
-      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。";
-      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。";
-      const timeMatch = responseContent.match(timeComplexityPattern);
-      if (timeMatch && timeMatch[1]) {
-        timeComplexity = timeMatch[1].trim();
-      }
-      const spaceMatch = responseContent.match(spaceComplexityPattern);
-      if (spaceMatch && spaceMatch[1]) {
-        spaceComplexity = spaceMatch[1].trim();
-      }
-      const formattedResponse = {
-        code,
-        thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
-        time_complexity: timeComplexity,
-        space_complexity: spaceComplexity
-      };
-      return { success: true, data: formattedResponse };
-    } catch (error2) {
-      if (error2.name === "AbortError") {
-        return {
-          success: false,
-          error: "处理已被用户取消"
-        };
-      }
-      console.error("生成解决方案错误:", error2);
-      return { success: false, error: error2.message || "生成解决方案失败" };
     }
+    const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i;
+    const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i;
+    let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。";
+    let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。";
+    const timeMatch = responseContent.match(timeComplexityPattern);
+    if (timeMatch && timeMatch[1]) {
+      timeComplexity = timeMatch[1].trim();
+    }
+    const spaceMatch = responseContent.match(spaceComplexityPattern);
+    if (spaceMatch && spaceMatch[1]) {
+      spaceComplexity = spaceMatch[1].trim();
+    }
+    const formattedResponse = {
+      type: "programming",
+      code,
+      thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
+      time_complexity: timeComplexity,
+      space_complexity: spaceComplexity
+    };
+    return { success: true, data: formattedResponse };
+  }
+  /**
+   * 生成选择题解决方案（支持多题）
+   */
+  async generateMultipleChoiceSolutions(userConfig, problemInfo, signal) {
+    var _a2;
+    console.log("🎯 开始生成选择题解决方案...");
+    const solutionModel = userConfig.multipleChoiceModel || userConfig.aiModel || "claude-3-5-sonnet-20241022";
+    console.log("🤖 使用模型:", solutionModel);
+    const questions = problemInfo.multiple_choice_questions || [];
+    console.log("📝 处理题目数量:", questions.length);
+    if (questions.length === 0) {
+      console.log("❌ 没有找到选择题题目");
+      return {
+        success: false,
+        error: "没有找到选择题题目"
+      };
+    }
+    const questionsText = questions.map((q2, index) => `
+题目${q2.question_number || index + 1}：
+${q2.question_text}
+
+选项：
+${q2.options.join("\n")}
+`).join("\n---\n");
+    const promptText = `
+请分析以下选择题并给出答案：
+
+${questionsText}
+
+**要求：**
+1. 对每道题进行分析并给出答案
+2. 提供解题思路和推理过程
+3. 答案格式：题号 - 答案选项（如：1 - A）
+
+请按照以下格式回复：
+
+**答案：**
+题目1 - A
+题目2 - B
+...
+
+**解题思路：**
+1. 题目1分析：...
+2. 题目2分析：...
+...
+
+**整体思路：**
+- 关键点1
+- 关键点2
+...
+`;
+    console.log("🔄 发送选择题请求到AI...");
+    const solutionResponse = await this.ismaqueClient.chat.completions.create({
+      model: solutionModel,
+      messages: [
+        { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。" },
+        { role: "user", content: promptText }
+      ],
+      max_tokens: 4e3,
+      temperature: 0.1
+    }, { signal });
+    const responseContent = solutionResponse.choices[0].message.content;
+    console.log("✅ 选择题AI响应完成");
+    console.log("📄 AI回复内容:", (responseContent == null ? void 0 : responseContent.substring(0, 500)) + "...");
+    console.log("🔍 开始解析选择题答案...");
+    const answers = [];
+    const answerPatterns = [
+      /题目(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
+      /(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
+      /答案[：:]\s*([A-Z])/g,
+      /选择[：:]?\s*([A-Z])/g
+    ];
+    let foundAnswers = false;
+    for (const pattern of answerPatterns) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(responseContent)) !== null) {
+        const questionNum = match[1] || ((_a2 = questions[0]) == null ? void 0 : _a2.question_number) || "1";
+        const answer = match[match.length - 1];
+        answers.push({
+          question_number: questionNum,
+          answer,
+          reasoning: `题目${questionNum}的解答分析`
+        });
+        foundAnswers = true;
+      }
+      if (foundAnswers) break;
+    }
+    console.log("🎯 解析到的答案数量:", answers.length);
+    console.log("📋 答案详情:", answers);
+    const thoughtsRegex = /(?:整体思路|解题思路|思路|关键点)[:：]([\s\S]*?)(?:$)/i;
+    const thoughtsMatch = responseContent.match(thoughtsRegex);
+    let thoughts = [];
+    if (thoughtsMatch && thoughtsMatch[1]) {
+      const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g);
+      if (bulletPoints) {
+        thoughts = bulletPoints.map(
+          (point) => point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, "").trim()
+        ).filter(Boolean);
+      } else {
+        thoughts = thoughtsMatch[1].split("\n").map((line) => line.trim()).filter(Boolean);
+      }
+    }
+    const formattedResponse = {
+      type: "multiple_choice",
+      answers,
+      thoughts: thoughts.length > 0 ? thoughts : ["选择题分析和推理过程"]
+      // time_complexity 和 space_complexity 对选择题留空
+    };
+    console.log("✅ 选择题解决方案生成完成");
+    console.log("📊 最终响应:", JSON.stringify(formattedResponse, null, 2));
+    return { success: true, data: formattedResponse };
   }
   /**
    * 处理额外队列截图（调试功能）
@@ -21992,7 +22197,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
           error: "AI客户端未初始化"
         };
       }
-      const debuggingModel = userConfig.aiModel || "claude-3-5-sonnet-20241022";
+      const debuggingModel = "gemini-2.5-flash-preview-04-17";
+      console.log("🔍 使用固定模型进行调试截图处理:", debuggingModel);
       const messages = [
         {
           role: "system",
@@ -22107,6 +22313,241 @@ ${problemInfo.example_output || "未提供示例输出。"}
   isAuthError(error2) {
     const authErrorKeywords = ["401", "unauthorized", "invalid token", "authentication failed", "认证失败", "登录失败"];
     return authErrorKeywords.some((keyword) => error2.toLowerCase().includes(keyword.toLowerCase()));
+  }
+  /**
+   * 识别题目类型（编程题 vs 选择题）
+   */
+  async identifyQuestionType(imageDataList, userConfig, signal) {
+    try {
+      if (!this.ismaqueClient) {
+        throw new Error("AI客户端未初始化");
+      }
+      const model = "gemini-2.5-flash-preview-04-17";
+      console.log("🔍 使用固定模型进行截图识别:", model);
+      const messages = [
+        {
+          role: "system",
+          content: `你是一个题目类型识别专家。请分析截图中的题目类型。
+
+**重要要求：**
+1. 只返回一个单词：programming 或 multiple_choice
+2. 不要任何解释或额外文字
+3. programming = 编程题（需要写代码的题目）
+4. multiple_choice = 选择题（有A、B、C、D等选项的题目）
+
+**判断标准：**
+- 如果看到选项A、B、C、D或类似的选择项 → multiple_choice
+- 如果看到"输入格式"、"输出格式"、"示例"等编程题特征 → programming
+- 如果看到代码输入输出要求 → programming
+- 如果看到多个选择项排列 → multiple_choice`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "请识别这些截图中的题目类型，只返回：programming 或 multiple_choice"
+            },
+            ...imageDataList.map((data) => ({
+              type: "image_url",
+              image_url: { url: `data:image/png;base64,${data}` }
+            }))
+          ]
+        }
+      ];
+      const response = await this.ismaqueClient.chat.completions.create({
+        model,
+        messages,
+        max_tokens: 10,
+        temperature: 0.1
+      }, { signal });
+      const result = response.choices[0].message.content.trim().toLowerCase();
+      if (result.includes("multiple_choice")) {
+        return "multiple_choice";
+      } else {
+        return "programming";
+      }
+    } catch (error2) {
+      console.warn("题目类型识别失败，默认为编程题:", error2);
+      return "programming";
+    }
+  }
+  /**
+   * 根据题目类型提取题目信息
+   */
+  async extractProblemInfo(imageDataList, questionType, userConfig, language, signal) {
+    try {
+      if (!this.ismaqueClient) {
+        return {
+          success: false,
+          error: "AI客户端未初始化"
+        };
+      }
+      const model = "gemini-2.5-flash-preview-04-17";
+      console.log(`🔍 使用固定模型提取${questionType === "programming" ? "编程题" : "选择题"}信息:`, model);
+      if (questionType === "programming") {
+        return await this.extractProgrammingProblem(imageDataList, model, language, signal);
+      } else {
+        return await this.extractMultipleChoiceProblems(imageDataList, model, signal);
+      }
+    } catch (error2) {
+      return {
+        success: false,
+        error: `提取题目信息失败：${error2.message}`
+      };
+    }
+  }
+  /**
+   * 提取编程题信息
+   */
+  async extractProgrammingProblem(imageDataList, model, language, signal) {
+    try {
+      const messages = [
+        {
+          role: "system",
+          content: `你是一个编程题目解释助手。请严格按照要求分析编程题目的截图，提取所有相关信息。
+
+**重要要求：**
+1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记
+2. JSON必须包含以下字段：type, problem_statement, constraints, example_input, example_output
+3. type 必须设为 "programming"
+4. 如果某个字段无法从截图中获取，请设置为空字符串
+5. 确保返回的是有效的JSON格式
+
+**示例输出格式：**
+{"type":"programming","problem_statement":"题目描述","constraints":"约束条件","example_input":"示例输入","example_output":"示例输出"}`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `从这些截图中提取编程题目详情、输入描述、输出描述以及示例，以严格的JSON格式返回。我们将使用${language}语言来解决这个问题。请确保返回的是有效的JSON格式，不要包含任何其他文本。`
+            },
+            ...imageDataList.map((data) => ({
+              type: "image_url",
+              image_url: { url: `data:image/png;base64,${data}` }
+            }))
+          ]
+        }
+      ];
+      const response = await this.ismaqueClient.chat.completions.create({
+        model,
+        messages,
+        max_tokens: 4e3,
+        temperature: 0.1
+      }, { signal });
+      const responseText = response.choices[0].message.content;
+      console.log("编程题AI提取响应:", responseText);
+      let jsonText = responseText.trim();
+      jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const jsonStart = jsonText.indexOf("{");
+      const jsonEnd = jsonText.lastIndexOf("}");
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonText = jsonText.substring(jsonStart, jsonEnd + 1);
+      }
+      const problemInfo = JSON.parse(jsonText);
+      return {
+        success: true,
+        data: {
+          type: "programming",
+          problem_statement: problemInfo.problem_statement || "无法从截图中提取题目描述",
+          constraints: problemInfo.constraints || "无法从截图中提取约束条件",
+          example_input: problemInfo.example_input || "无法从截图中提取示例输入",
+          example_output: problemInfo.example_output || "无法从截图中提取示例输出"
+        }
+      };
+    } catch (error2) {
+      console.error("解析编程题AI响应失败:", error2);
+      return {
+        success: false,
+        error: `解析编程题信息失败：${error2.message}`
+      };
+    }
+  }
+  /**
+   * 提取选择题信息（支持多题）
+   */
+  async extractMultipleChoiceProblems(imageDataList, model, signal) {
+    try {
+      const messages = [
+        {
+          role: "system",
+          content: `你是一个选择题识别专家。请分析截图中的所有选择题，提取完整信息。
+
+**重要要求：**
+1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记
+2. JSON必须包含：type, problem_statement, multiple_choice_questions
+3. type 必须设为 "multiple_choice"
+4. multiple_choice_questions 是数组，包含所有识别到的选择题
+5. 每个选择题包含：question_number, question_text, options
+6. question_number 是题号（如"1", "2", "A", "B"等）
+7. options 是选项数组（如["A. 选项A", "B. 选项B", ...]）
+8. 确保返回的是有效的JSON格式
+
+**示例输出格式：**
+{
+  "type": "multiple_choice",
+  "problem_statement": "选择题集合",
+  "multiple_choice_questions": [
+    {
+      "question_number": "1",
+      "question_text": "第一题的题目内容",
+      "options": ["A. 选项A", "B. 选项B", "C. 选项C", "D. 选项D"]
+    },
+    {
+      "question_number": "2", 
+      "question_text": "第二题的题目内容",
+      "options": ["A. 选项A", "B. 选项B", "C. 选项C", "D. 选项D"]
+    }
+  ]
+}`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "请识别这些截图中的所有选择题，按题号顺序提取题目和选项信息，以严格的JSON格式返回。请确保识别出所有完整的题目。"
+            },
+            ...imageDataList.map((data) => ({
+              type: "image_url",
+              image_url: { url: `data:image/png;base64,${data}` }
+            }))
+          ]
+        }
+      ];
+      const response = await this.ismaqueClient.chat.completions.create({
+        model,
+        messages,
+        max_tokens: 6e3,
+        temperature: 0.1
+      }, { signal });
+      const responseText = response.choices[0].message.content;
+      console.log("选择题AI提取响应:", responseText);
+      let jsonText = responseText.trim();
+      jsonText = jsonText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const jsonStart = jsonText.indexOf("{");
+      const jsonEnd = jsonText.lastIndexOf("}");
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonText = jsonText.substring(jsonStart, jsonEnd + 1);
+      }
+      const problemInfo = JSON.parse(jsonText);
+      return {
+        success: true,
+        data: {
+          type: "multiple_choice",
+          problem_statement: problemInfo.problem_statement || "选择题集合",
+          multiple_choice_questions: problemInfo.multiple_choice_questions || []
+        }
+      };
+    } catch (error2) {
+      console.error("解析选择题AI响应失败:", error2);
+      return {
+        success: false,
+        error: `解析选择题信息失败：${error2.message}`
+      };
+    }
   }
   /**
    * 取消所有进行中的请求
@@ -26031,6 +26472,9 @@ class ShortcutsHelper {
     }
   }
   registerGlobalShortcuts() {
+    console.log("Cleaning up existing global shortcuts...");
+    require$$1$1.globalShortcut.unregisterAll();
+    console.log("Registering global shortcuts...");
     require$$1$1.globalShortcut.register("CommandOrControl+H", async () => {
       const mainWindow = this.deps.getMainWindow();
       if (mainWindow) {
@@ -26062,8 +26506,28 @@ class ShortcutsHelper {
       this.deps.setView("queue");
       const mainWindow = this.deps.getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.getOpacity() === 0 || !this.deps.isVisible()) {
+          console.log("Window was hidden, restoring visibility...");
+          mainWindow.setOpacity(1);
+          mainWindow.setIgnoreMouseEvents(false);
+          mainWindow.showInactive();
+          if (typeof this.deps.setVisible === "function") {
+            this.deps.setVisible(true);
+          }
+        }
+        const bounds = mainWindow.getBounds();
+        const { screen } = require("electron");
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const workArea = primaryDisplay.workArea;
+        if (bounds.x + bounds.width < 0 || bounds.x > workArea.width || bounds.y + bounds.height < 0 || bounds.y > workArea.height) {
+          console.log("Window was off-screen, repositioning...");
+          const newX = Math.max(0, Math.min(bounds.x, workArea.width - bounds.width));
+          const newY = Math.max(0, Math.min(bounds.y, workArea.height - bounds.height));
+          mainWindow.setPosition(newX, newY);
+        }
         mainWindow.webContents.send("reset-view");
         mainWindow.webContents.send("reset");
+        console.log("Reset completed, window visibility ensured");
       }
     });
     require$$1$1.globalShortcut.register("CommandOrControl+Left", () => {
@@ -26076,11 +26540,19 @@ class ShortcutsHelper {
     });
     require$$1$1.globalShortcut.register("CommandOrControl+Down", () => {
       console.log("Command/Ctrl + down pressed. Moving window down.");
-      this.deps.moveWindowDown();
+      try {
+        this.deps.moveWindowDown();
+      } catch (error2) {
+        console.error("Error moving window down:", error2);
+      }
     });
     require$$1$1.globalShortcut.register("CommandOrControl+Up", () => {
       console.log("Command/Ctrl + Up pressed. Moving window Up.");
-      this.deps.moveWindowUp();
+      try {
+        this.deps.moveWindowUp();
+      } catch (error2) {
+        console.error("Error moving window up:", error2);
+      }
     });
     require$$1$1.globalShortcut.register("CommandOrControl+B", () => {
       console.log("Command/Ctrl + B pressed. Toggling window visibility.");
@@ -26126,6 +26598,43 @@ class ShortcutsHelper {
       const mainWindow = this.deps.getMainWindow();
       if (mainWindow) {
         mainWindow.webContents.send("delete-last-screenshot");
+      }
+    });
+    require$$1$1.globalShortcut.register("CommandOrControl+Shift+R", () => {
+      console.log("Emergency window recovery shortcut activated!");
+      const mainWindow = this.deps.getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          const { screen } = require("electron");
+          const primaryDisplay = screen.getPrimaryDisplay();
+          const workArea = primaryDisplay.workArea;
+          const bounds = mainWindow.getBounds();
+          const centerX = workArea.x + (workArea.width - bounds.width) / 2;
+          const centerY = workArea.y + (workArea.height - bounds.height) / 2;
+          mainWindow.setPosition(Math.round(centerX), Math.round(centerY));
+          mainWindow.setOpacity(1);
+          mainWindow.setIgnoreMouseEvents(false);
+          mainWindow.show();
+          mainWindow.focus();
+          console.log("Window recovered to center of screen");
+        } catch (error2) {
+          console.error("Error during emergency window recovery:", error2);
+        }
+      }
+    });
+    require$$1$1.globalShortcut.register("CommandOrControl+Shift+C", async () => {
+      console.log("Manual config refresh shortcut activated!");
+      try {
+        const { simpleAuthManager: simpleAuthManager2 } = require("./SimpleAuthManager");
+        console.log("🔄 手动刷新用户配置...");
+        await simpleAuthManager2.refreshUserConfig(true);
+        console.log("✅ 配置刷新完成");
+        const mainWindow = this.deps.getMainWindow();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("config-refreshed");
+        }
+      } catch (error2) {
+        console.error("Error during manual config refresh:", error2);
       }
     });
     require$$1$1.app.on("will-quit", () => {
@@ -43448,23 +43957,41 @@ function hideMainWindow() {
 function showMainWindow() {
   var _a2;
   if (!((_a2 = state.mainWindow) == null ? void 0 : _a2.isDestroyed())) {
-    if (state.windowPosition && state.windowSize) {
-      state.mainWindow.setBounds({
-        ...state.windowPosition,
-        ...state.windowSize
+    try {
+      const { screen: screen2 } = require("electron");
+      const primaryDisplay = screen2.getPrimaryDisplay();
+      const workArea = primaryDisplay.workArea;
+      if (state.windowPosition && state.windowSize) {
+        const { x: x2, y: y2 } = state.windowPosition;
+        const { width, height } = state.windowSize;
+        const adjustedX = Math.max(workArea.x, Math.min(x2, workArea.x + workArea.width - width));
+        const adjustedY = Math.max(workArea.y, Math.min(y2, workArea.y + workArea.height - height));
+        state.mainWindow.setBounds({
+          x: adjustedX,
+          y: adjustedY,
+          width,
+          height
+        });
+        state.currentX = adjustedX;
+        state.currentY = adjustedY;
+      }
+      state.mainWindow.setIgnoreMouseEvents(false);
+      state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+      state.mainWindow.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true
       });
+      state.mainWindow.setContentProtection(true);
+      state.mainWindow.setOpacity(0);
+      state.mainWindow.showInactive();
+      state.mainWindow.setOpacity(1);
+      state.isWindowVisible = true;
+      console.log(`Window shown at position (${state.currentX}, ${state.currentY}), opacity set to 1`);
+    } catch (error2) {
+      console.error("Error showing main window:", error2);
+      state.mainWindow.setOpacity(1);
+      state.mainWindow.showInactive();
+      state.isWindowVisible = true;
     }
-    state.mainWindow.setIgnoreMouseEvents(false);
-    state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
-    state.mainWindow.setVisibleOnAllWorkspaces(true, {
-      visibleOnFullScreen: true
-    });
-    state.mainWindow.setContentProtection(true);
-    state.mainWindow.setOpacity(0);
-    state.mainWindow.showInactive();
-    state.mainWindow.setOpacity(1);
-    state.isWindowVisible = true;
-    console.log("Window shown with showInactive(), opacity set to 1");
   }
 }
 function toggleMainWindow() {
@@ -43495,14 +44022,25 @@ function moveWindowVertical(updateFn) {
     maxDownLimit,
     screenHeight: state.screenHeight,
     windowHeight: (_c = state.windowSize) == null ? void 0 : _c.height,
-    currentY: state.currentY
+    currentY: state.currentY,
+    step: state.step
   });
-  if (newY >= maxUpLimit && newY <= maxDownLimit) {
+  if (state.mainWindow.getOpacity() === 0) {
+    console.log("Window was hidden, making it visible for movement");
+    state.mainWindow.setOpacity(1);
+    state.mainWindow.setIgnoreMouseEvents(false);
+    state.isWindowVisible = true;
+  }
+  const isMovingBackOnScreen = state.currentY < 0 && newY > state.currentY || state.currentY > state.screenHeight && newY < state.currentY;
+  if (newY >= maxUpLimit && newY <= maxDownLimit || isMovingBackOnScreen) {
     state.currentY = newY;
     state.mainWindow.setPosition(
       Math.round(state.currentX),
       Math.round(state.currentY)
     );
+    console.log(`Window moved to position: (${Math.round(state.currentX)}, ${Math.round(state.currentY)})`);
+  } else {
+    console.log(`Movement blocked - would move outside bounds. Current: ${state.currentY}, Attempted: ${newY}`);
   }
 }
 function setWindowDimensions(width, height) {
@@ -43716,4 +44254,4 @@ exports.showMainWindow = showMainWindow;
 exports.state = state;
 exports.takeScreenshot = takeScreenshot;
 exports.toggleMainWindow = toggleMainWindow;
-//# sourceMappingURL=main-De8eTBgd.js.map
+//# sourceMappingURL=main-C8wL5b2S.js.map
