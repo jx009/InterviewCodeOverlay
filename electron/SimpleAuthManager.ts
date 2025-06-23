@@ -232,6 +232,13 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
+   * 获取当前token（sessionId）
+   */
+  public getToken(): string | null {
+    return this.token
+  }
+
+  /**
    * 获取用户配置
    */
   public getUserConfig(): UserConfig | null {
@@ -602,9 +609,9 @@ export class SimpleAuthManager extends EventEmitter {
         // 根据后端返回的数据结构适配，支持新的模型字段
         this.userConfig = {
           // 兼容新旧模型字段
-          aiModel: response.data.aiModel || response.data.programmingModel || 'claude-3-5-sonnet-20241022',
-          programmingModel: response.data.programmingModel || response.data.aiModel || 'claude-3-5-sonnet-20241022',
-          multipleChoiceModel: response.data.multipleChoiceModel || response.data.aiModel || 'claude-3-5-sonnet-20241022',
+          aiModel: response.data.aiModel || response.data.programmingModel || 'claude-sonnet-4-20250514',
+          programmingModel: response.data.programmingModel || response.data.aiModel || 'claude-sonnet-4-20250514',
+          multipleChoiceModel: response.data.multipleChoiceModel || response.data.aiModel || 'claude-sonnet-4-20250514',
           language: response.data.language || 'python',
           theme: response.data.theme || 'system',
           shortcuts: response.data.shortcuts || {
@@ -639,9 +646,9 @@ export class SimpleAuthManager extends EventEmitter {
       // 如果配置获取失败，创建默认配置
       console.log('🔧 使用默认配置...')
       this.userConfig = {
-        aiModel: 'claude-3-5-sonnet-20241022',
-        programmingModel: 'claude-3-5-sonnet-20241022',
-        multipleChoiceModel: 'claude-3-5-sonnet-20241022',
+        aiModel: 'claude-sonnet-4-20250514',
+        programmingModel: 'claude-sonnet-4-20250514',
+        multipleChoiceModel: 'claude-sonnet-4-20250514',
         language: 'python',
         theme: 'system',
         shortcuts: {

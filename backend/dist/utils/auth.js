@@ -6,10 +6,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthUtils = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'default-refresh-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+if (!JWT_SECRET) {
+    throw new Error('🔒 安全错误: JWT_SECRET 环境变量未配置！请在 .env 文件中设置强随机密钥');
+}
+if (!JWT_REFRESH_SECRET) {
+    throw new Error('🔒 安全错误: JWT_REFRESH_SECRET 环境变量未配置！请在 .env 文件中设置强随机密钥');
+}
+console.log('✅ JWT密钥配置检查通过');
 class AuthUtils {
     static generateAccessToken(payload) {
         return jsonwebtoken_1.default.sign(payload, JWT_SECRET, {

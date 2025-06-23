@@ -1,55 +1,60 @@
 @echo off
-title Interview Code Overlay - Web前端启动器
+chcp 65001 >nul
+title Web管理界面启动器
+
 echo.
-echo ================================
-echo Interview Code Overlay Web前端
-echo ================================
-echo.
-echo 正在启动Web配置中心...
+echo ====================================
+echo    Web管理界面启动器
+echo ====================================
 echo.
 
-:: 检查Node.js是否安装
-node --version >nul 2>&1
-if errorlevel 1 (
-    echo ❌ 错误：未找到Node.js，请先安装Node.js
-    echo 下载地址：https://nodejs.org
+:: 检查Node.js
+where node >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ❌ 错误：未找到Node.js
+    echo 请先安装Node.js：https://nodejs.org/
     pause
-    exit /b
+    exit /b 1
 )
 
-:: 检查是否在正确目录
-if not exist "package.json" (
-    echo ❌ 错误：请确保在web目录下运行此脚本
-    pause
-    exit /b
+:: 检查端口3000是否被占用
+echo 🔍 检查端口3000...
+netstat -an | findstr ":3000 " >nul
+if %errorlevel% equ 0 (
+    echo ⚠️  警告：端口3000已被占用
+    echo.
+    choice /C YN /M "是否继续启动？可能会失败"
+    if errorlevel 2 exit /b 1
 )
 
-:: 检查依赖是否安装
+:: 检查依赖
+echo 📦 检查依赖...
 if not exist "node_modules" (
-    echo 📦 首次运行，正在安装依赖...
-    npm install
-    if errorlevel 1 (
+    echo 🚀 正在安装依赖...
+    call npm install
+    if %errorlevel% neq 0 (
         echo ❌ 依赖安装失败
         pause
-        exit /b
+        exit /b 1
     )
 )
 
-echo ✅ 环境检查完成
-echo.
-echo 🚀 启动Web开发服务器...
-echo.
-echo 📋 重要提示：
-echo   - 请确保后端服务器已启动（端口3001）
-echo   - 前端将运行在：http://localhost:3000
-echo   - 按 Ctrl+C 可停止服务器
-echo.
-echo ================================
-echo.
-
 :: 启动开发服务器
-npm run dev
-
 echo.
-echo 服务器已停止
+echo 🚀 启动Web管理界面...
+echo.
+echo 📋 服务器信息：
+echo    - 本地地址：http://localhost:3000
+echo    - 管理界面：http://localhost:3000/manager
+echo    - 网络地址：http://0.0.0.0:3000
+echo.
+echo 💡 提示：
+echo    - 按 Ctrl+C 停止服务器
+echo    - 管理员账户才能访问 /manager 页面
+echo    - 确保后端服务(端口3001)已启动
+echo.
+
+:: 启动Vite开发服务器，并支持路由回退
+call npm run dev -- --host 0.0.0.0 --open
+
 pause 

@@ -16,13 +16,15 @@ model User {
   email     String?  @unique @db.VarChar(100)
   password  String   @db.VarChar(255)
   isActive  Boolean  @default(true)
+  points    Int      @default(100) // 用户积分余额，新用户默认100积分
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  config    UserConfig?
-  usage     UsageRecord[]
-  sessions  UserSession[]
+  config       UserConfig?
+  usage        UsageRecord[]
+  sessions     UserSession[]
+  transactions PointTransaction[] // 积分交易记录
 
   @@map("users")
 }
@@ -41,9 +43,9 @@ model UserConfig {
   
   // 原有的AI Model Settings（保持兼容性）
   selectedProvider String   @default("claude") @db.VarChar(50) @map("selected_provider")
-  extractionModel  String?  @default("claude-3-7-sonnet-20250219") @db.VarChar(100) @map("extraction_model")
-  solutionModel    String?  @default("claude-3-7-sonnet-20250219") @db.VarChar(100) @map("solution_model")
-  debuggingModel   String?  @default("claude-3-7-sonnet-20250219") @db.VarChar(100) @map("debugging_model")
+  extractionModel  String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("extraction_model")
+  solutionModel    String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("solution_model")
+  debuggingModel   String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("debugging_model")
   
   // Language Settings
   language         String   @default("python") @db.VarChar(50)
@@ -137,4 +139,56 @@ model RedisSession {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("redis_sessions")
+}
+
+// 🔥 积分系统相关表
+
+// 模型积分配置表
+model ModelPointConfig {
+  id           Int      @id @default(autoincrement())
+  modelName    String   @db.VarChar(100) @map("model_name") // AI模型名称
+  questionType QuestionType @map("question_type") // 题目类型
+  cost         Int      // 积分消耗
+  isActive     Boolean  @default(true) @map("is_active") // 是否启用
+  description  String?  @db.Text // 配置描述
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([modelName, questionType], name: "unique_model_question_type")
+  @@map("model_point_configs")
+}
+
+// 积分交易记录表
+model PointTransaction {
+  id              Int             @id @default(autoincrement())
+  userId          Int             @map("user_id")
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionType TransactionType @map("transaction_type") // 交易类型
+  amount          Int             // 积分数量(消费为负数，充值为正数)
+  balanceAfter    Int             @map("balance_after") // 操作后余额
+  modelName       String?         @db.VarChar(100) @map("model_name") // 相关模型名称
+  questionType    QuestionType?   @map("question_type") // 题目类型
+  description     String?         @db.Text // 交易描述
+  metadata        String?         @db.Text // 额外元数据(JSON格式)
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  @@map("point_transactions")
+}
+
+// 题目类型枚举
+enum QuestionType {
+  MULTIPLE_CHOICE @map("multiple_choice") // 选择题
+  PROGRAMMING     @map("programming")     // 编程题
+
+  @@map("question_types")
+}
+
+// 交易类型枚举
+enum TransactionType {
+  CONSUME  @map("consume")  // 消费
+  RECHARGE @map("recharge") // 充值
+  REFUND   @map("refund")   // 退款
+  REWARD   @map("reward")   // 奖励
+
+  @@map("transaction_types")
 } 

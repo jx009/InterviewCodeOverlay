@@ -144,9 +144,7 @@ export interface UsageStats {
 export const SUPPORTED_MODELS = {
   claude: [
     { id: 'claude-sonnet-4-20250514-thinking', name: 'Claude Sonnet 4 (Thinking)', category: 'general' },
-    { id: 'claude-3-7-sonnet-thinking', name: 'Claude 3.7 Sonnet (Thinking)', category: 'general' },
     { id: 'claude-opus-4-20250514-thinking', name: 'Claude Opus 4 (Thinking)', category: 'general' },
-    { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', category: 'general' },
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', category: 'general' }
   ],
   gemini: [

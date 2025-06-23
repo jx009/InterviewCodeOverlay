@@ -1,12 +1,17 @@
 "use strict";
 // ipcHandlers.ts
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeIpcHandlers = initializeIpcHandlers;
+exports.registerCreditsHandlers = registerCreditsHandlers;
 const electron_1 = require("electron");
 const ConfigHelper_1 = require("./ConfigHelper");
 const SimpleAuthManager_1 = require("./SimpleAuthManager");
+const node_fetch_1 = __importDefault(require("node-fetch"));
 function initializeIpcHandlers(deps) {
-    console.log("Initializing IPC handlers");
+    console.log("Initializing standard IPC handlers");
     // Configuration handlers
     electron_1.ipcMain.handle("get-config", () => {
         return ConfigHelper_1.configHelper.loadConfig();
@@ -25,13 +30,149 @@ function initializeIpcHandlers(deps) {
             error: null
         };
     });
-    // Credits handlers
+    // 🆕 积分管理处理器 - 替换旧的简单积分系统
+    electron_1.ipcMain.handle("credits:get", async () => {
+        try {
+            const authStatus = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
+            if (!authStatus) {
+                return { success: false, error: '用户未认证' };
+            }
+            const sessionId = SimpleAuthManager_1.simpleAuthManager.getToken();
+            if (!sessionId) {
+                return { success: false, error: '无session信息' };
+            }
+            const response = await (0, node_fetch_1.default)('http://localhost:3001/api/client/credits', {
+                method: 'GET',
+                headers: {
+                    'X-Session-Id': sessionId,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return { success: true, credits: data.credits };
+            }
+            else {
+                return { success: false, error: '获取积分失败' };
+            }
+        }
+        catch (error) {
+            console.error('获取积分错误:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("credits:check", async (_event, { modelName, questionType }) => {
+        try {
+            const authStatus = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
+            if (!authStatus) {
+                return { success: false, error: '用户未认证' };
+            }
+            const sessionId = SimpleAuthManager_1.simpleAuthManager.getToken();
+            if (!sessionId) {
+                return { success: false, error: '无session信息' };
+            }
+            const response = await (0, node_fetch_1.default)('http://localhost:3001/api/client/credits/check', {
+                method: 'POST',
+                headers: {
+                    'X-Session-Id': sessionId,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ modelName, questionType })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return { success: true, ...data };
+            }
+            else {
+                const error = await response.json();
+                return { success: false, error: error.error || '检查积分失败' };
+            }
+        }
+        catch (error) {
+            console.error('检查积分错误:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("credits:deduct", async (_event, { modelName, questionType, operationId }) => {
+        try {
+            const authStatus = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
+            if (!authStatus) {
+                return { success: false, error: '用户未认证' };
+            }
+            const sessionId = SimpleAuthManager_1.simpleAuthManager.getToken();
+            if (!sessionId) {
+                return { success: false, error: '无session信息' };
+            }
+            const response = await (0, node_fetch_1.default)('http://localhost:3001/api/client/credits/deduct', {
+                method: 'POST',
+                headers: {
+                    'X-Session-Id': sessionId,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ modelName, questionType, operationId })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                // 更新前端积分显示
+                const mainWindow = deps.getMainWindow();
+                if (mainWindow) {
+                    mainWindow.webContents.send("credits-updated", data.newCredits);
+                }
+                return { success: true, ...data };
+            }
+            else {
+                const error = await response.json();
+                return { success: false, error: error.error || '扣除积分失败' };
+            }
+        }
+        catch (error) {
+            console.error('扣除积分错误:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle("credits:refund", async (_event, { operationId, amount, reason }) => {
+        try {
+            const authStatus = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
+            if (!authStatus) {
+                return { success: false, error: '用户未认证' };
+            }
+            const sessionId = SimpleAuthManager_1.simpleAuthManager.getToken();
+            if (!sessionId) {
+                return { success: false, error: '无session信息' };
+            }
+            const response = await (0, node_fetch_1.default)('http://localhost:3001/api/client/credits/refund', {
+                method: 'POST',
+                headers: {
+                    'X-Session-Id': sessionId,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ operationId, amount, reason })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                // 更新前端积分显示
+                const mainWindow = deps.getMainWindow();
+                if (mainWindow) {
+                    mainWindow.webContents.send("credits-updated", data.newCredits);
+                }
+                return { success: true, ...data };
+            }
+            else {
+                const error = await response.json();
+                return { success: false, error: error.error || '退还积分失败' };
+            }
+        }
+        catch (error) {
+            console.error('退还积分错误:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    // 🆕 兼容旧系统的处理器（逐步废弃）
     electron_1.ipcMain.handle("set-initial-credits", async (_event, credits) => {
         const mainWindow = deps.getMainWindow();
         if (!mainWindow)
             return;
         try {
-            // Set the credits in a way that ensures atomicity
             await mainWindow.webContents.executeJavaScript(`window.__CREDITS__ = ${credits}`);
             mainWindow.webContents.send("credits-updated", credits);
         }
@@ -41,6 +182,8 @@ function initializeIpcHandlers(deps) {
         }
     });
     electron_1.ipcMain.handle("decrement-credits", async () => {
+        // 这个方法现在被credits:deduct替代，保留用于兼容性
+        console.warn("⚠️ decrement-credits已废弃，请使用credits:deduct");
         const mainWindow = deps.getMainWindow();
         if (!mainWindow)
             return;
@@ -165,9 +308,11 @@ function initializeIpcHandlers(deps) {
         try {
             const isAuthenticated = await SimpleAuthManager_1.simpleAuthManager.isAuthenticated();
             const user = SimpleAuthManager_1.simpleAuthManager.getCurrentUser();
+            const sessionId = SimpleAuthManager_1.simpleAuthManager.getToken(); // token就是sessionId
             return {
                 authenticated: isAuthenticated,
-                user: user
+                user: user,
+                sessionId: sessionId
             };
         }
         catch (error) {
@@ -413,3 +558,61 @@ function initializeIpcHandlers(deps) {
         }
     });
 }
+// 积分管理 (独立导出，在main.ts中单独注册)
+function registerCreditsHandlers(deps) {
+    console.log('Initializing credits IPC handlers');
+    const BASE_URL = 'http://localhost:3001';
+    const makeAuthenticatedRequest = async (endpoint, options = {}) => {
+        const token = SimpleAuthManager_1.simpleAuthManager.getToken();
+        if (!token) {
+            return { success: false, error: 'User not authenticated' };
+        }
+        try {
+            const response = await (0, node_fetch_1.default)(`${BASE_URL}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Id': token,
+                    ...options.headers,
+                },
+            });
+            const data = await response.json();
+            return { success: response.ok, ...data };
+        }
+        catch (error) {
+            return { success: false, error: error.message };
+        }
+    };
+    electron_1.ipcMain.handle('credits:get', async () => {
+        return makeAuthenticatedRequest('/api/client/credits');
+    });
+    electron_1.ipcMain.handle('credits:check', async (_event, { modelName, questionType }) => {
+        return makeAuthenticatedRequest('/api/client/credits/check', {
+            method: 'POST',
+            body: JSON.stringify({ modelName, questionType }),
+        });
+    });
+    electron_1.ipcMain.handle('credits:deduct', async (_event, { modelName, questionType, operationId }) => {
+        const result = await makeAuthenticatedRequest('/api/client/credits/deduct', {
+            method: 'POST',
+            body: JSON.stringify({ modelName, questionType, operationId }),
+        });
+        if (result.success) {
+            deps.getMainWindow()?.webContents.send('credits-updated', result.newCredits);
+        }
+        return result;
+    });
+    electron_1.ipcMain.handle('credits:refund', async (_event, { amount, operationId, reason }) => {
+        const result = await makeAuthenticatedRequest('/api/client/credits/refund', {
+            method: 'POST',
+            body: JSON.stringify({ amount, operationId, reason }),
+        });
+        if (result.success) {
+            deps.getMainWindow()?.webContents.send('credits-updated', result.newCredits);
+        }
+        return result;
+    });
+}
+/**
+ * Registers IPC handlers for application settings.
+ */

@@ -6,6 +6,10 @@ import { BrowserWindow } from "electron"
 import { OpenAI } from "openai"
 import { simpleAuthManager } from "./SimpleAuthManager"
 import { configHelper } from "./ConfigHelper"
+import { ipcMain } from "electron"
+import { randomUUID } from "crypto"
+import { Solutions } from '../Solutions'
+import fetch from 'node-fetch'
 
 // 统一的API密钥 - 用户无需配置
 const ISMAQUE_API_KEY = "sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP"
@@ -21,10 +25,15 @@ export class SimpleProcessingHelper {
   private deps: IProcessingHelperDeps
   private screenshotHelper: ScreenshotHelper
   private ismaqueClient: OpenAI | null = null
+  private static instance: SimpleProcessingHelper | null = null
+  private ongoingRequests: Map<string, AbortController> = new Map()
 
   // AbortControllers for API requests
   private currentProcessingAbortController: AbortController | null = null
   private currentExtraProcessingAbortController: AbortController | null = null
+
+  // 🆕 积分管理相关
+  private pendingCreditOperations: Map<string, { modelName: string; questionType: string; amount: number }> = new Map()
 
   constructor(deps: IProcessingHelperDeps) {
     this.deps = deps
@@ -120,8 +129,6 @@ export class SimpleProcessingHelper {
       await this.processExtraQueue(userConfig, finalLanguage)
     }
   }
-
-
 
   /**
    * 获取客户端语言设置
@@ -494,10 +501,13 @@ export class SimpleProcessingHelper {
    * 生成编程题解决方案
    */
   private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
-    // 使用编程题模型
-    const solutionModel = userConfig.programmingModel || userConfig.aiModel || 'claude-3-5-sonnet-20241022'
+    const operationId = `prog_${randomUUID()}`;
+    let deductionInfo: { requiredCredits: number } | null = null;
+    try {
+      const model = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+      deductionInfo = await this.checkAndDeductCredits(model, 'programming', operationId);
 
-    const promptText = `
+      const promptText = `
 为以下编程题目生成详细的解决方案：
 
 题目描述：
@@ -529,91 +539,121 @@ ${problemInfo.example_output || "未提供示例输出。"}
 - 包含适当的导入语句和必要的库引用
 `
 
-    const solutionResponse = await this.ismaqueClient.chat.completions.create({
-      model: solutionModel,
-      messages: [
-        { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
-        { role: "user", content: promptText }
-      ],
-      max_tokens: 4000,
-      temperature: 0.2
-    }, { signal })
+      let solutionResponse
+      try {
+        solutionResponse = await this.ismaqueClient.chat.completions.create({
+          model: model,
+          messages: [
+            { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
+            { role: "user", content: promptText }
+          ],
+          max_tokens: 4000,
+          temperature: 0.2
+        }, { signal })
+        
+        console.log('✅ 编程题AI调用成功')
+      } catch (error) {
+        console.error('❌ 编程题AI调用失败:', error)
+        // AI调用失败，退还积分
+        await this.refundCredits(operationId, deductionInfo.requiredCredits, '编程题AI调用失败')
+        throw error
+      }
 
-    const responseContent = solutionResponse.choices[0].message.content
-    
-    // 解析响应内容
-    const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
-    const code = codeMatch ? codeMatch[1].trim() : responseContent
-    
-    // 提取思路
-    const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i
-    const thoughtsMatch = responseContent.match(thoughtsRegex)
-    let thoughts: string[] = []
-    
-    if (thoughtsMatch && thoughtsMatch[1]) {
-      const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
-      if (bulletPoints) {
-        thoughts = bulletPoints.map(point => 
-          point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
-        ).filter(Boolean)
-      } else {
-        thoughts = thoughtsMatch[1].split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
+      const responseContent = solutionResponse.choices[0].message.content
+      
+      // 解析响应内容
+      const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
+      const code = codeMatch ? codeMatch[1].trim() : responseContent
+      
+      // 提取思路
+      const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i
+      const thoughtsMatch = responseContent.match(thoughtsRegex)
+      let thoughts: string[] = []
+      
+      if (thoughtsMatch && thoughtsMatch[1]) {
+        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
+        if (bulletPoints) {
+          thoughts = bulletPoints.map(point => 
+            point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
+          ).filter(Boolean)
+        } else {
+          thoughts = thoughtsMatch[1].split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+        }
+      }
+      
+      // 提取复杂度信息
+      const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i
+      const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i
+      
+      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。"
+      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。"
+      
+      const timeMatch = responseContent.match(timeComplexityPattern)
+      if (timeMatch && timeMatch[1]) {
+        timeComplexity = timeMatch[1].trim()
+      }
+      
+      const spaceMatch = responseContent.match(spaceComplexityPattern)
+      if (spaceMatch && spaceMatch[1]) {
+        spaceComplexity = spaceMatch[1].trim()
+      }
+
+      const formattedResponse = {
+        type: 'programming',
+        code: code,
+        thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
+        time_complexity: timeComplexity,
+        space_complexity: spaceComplexity
+      }
+
+      // 🆕 AI调用成功，完成积分操作
+      await this.completeCreditsOperation(operationId)
+      console.log('💰 编程题积分操作完成')
+
+      return { success: true, data: formattedResponse }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "处理已被用户取消"
+        }
+      }
+      
+      console.error("AI处理错误:", error)
+      return { 
+        success: false, 
+        error: error.message || "AI处理失败，请重试" 
       }
     }
-    
-    // 提取复杂度信息
-    const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i
-    const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i
-    
-    let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。"
-    let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。"
-    
-    const timeMatch = responseContent.match(timeComplexityPattern)
-    if (timeMatch && timeMatch[1]) {
-      timeComplexity = timeMatch[1].trim()
-    }
-    
-    const spaceMatch = responseContent.match(spaceComplexityPattern)
-    if (spaceMatch && spaceMatch[1]) {
-      spaceComplexity = spaceMatch[1].trim()
-    }
-
-    const formattedResponse = {
-      type: 'programming',
-      code: code,
-      thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
-      time_complexity: timeComplexity,
-      space_complexity: spaceComplexity
-    }
-
-    return { success: true, data: formattedResponse }
   }
 
   /**
    * 生成选择题解决方案（支持多题）
    */
   private async generateMultipleChoiceSolutions(userConfig: any, problemInfo: any, signal: AbortSignal) {
-    console.log('🎯 开始生成选择题解决方案...')
-    
-    // 使用选择题模型
-    const solutionModel = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-3-5-sonnet-20241022'
-    console.log('🤖 使用模型:', solutionModel)
+    const operationId = `mcq_${randomUUID()}`;
+    let deductionInfo: { requiredCredits: number } | null = null;
+    try {
+      const model = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+      deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
 
-    const questions = problemInfo.multiple_choice_questions || []
-    console.log('📝 处理题目数量:', questions.length)
-    
-    if (questions.length === 0) {
-      console.log('❌ 没有找到选择题题目')
-      return {
-        success: false,
-        error: "没有找到选择题题目"
+      console.log('🎯 开始生成选择题解决方案...')
+      
+      const questions = problemInfo.multiple_choice_questions || []
+      console.log('📝 处理题目数量:', questions.length)
+      
+      if (questions.length === 0) {
+        console.log('❌ 没有找到选择题题目')
+        return {
+          success: false,
+          error: "没有找到选择题题目"
+        }
       }
-    }
 
-    // 构建问题文本
-    const questionsText = questions.map((q: any, index: number) => `
+      // 构建问题文本
+      const questionsText = questions.map((q: any, index: number) => `
 题目${q.question_number || (index + 1)}：
 ${q.question_text}
 
@@ -621,7 +661,7 @@ ${q.question_text}
 ${q.options.join('\n')}
 `).join('\n---\n')
 
-    const promptText = `
+      const promptText = `
 请分析以下选择题并给出答案：
 
 ${questionsText}
@@ -649,84 +689,109 @@ ${questionsText}
 ...
 `
 
-    console.log('🔄 发送选择题请求到AI...')
-    
-    const solutionResponse = await this.ismaqueClient.chat.completions.create({
-      model: solutionModel,
-      messages: [
-        { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。" },
-        { role: "user", content: promptText }
-      ],
-      max_tokens: 4000,
-      temperature: 0.1
-    }, { signal })
-
-    const responseContent = solutionResponse.choices[0].message.content
-    console.log('✅ 选择题AI响应完成')
-    console.log('📄 AI回复内容:', responseContent?.substring(0, 500) + '...')
-    
-    // 解析答案
-    console.log('🔍 开始解析选择题答案...')
-    const answers: any[] = []
-    
-    // 尝试多种答案格式
-    const answerPatterns = [
-      /题目(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
-      /(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
-      /答案[：:]\s*([A-Z])/g,
-      /选择[：:]?\s*([A-Z])/g
-    ]
-    
-    let foundAnswers = false
-    for (const pattern of answerPatterns) {
-      pattern.lastIndex = 0 // 重置正则表达式索引
-      let match
-      while ((match = pattern.exec(responseContent)) !== null) {
-        const questionNum = match[1] || questions[0]?.question_number || '1'
-        const answer = match[match.length - 1] // 取最后一个匹配组作为答案
+      console.log('🔄 发送选择题请求到AI...')
+      
+      let solutionResponse
+      try {
+        solutionResponse = await this.ismaqueClient.chat.completions.create({
+          model: model,
+          messages: [
+            { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。" },
+            { role: "user", content: promptText }
+          ],
+          max_tokens: 4000,
+          temperature: 0.1
+        }, { signal })
         
-        answers.push({
-          question_number: questionNum,
-          answer: answer,
-          reasoning: `题目${questionNum}的解答分析`
-        })
-        foundAnswers = true
+        console.log('✅ 选择题AI调用成功')
+      } catch (error) {
+        console.error('❌ 选择题AI调用失败:', error)
+        // AI调用失败，退还积分
+        await this.refundCredits(operationId, deductionInfo.requiredCredits, '选择题AI调用失败')
+        throw error
       }
-      if (foundAnswers) break
-    }
-    
-    console.log('🎯 解析到的答案数量:', answers.length)
-    console.log('📋 答案详情:', answers)
 
-    // 提取整体思路
-    const thoughtsRegex = /(?:整体思路|解题思路|思路|关键点)[:：]([\s\S]*?)(?:$)/i
-    const thoughtsMatch = responseContent.match(thoughtsRegex)
-    let thoughts: string[] = []
-    
-    if (thoughtsMatch && thoughtsMatch[1]) {
-      const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
-      if (bulletPoints) {
-        thoughts = bulletPoints.map(point => 
-          point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
-        ).filter(Boolean)
-      } else {
-        thoughts = thoughtsMatch[1].split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
+      const responseContent = solutionResponse.choices[0].message.content
+      console.log('✅ 选择题AI响应完成')
+      console.log('📄 AI回复内容:', responseContent?.substring(0, 500) + '...')
+      
+      // 解析答案
+      console.log('🔍 开始解析选择题答案...')
+      const answers: any[] = []
+      
+      // 尝试多种答案格式
+      const answerPatterns = [
+        /题目(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
+        /(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
+        /答案[：:]\s*([A-Z])/g,
+        /选择[：:]?\s*([A-Z])/g
+      ]
+      
+      let foundAnswers = false
+      for (const pattern of answerPatterns) {
+        pattern.lastIndex = 0 // 重置正则表达式索引
+        let match
+        while ((match = pattern.exec(responseContent)) !== null) {
+          const questionNum = match[1] || questions[0]?.question_number || '1'
+          const answer = match[match.length - 1] // 取最后一个匹配组作为答案
+          
+          answers.push({
+            question_number: questionNum,
+            answer: answer,
+            reasoning: `题目${questionNum}的解答分析`
+          })
+          foundAnswers = true
+        }
+        if (foundAnswers) break
       }
-    }
+      
+      console.log('🎯 解析到的答案数量:', answers.length)
+      console.log('📋 答案详情:', answers)
 
-    const formattedResponse = {
-      type: 'multiple_choice',
-      answers: answers,
-      thoughts: thoughts.length > 0 ? thoughts : ["选择题分析和推理过程"]
-      // time_complexity 和 space_complexity 对选择题留空
-    }
+      // 提取整体思路
+      const thoughtsRegex = /(?:整体思路|解题思路|思路|关键点)[:：]([\s\S]*?)(?:$)/i
+      const thoughtsMatch = responseContent.match(thoughtsRegex)
+      let thoughts: string[] = []
+      
+      if (thoughtsMatch && thoughtsMatch[1]) {
+        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g)
+        if (bulletPoints) {
+          thoughts = bulletPoints.map(point => 
+            point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
+          ).filter(Boolean)
+        } else {
+          thoughts = thoughtsMatch[1].split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+        }
+      }
 
-    console.log('✅ 选择题解决方案生成完成')
-    console.log('📊 最终响应:', JSON.stringify(formattedResponse, null, 2))
-    
-    return { success: true, data: formattedResponse }
+      const formattedResponse = {
+        type: 'multiple_choice',
+        answers: answers,
+        thoughts: thoughts.length > 0 ? thoughts : ["选择题分析和推理过程"]
+        // time_complexity 和 space_complexity 对选择题留空
+      }
+
+      // 🆕 AI调用成功，完成积分操作
+      await this.completeCreditsOperation(operationId)
+      console.log('💰 选择题积分操作完成')
+
+      console.log('✅ 选择题解决方案生成完成')
+      console.log('📊 最终响应:', JSON.stringify(formattedResponse, null, 2))
+      
+      return { success: true, data: formattedResponse }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "处理已被用户取消"
+        }
+      }
+      
+      console.error("AI处理错误:", error)
+      return { success: false, error: error.message || "AI处理失败，请重试" }
+    }
   }
 
   /**
@@ -1316,5 +1381,144 @@ ${problemInfo.example_output || "未提供示例输出。"}
     if (wasCancelled && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS)
     }
+  }
+
+  // 🆕 积分管理辅助方法
+
+  /**
+   * 检查积分是否足够
+   */
+  private async checkCredits(modelName: string, questionType: 'programming' | 'multiple_choice'): Promise<{
+    sufficient: boolean;
+    currentCredits: number;
+    requiredCredits: number;
+    error?: string;
+  }> {
+    try {
+      const mainWindow = this.deps.getMainWindow()
+      if (!mainWindow) {
+        return { sufficient: false, currentCredits: 0, requiredCredits: 0, error: '主窗口不可用' }
+      }
+
+      const result = await mainWindow.webContents.executeJavaScript(`
+        window.electronAPI.creditsCheck({ modelName: '${modelName}', questionType: '${questionType}' })
+      `)
+
+      if (result.success) {
+        return {
+          sufficient: result.sufficient,
+          currentCredits: result.currentCredits,
+          requiredCredits: result.requiredCredits
+        }
+      } else {
+        return { sufficient: false, currentCredits: 0, requiredCredits: 0, error: result.error }
+      }
+    } catch (error) {
+      console.error('检查积分失败:', error)
+      return { sufficient: false, currentCredits: 0, requiredCredits: 0, error: error.message }
+    }
+  }
+
+  /**
+   * 扣除积分
+   */
+  private async deductCredits(modelName: string, questionType: 'programming' | 'multiple_choice'): Promise<{
+    success: boolean;
+    operationId?: string;
+    deductedAmount?: number;
+    error?: string;
+  }> {
+    try {
+      const mainWindow = this.deps.getMainWindow()
+      if (!mainWindow) {
+        return { success: false, error: '主窗口不可用' }
+      }
+
+      const operationId = `ai_call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      const result = await mainWindow.webContents.executeJavaScript(`
+        window.electronAPI.creditsDeduct({ 
+          modelName: '${modelName}', 
+          questionType: '${questionType}',
+          operationId: '${operationId}'
+        })
+      `)
+
+      if (result.success) {
+        // 记录待处理的积分操作，以便失败时退款
+        this.pendingCreditOperations.set(operationId, {
+          modelName,
+          questionType,
+          amount: result.deductedAmount
+        })
+
+        return {
+          success: true,
+          operationId: result.operationId,
+          deductedAmount: result.deductedAmount
+        }
+      } else {
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      console.error('扣除积分失败:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * 退还积分（AI调用失败时）
+   */
+  private async refundCredits(operationId: string, amount: number, reason: string) {
+    const token = simpleAuthManager.getToken();
+    if (!token) return; // 如果没有token，无法退款
+    const BASE_URL = 'http://localhost:3001';
+    await fetch(`${BASE_URL}/api/client/credits/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+        body: JSON.stringify({ operationId, amount, reason }),
+    });
+  }
+
+  /**
+   * 完成积分操作（AI调用成功时）
+   */
+  private async completeCreditsOperation(operationId: string): Promise<void> {
+    // 移除待处理的操作记录，表示操作成功完成
+    this.pendingCreditOperations.delete(operationId)
+    console.log('✅ 积分操作完成:', operationId)
+  }
+
+  // 积分检查和扣除的逻辑
+  private async checkAndDeductCredits(model: string, type: 'programming' | 'multiple_choice', operationId: string) {
+    const token = simpleAuthManager.getToken()
+    if (!token) throw new Error('User not authenticated for credits check');
+
+    const BASE_URL = 'http://localhost:3001'
+
+    // 1. 检查积分
+    const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+      body: JSON.stringify({ modelName: model, questionType: type })
+    })
+    const checkResult = await checkResponse.json()
+    if (!checkResponse.ok || !checkResult.sufficient) {
+      throw new Error(checkResult.error || `积分不足 (需要 ${checkResult.requiredCredits})`);
+    }
+
+    // 2. 扣除积分
+    const deductResponse = await fetch(`${BASE_URL}/api/client/credits/deduct`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+      body: JSON.stringify({ modelName: model, questionType: type, operationId })
+    })
+    const deductResult = await deductResponse.json()
+    if (!deductResponse.ok) {
+      throw new Error(deductResult.error || '积分扣除失败');
+    }
+    
+    // 将所需积分附加到成功结果中，以便退款
+    return { ...deductResult, requiredCredits: checkResult.requiredCredits };
   }
 } 

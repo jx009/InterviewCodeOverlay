@@ -5,9 +5,12 @@ import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
 import { simpleAuthManager } from "./SimpleAuthManager"
+import { SettingsManager } from './SettingsManager'
+import { SimpleAuthManager } from './SimpleAuthManager'
+import fetch from 'node-fetch'
 
 export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
-  console.log("Initializing IPC handlers")
+  console.log("Initializing standard IPC handlers")
 
   // Configuration handlers
   ipcMain.handle("get-config", () => {
@@ -31,13 +34,157 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     };
   })
 
-  // Credits handlers
+  // 🆕 积分管理处理器 - 替换旧的简单积分系统
+  ipcMain.handle("credits:get", async () => {
+    try {
+      const authStatus = await simpleAuthManager.isAuthenticated()
+      if (!authStatus) {
+        return { success: false, error: '用户未认证' }
+      }
+
+      const sessionId = simpleAuthManager.getToken()
+      if (!sessionId) {
+        return { success: false, error: '无session信息' }
+      }
+
+      const response = await fetch('http://localhost:3001/api/client/credits', {
+        method: 'GET',
+        headers: {
+          'X-Session-Id': sessionId,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return { success: true, credits: data.credits }
+      } else {
+        return { success: false, error: '获取积分失败' }
+      }
+    } catch (error) {
+      console.error('获取积分错误:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("credits:check", async (_event, { modelName, questionType }) => {
+    try {
+      const authStatus = await simpleAuthManager.isAuthenticated()
+      if (!authStatus) {
+        return { success: false, error: '用户未认证' }
+      }
+
+      const sessionId = simpleAuthManager.getToken()
+      if (!sessionId) {
+        return { success: false, error: '无session信息' }
+      }
+
+      const response = await fetch('http://localhost:3001/api/client/credits/check', {
+        method: 'POST',
+        headers: {
+          'X-Session-Id': sessionId,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ modelName, questionType })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return { success: true, ...data }
+      } else {
+        const error = await response.json()
+        return { success: false, error: error.error || '检查积分失败' }
+      }
+    } catch (error) {
+      console.error('检查积分错误:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("credits:deduct", async (_event, { modelName, questionType, operationId }) => {
+    try {
+      const authStatus = await simpleAuthManager.isAuthenticated()
+      if (!authStatus) {
+        return { success: false, error: '用户未认证' }
+      }
+
+      const sessionId = simpleAuthManager.getToken()
+      if (!sessionId) {
+        return { success: false, error: '无session信息' }
+      }
+
+      const response = await fetch('http://localhost:3001/api/client/credits/deduct', {
+        method: 'POST',
+        headers: {
+          'X-Session-Id': sessionId,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ modelName, questionType, operationId })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // 更新前端积分显示
+        const mainWindow = deps.getMainWindow()
+        if (mainWindow) {
+          mainWindow.webContents.send("credits-updated", data.newCredits)
+        }
+        return { success: true, ...data }
+      } else {
+        const error = await response.json()
+        return { success: false, error: error.error || '扣除积分失败' }
+      }
+    } catch (error) {
+      console.error('扣除积分错误:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("credits:refund", async (_event, { operationId, amount, reason }) => {
+    try {
+      const authStatus = await simpleAuthManager.isAuthenticated()
+      if (!authStatus) {
+        return { success: false, error: '用户未认证' }
+      }
+
+      const sessionId = simpleAuthManager.getToken()
+      if (!sessionId) {
+        return { success: false, error: '无session信息' }
+      }
+
+      const response = await fetch('http://localhost:3001/api/client/credits/refund', {
+        method: 'POST',
+        headers: {
+          'X-Session-Id': sessionId,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ operationId, amount, reason })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // 更新前端积分显示
+        const mainWindow = deps.getMainWindow()
+        if (mainWindow) {
+          mainWindow.webContents.send("credits-updated", data.newCredits)
+        }
+        return { success: true, ...data }
+      } else {
+        const error = await response.json()
+        return { success: false, error: error.error || '退还积分失败' }
+      }
+    } catch (error) {
+      console.error('退还积分错误:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // 🆕 兼容旧系统的处理器（逐步废弃）
   ipcMain.handle("set-initial-credits", async (_event, credits: number) => {
     const mainWindow = deps.getMainWindow()
     if (!mainWindow) return
 
     try {
-      // Set the credits in a way that ensures atomicity
       await mainWindow.webContents.executeJavaScript(
         `window.__CREDITS__ = ${credits}`
       )
@@ -49,6 +196,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   })
 
   ipcMain.handle("decrement-credits", async () => {
+    // 这个方法现在被credits:deduct替代，保留用于兼容性
+    console.warn("⚠️ decrement-credits已废弃，请使用credits:deduct")
     const mainWindow = deps.getMainWindow()
     if (!mainWindow) return
 
@@ -177,7 +326,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
       return { success }
     } catch (error) {
       console.error("Failed to open web login:", error)
-      return { success: false, error: error.message }
+      return { success: false, error: (error as Error).message }
     }
   })
 
@@ -195,9 +344,11 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     try {
       const isAuthenticated = await simpleAuthManager.isAuthenticated()
       const user = simpleAuthManager.getCurrentUser()
+      const sessionId = simpleAuthManager.getToken() // token就是sessionId
       return { 
         authenticated: isAuthenticated, 
-        user: user 
+        user: user,
+        sessionId: sessionId 
       }
     } catch (error) {
       console.error("Failed to check auth status:", error)
@@ -459,3 +610,67 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 }
+
+// 积分管理 (独立导出，在main.ts中单独注册)
+export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
+  console.log('Initializing credits IPC handlers')
+  const BASE_URL = 'http://localhost:3001'
+
+  const makeAuthenticatedRequest = async (endpoint: string, options: any = {}) => {
+    const token = simpleAuthManager.getToken()
+    if (!token) {
+      return { success: false, error: 'User not authenticated' }
+    }
+    try {
+      const response = await fetch(`${BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': token,
+          ...options.headers,
+        },
+      })
+      const data = await response.json()
+      return { success: response.ok, ...data }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  }
+
+  ipcMain.handle('credits:get', async () => {
+    return makeAuthenticatedRequest('/api/client/credits')
+  })
+
+  ipcMain.handle('credits:check', async (_event, { modelName, questionType }) => {
+    return makeAuthenticatedRequest('/api/client/credits/check', {
+      method: 'POST',
+      body: JSON.stringify({ modelName, questionType }),
+    })
+  })
+
+  ipcMain.handle('credits:deduct', async (_event, { modelName, questionType, operationId }) => {
+    const result = await makeAuthenticatedRequest('/api/client/credits/deduct', {
+      method: 'POST',
+      body: JSON.stringify({ modelName, questionType, operationId }),
+    })
+    if (result.success) {
+      deps.getMainWindow()?.webContents.send('credits-updated', result.newCredits)
+    }
+    return result
+  })
+
+  ipcMain.handle('credits:refund', async (_event, { amount, operationId, reason }) => {
+    const result = await makeAuthenticatedRequest('/api/client/credits/refund', {
+      method: 'POST',
+      body: JSON.stringify({ amount, operationId, reason }),
+    })
+    if (result.success) {
+      deps.getMainWindow()?.webContents.send('credits-updated', result.newCredits)
+    }
+    return result
+  })
+}
+
+/**
+ * Registers IPC handlers for application settings.
+ */

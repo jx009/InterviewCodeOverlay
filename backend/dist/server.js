@@ -97,6 +97,16 @@ async function startServer() {
         });
         app.use('/api/auth', auth_1.default);
         app.use('/api/config', config_1.default);
+        const pointsRoutes = require('./routes/points').default;
+        app.use('/api/points', pointsRoutes);
+        const searchRoutes = require('./routes/search').default;
+        app.use('/api/search', searchRoutes);
+        const adminRoutes = require('./routes/admin').default;
+        app.use('/api/admin', adminRoutes);
+        const monitoringRoutes = require('./routes/monitoring').default;
+        app.use('/api/monitoring', monitoringRoutes);
+        const docsRoutes = require('./routes/docs').default;
+        app.use('/api/docs', docsRoutes);
         app.use('*', (req, res) => {
             response_1.ResponseUtils.notFound(res, '请求的资源不存在');
         });

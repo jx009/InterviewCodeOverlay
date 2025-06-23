@@ -6,6 +6,22 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: true
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
+    }
+  },
+  // 构建配置
+  build: {
+    // 确保所有路径都回退到index.html
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
   }
 }) 

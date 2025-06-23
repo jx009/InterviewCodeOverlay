@@ -225,14 +225,14 @@ export class VerificationManager {
     };
 
     // 存储验证码（通过email查找）
-    await this.redis.setex(
+    await this.redis.setEx(
       `${this.CODE_PREFIX}${email}`,
       this.CODE_EXPIRE_TIME,
       JSON.stringify(codeData)
     );
 
     // 存储token关联（通过token查找）
-    await this.redis.setex(
+    await this.redis.setEx(
       `${this.TOKEN_PREFIX}${token}`,
       this.TOKEN_EXPIRE_TIME,
       JSON.stringify(codeData)
@@ -265,7 +265,7 @@ export class VerificationManager {
       // 验证码比对
       if (data.code !== inputCode) {
         // 更新尝试次数
-        await this.redis.setex(
+        await this.redis.setEx(
           `${this.TOKEN_PREFIX}${token}`,
           this.TOKEN_EXPIRE_TIME,
           JSON.stringify(data)

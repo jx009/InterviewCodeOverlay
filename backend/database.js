@@ -15,6 +15,7 @@ class Database {
       await this.prisma.$connect();
       console.log('✅ MySQL数据库连接成功');
       await this.seedDefaultData();
+      await this.seedDefaultPointConfigs();
     } catch (error) {
       console.error('❌ 数据库初始化失败:', error);
       throw error;
@@ -35,6 +36,33 @@ class Database {
       });
       
       console.log('✅ 默认测试用户创建成功 (用户名/密码: 123456)');
+    } else {
+      // 🆕 确保测试用户有足够的积分进行测试
+      if (existingUser.points < 100) {
+        await this.updateUserCredits(existingUser.id, 100);
+        console.log('💰 为测试用户充值积分到100');
+      }
+    }
+
+    // 检查是否已有admin用户
+    const existingAdmin = await this.getUserByUsername('admin');
+    if (!existingAdmin) {
+      console.log('🌱 创建默认管理员用户...');
+      const hashedPassword = await bcrypt.hash('admin123456', 10);
+      
+      await this.createUser({
+        username: 'admin',
+        email: 'admin@test.com',
+        password: hashedPassword
+      });
+      
+      console.log('✅ 默认管理员用户创建成功 (用户名: admin, 邮箱: admin@test.com, 密码: admin123456)');
+    } else {
+      // 🆕 确保管理员用户有足够的积分
+      if (existingAdmin.points < 100) {
+        await this.updateUserCredits(existingAdmin.id, 100);
+        console.log('💰 为管理员用户充值积分到100');
+      }
     }
   }
 
@@ -126,6 +154,19 @@ class Database {
       const updatedUser = await this.prisma.user.update({
         where: { id: parseInt(userId) },
         data: { password: hashedPassword }
+      });
+      return updatedUser;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 🆕 更新用户积分
+  async updateUserCredits(userId, newCredits) {
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { id: parseInt(userId) },
+        data: { points: parseInt(newCredits) }
       });
       return updatedUser;
     } catch (error) {
@@ -330,6 +371,160 @@ class Database {
 
       return verification;
     } catch (error) {
+      throw error;
+    }
+  }
+
+  // 🔥 积分系统相关方法
+  
+  // 获取所有模型积分配置
+  async getAllModelPointConfigs() {
+    try {
+      return await this.prisma.modelPointConfig.findMany({
+        orderBy: [
+          { modelName: 'asc' },
+          { questionType: 'asc' }
+        ]
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 根据模型名称和题目类型获取配置
+  async getModelPointConfig(modelName, questionType) {
+    try {
+      return await this.prisma.modelPointConfig.findFirst({
+        where: {
+          modelName,
+          questionType
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 创建或更新模型积分配置
+  async upsertModelPointConfig(configData) {
+    try {
+      const { modelName, questionType, cost, description, isActive = true } = configData;
+      
+      return await this.prisma.modelPointConfig.upsert({
+        where: {
+          unique_model_question_type: {
+            modelName,
+            questionType
+          }
+        },
+        update: {
+          cost: parseInt(cost),
+          description,
+          isActive,
+          updatedAt: new Date()
+        },
+        create: {
+          modelName,
+          questionType,
+          cost: parseInt(cost),
+          description: description || '',
+          isActive
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 删除模型积分配置
+  async deleteModelPointConfig(modelName, questionType) {
+    try {
+      return await this.prisma.modelPointConfig.delete({
+        where: {
+          unique_model_question_type: {
+            modelName,
+            questionType
+          }
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 批量创建/更新模型积分配置
+  async batchUpsertModelPointConfigs(configs) {
+    try {
+      const results = [];
+      
+      for (const config of configs) {
+        const result = await this.upsertModelPointConfig(config);
+        results.push(result);
+      }
+      
+      return results;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 初始化默认积分配置
+  async seedDefaultPointConfigs() {
+    try {
+      const existingConfigs = await this.prisma.modelPointConfig.count();
+      if (existingConfigs > 0) {
+        console.log('💡 积分配置已存在，跳过初始化');
+        return;
+      }
+
+      console.log('🌱 创建默认积分配置...');
+      
+      const defaultConfigs = [
+        {
+          modelName: 'gpt-4',
+          questionType: 'MULTIPLE_CHOICE',
+          cost: 2,
+          description: 'GPT-4模型处理选择题',
+          isActive: true
+        },
+        {
+          modelName: 'gpt-4',
+          questionType: 'PROGRAMMING',
+          cost: 5,
+          description: 'GPT-4模型处理编程题',
+          isActive: true
+        },
+        {
+          modelName: 'gpt-3.5-turbo',
+          questionType: 'MULTIPLE_CHOICE',
+          cost: 1,
+          description: 'GPT-3.5模型处理选择题',
+          isActive: true
+        },
+        {
+          modelName: 'claude-3-sonnet',
+          questionType: 'PROGRAMMING',
+          cost: 4,
+          description: 'Claude-3模型处理编程题',
+          isActive: true
+        },
+        {
+          modelName: 'claude-3-sonnet',
+          questionType: 'MULTIPLE_CHOICE',
+          cost: 2,
+          description: 'Claude-3模型处理选择题',
+          isActive: true
+        }
+      ];
+
+      await this.prisma.modelPointConfig.createMany({
+        data: defaultConfigs,
+        skipDuplicates: true
+      });
+
+      console.log('✅ 默认积分配置创建成功');
+    } catch (error) {
+      console.error('❌ 创建默认积分配置失败:', error);
       throw error;
     }
   }

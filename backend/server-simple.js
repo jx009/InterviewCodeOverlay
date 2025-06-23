@@ -17,16 +17,14 @@ const PORT = process.env.PORT || 3001;
 // AI模型数据
 const aiModels = [
   { id: 1, name: 'claude-sonnet-4-20250514-thinking', displayName: 'Claude Sonnet 4 Thinking', provider: 'anthropic', category: 'premium' },
-  { id: 2, name: 'claude-3-7-sonnet-thinking', displayName: 'Claude 3.7 Sonnet Thinking', provider: 'anthropic', category: 'premium' },
-  { id: 3, name: 'claude-opus-4-20250514-thinking', displayName: 'Claude Opus 4 Thinking', provider: 'anthropic', category: 'premium' },
-  { id: 4, name: 'claude-3-7-sonnet-20250219', displayName: 'Claude 3.7 Sonnet', provider: 'anthropic', category: 'standard' },
-  { id: 5, name: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', provider: 'anthropic', category: 'standard' },
-  { id: 6, name: 'gemini-2.5-flash-preview-04-17-thinking', displayName: 'Gemini 2.5 Flash Thinking', provider: 'google', category: 'premium' },
-  { id: 7, name: 'gemini-2.5-flash-preview-04-17', displayName: 'Gemini 2.5 Flash', provider: 'google', category: 'standard' },
-  { id: 8, name: 'gemini-2.5-pro-preview-06-05', displayName: 'Gemini 2.5 Pro', provider: 'google', category: 'standard' },
-  { id: 9, name: 'gemini-2.5-pro-preview-06-05-thinking', displayName: 'Gemini 2.5 Pro Thinking', provider: 'google', category: 'premium' },
-  { id: 10, name: 'chatgpt-4o-latest', displayName: 'ChatGPT 4o Latest', provider: 'openai', category: 'standard' },
-  { id: 11, name: 'o3-mini', displayName: 'GPT o3 Mini', provider: 'openai', category: 'premium' }
+  { id: 2, name: 'claude-opus-4-20250514-thinking', displayName: 'Claude Opus 4 Thinking', provider: 'anthropic', category: 'premium' },
+  { id: 3, name: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', provider: 'anthropic', category: 'standard' },
+  { id: 4, name: 'gemini-2.5-flash-preview-04-17-thinking', displayName: 'Gemini 2.5 Flash Thinking', provider: 'google', category: 'premium' },
+  { id: 5, name: 'gemini-2.5-flash-preview-04-17', displayName: 'Gemini 2.5 Flash', provider: 'google', category: 'standard' },
+  { id: 6, name: 'gemini-2.5-pro-preview-06-05', displayName: 'Gemini 2.5 Pro', provider: 'google', category: 'standard' },
+  { id: 7, name: 'gemini-2.5-pro-preview-06-05-thinking', displayName: 'Gemini 2.5 Pro Thinking', provider: 'google', category: 'premium' },
+  { id: 8, name: 'chatgpt-4o-latest', displayName: 'ChatGPT 4o Latest', provider: 'openai', category: 'standard' },
+  { id: 9, name: 'o3-mini', displayName: 'GPT o3 Mini', provider: 'openai', category: 'premium' }
 ];
 
 // 🆕 增强认证相关配置
@@ -1127,6 +1125,467 @@ app.post('/api/reset_password', async (req, res) => {
     });
   }
 });
+
+// ======================
+// 管理员API路由 - 积分配置管理
+// ======================
+
+// 管理员认证中间件
+const adminAuthMiddleware = async (req, res, next) => {
+  try {
+    const sessionId = req.headers['x-session-id'];
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: '未提供会话ID'
+      });
+    }
+
+    const sessionData = await SessionStore.get(`session:${sessionId}`);
+    
+    if (!sessionData) {
+      return res.status(401).json({
+        success: false,
+        message: '会话无效或已过期'
+      });
+    }
+
+    // 检查是否为管理员
+    if (sessionData.username !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '权限不足，需要管理员权限'
+      });
+    }
+
+    req.user = sessionData;
+    next();
+  } catch (error) {
+    console.error('管理员认证失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '认证过程中出现错误'
+    });
+  }
+};
+
+// 🔥 积分配置现在存储在数据库中，不再使用内存数据
+
+// 获取所有模型配置
+app.get('/api/admin/model-configs', adminAuthMiddleware, async (req, res) => {
+  try {
+    const configs = await db.getAllModelPointConfigs();
+    
+    // 转换数据格式以匹配前端期望的格式
+    const formattedConfigs = configs.map(config => ({
+      id: config.id,
+      modelName: config.modelName,
+      questionType: config.questionType.toLowerCase(), // 转换为小写
+      cost: config.cost,
+      isActive: config.isActive,
+      description: config.description,
+      createdAt: config.createdAt.toISOString(),
+      updatedAt: config.updatedAt.toISOString()
+    }));
+    
+    res.json({
+      success: true,
+      data: {
+        configs: formattedConfigs,
+        total: formattedConfigs.length
+      },
+      message: '获取配置列表成功'
+    });
+  } catch (error) {
+    console.error('获取模型配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取配置失败'
+    });
+  }
+});
+
+// 创建或更新模型配置
+app.put('/api/admin/model-configs', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { modelName, questionType, cost, description, isActive = true } = req.body;
+
+    // 验证输入
+    if (!modelName || !questionType || !cost) {
+      return res.status(400).json({
+        success: false,
+        message: '模型名称、题目类型和积分消耗不能为空'
+      });
+    }
+
+    if (!['multiple_choice', 'programming'].includes(questionType)) {
+      return res.status(400).json({
+        success: false,
+        message: '题目类型必须是 multiple_choice 或 programming'
+      });
+    }
+
+    if (cost <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '积分消耗必须大于0'
+      });
+    }
+
+    // 转换题目类型为数据库枚举格式
+    const dbQuestionType = questionType.toUpperCase();
+
+    // 使用数据库upsert操作
+    const savedConfig = await db.upsertModelPointConfig({
+      modelName,
+      questionType: dbQuestionType,
+      cost: parseInt(cost),
+      description,
+      isActive
+    });
+
+    // 转换返回格式
+    const formattedConfig = {
+      id: savedConfig.id,
+      modelName: savedConfig.modelName,
+      questionType: savedConfig.questionType.toLowerCase(),
+      cost: savedConfig.cost,
+      isActive: savedConfig.isActive,
+      description: savedConfig.description,
+      createdAt: savedConfig.createdAt.toISOString(),
+      updatedAt: savedConfig.updatedAt.toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: {
+        config: formattedConfig
+      },
+      message: '配置保存成功'
+    });
+  } catch (error) {
+    console.error('保存模型配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '保存配置失败'
+    });
+  }
+});
+
+// 删除模型配置
+app.delete('/api/admin/model-configs', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { modelName, questionType } = req.body;
+
+    if (!modelName || !questionType) {
+      return res.status(400).json({
+        success: false,
+        message: '模型名称和题目类型不能为空'
+      });
+    }
+
+    // 转换题目类型为数据库枚举格式
+    const dbQuestionType = questionType.toUpperCase();
+
+    // 从数据库删除配置
+    const deletedConfig = await db.deleteModelPointConfig(modelName, dbQuestionType);
+
+    // 转换返回格式
+    const formattedConfig = {
+      id: deletedConfig.id,
+      modelName: deletedConfig.modelName,
+      questionType: deletedConfig.questionType.toLowerCase(),
+      cost: deletedConfig.cost,
+      isActive: deletedConfig.isActive,
+      description: deletedConfig.description,
+      createdAt: deletedConfig.createdAt.toISOString(),
+      updatedAt: deletedConfig.updatedAt.toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: {
+        config: formattedConfig
+      },
+      message: '配置删除成功'
+    });
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: '配置不存在'
+      });
+    }
+    
+    console.error('删除模型配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '删除配置失败'
+    });
+  }
+});
+
+// 批量更新模型配置
+app.post('/api/admin/model-configs/batch', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { configs } = req.body;
+
+    if (!Array.isArray(configs) || configs.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '配置列表不能为空'
+      });
+    }
+
+    const results = [];
+    const errors = [];
+
+    for (let i = 0; i < configs.length; i++) {
+      const config = configs[i];
+      try {
+        const { modelName, questionType, cost, description, isActive = true } = config;
+
+        // 验证每个配置
+        if (!modelName || !questionType || !cost) {
+          errors.push(`配置 ${i + 1}: 模型名称、题目类型和积分消耗不能为空`);
+          continue;
+        }
+
+        if (!['multiple_choice', 'programming'].includes(questionType)) {
+          errors.push(`配置 ${i + 1}: 题目类型必须是 multiple_choice 或 programming`);
+          continue;
+        }
+
+        if (cost <= 0) {
+          errors.push(`配置 ${i + 1}: 积分消耗必须大于0`);
+          continue;
+        }
+
+        // 转换题目类型为数据库枚举格式
+        const dbQuestionType = questionType.toUpperCase();
+
+        // 使用数据库upsert操作
+        const savedConfig = await db.upsertModelPointConfig({
+          modelName,
+          questionType: dbQuestionType,
+          cost: parseInt(cost),
+          description,
+          isActive
+        });
+
+        // 转换返回格式
+        const formattedConfig = {
+          id: savedConfig.id,
+          modelName: savedConfig.modelName,
+          questionType: savedConfig.questionType.toLowerCase(),
+          cost: savedConfig.cost,
+          isActive: savedConfig.isActive,
+          description: savedConfig.description,
+          createdAt: savedConfig.createdAt.toISOString(),
+          updatedAt: savedConfig.updatedAt.toISOString()
+        };
+
+        results.push({ 
+          action: 'upserted', 
+          config: formattedConfig 
+        });
+      } catch (error) {
+        errors.push(`配置 ${i + 1}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      success: errors.length === 0,
+      data: {
+        results,
+        processed: results.length,
+        errors: errors.length,
+        errorDetails: errors
+      },
+      message: `批量操作完成，成功处理 ${results.length} 个配置${errors.length > 0 ? `，${errors.length} 个错误` : ''}`
+    });
+  } catch (error) {
+    console.error('批量更新模型配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '批量更新失败'
+    });
+  }
+});
+
+// 🆕 客户端积分API - 用于Electron客户端的积分管理
+// 获取用户积分余额
+app.get('/api/client/credits', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const user = await db.getUserById(userId)
+    
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+    
+    res.json({ 
+      credits: user.points || 0,
+      userId: userId 
+    })
+  } catch (error) {
+    console.error('获取积分余额失败:', error)
+    res.status(500).json({ error: '服务器错误' })
+  }
+})
+
+// 检查积分是否足够（预检查）
+app.post('/api/client/credits/check', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const { modelName, questionType } = req.body
+    
+    if (!modelName || !questionType) {
+      return res.status(400).json({ error: '缺少必需参数' })
+    }
+    
+    // 获取用户当前积分
+    const user = await db.getUserById(userId)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+    
+    // 获取积分配置
+    const dbQuestionType = questionType.toUpperCase()
+    const config = await db.getModelPointConfig(modelName, dbQuestionType)
+    if (!config) {
+      return res.status(404).json({ error: '未找到积分配置' })
+    }
+    
+    const currentCredits = user.points || 0
+    const requiredCredits = config.cost
+    const sufficient = currentCredits >= requiredCredits
+    
+    res.json({
+      sufficient,
+      currentCredits,
+      requiredCredits,
+      modelName,
+      questionType,
+      configId: config.id
+    })
+  } catch (error) {
+    console.error('积分检查失败:', error)
+    res.status(500).json({ error: '服务器错误' })
+  }
+})
+
+// 扣除积分（实际扣除）
+app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const { modelName, questionType, operationId } = req.body
+    
+    if (!modelName || !questionType) {
+      return res.status(400).json({ error: '缺少必需参数' })
+    }
+    
+    // 获取用户当前积分
+    const user = await db.getUserById(userId)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+    
+    // 获取积分配置
+    const dbQuestionType = questionType.toUpperCase()
+    const config = await db.getModelPointConfig(modelName, dbQuestionType)
+    if (!config) {
+      return res.status(404).json({ error: '未找到积分配置' })
+    }
+    
+    const currentCredits = user.points || 0
+    const requiredCredits = config.cost
+    
+    // 检查积分是否足够
+    if (currentCredits < requiredCredits) {
+      return res.status(400).json({ 
+        error: '积分不足',
+        currentCredits,
+        requiredCredits
+      })
+    }
+    
+    // 扣除积分
+    const newCredits = currentCredits - requiredCredits
+    await db.updateUserCredits(userId, newCredits)
+    
+    // 记录积分交易（如果有相关表的话）
+    const transactionData = {
+      userId,
+      type: 'deduct',
+      amount: requiredCredits,
+      modelName,
+      questionType,
+      operationId: operationId || `ai_call_${Date.now()}`,
+      createdAt: new Date()
+    }
+    
+    console.log('✅ 积分扣除成功:', transactionData)
+    
+    res.json({
+      success: true,
+      previousCredits: currentCredits,
+      newCredits,
+      deductedAmount: requiredCredits,
+      operationId: transactionData.operationId
+    })
+  } catch (error) {
+    console.error('积分扣除失败:', error)
+    res.status(500).json({ error: '服务器错误' })
+  }
+})
+
+// 退还积分（失败时退款）
+app.post('/api/client/credits/refund', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const { operationId, amount, reason } = req.body
+    
+    if (!operationId || !amount) {
+      return res.status(400).json({ error: '缺少必需参数' })
+    }
+    
+    // 获取用户当前积分
+    const user = await db.getUserById(userId)
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+    
+    // 退还积分
+    const currentCredits = user.points || 0
+    const newCredits = currentCredits + amount
+    await db.updateUserCredits(userId, newCredits)
+    
+    // 记录退款交易
+    const refundData = {
+      userId,
+      type: 'refund',
+      amount,
+      operationId,
+      reason: reason || 'AI调用失败',
+      createdAt: new Date()
+    }
+    
+    console.log('✅ 积分退还成功:', refundData)
+    
+    res.json({
+      success: true,
+      previousCredits: currentCredits,
+      newCredits,
+      refundedAmount: amount,
+      operationId
+    })
+  } catch (error) {
+    console.error('积分退还失败:', error)
+    res.status(500).json({ error: '服务器错误' })
+  }
+})
 
 // 启动服务器
 app.listen(PORT, () => {

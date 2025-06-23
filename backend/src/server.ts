@@ -122,6 +122,26 @@ async function startServer() {
     // API路由
     app.use('/api/auth', authRoutes);
     app.use('/api/config', configRoutes);
+    
+    // 积分系统路由
+    const pointsRoutes = require('./routes/points').default;
+    app.use('/api/points', pointsRoutes);
+    
+    // 搜题路由
+    const searchRoutes = require('./routes/search').default;
+    app.use('/api/search', searchRoutes);
+    
+    // 管理员路由
+    const adminRoutes = require('./routes/admin').default;
+    app.use('/api/admin', adminRoutes);
+    
+    // 监控路由
+    const monitoringRoutes = require('./routes/monitoring').default;
+    app.use('/api/monitoring', monitoringRoutes);
+    
+    // API文档路由
+    const docsRoutes = require('./routes/docs').default;
+    app.use('/api/docs', docsRoutes);
 
     // 404处理
     app.use('*', (req, res) => {

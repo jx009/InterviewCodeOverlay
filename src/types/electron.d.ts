@@ -46,6 +46,40 @@ export interface ElectronAPI {
   onUpdateAvailable: (callback: (info: any) => void) => () => void
   onUpdateDownloaded: (callback: (info: any) => void) => () => void
 
+  // 🆕 新的积分管理方法
+  creditsGet: () => Promise<{ success: boolean; credits?: number; error?: string }>
+  creditsCheck: (params: { modelName: string; questionType: string }) => Promise<{ 
+    success: boolean; 
+    sufficient?: boolean; 
+    currentCredits?: number; 
+    requiredCredits?: number; 
+    error?: string 
+  }>
+  creditsDeduct: (params: { 
+    modelName: string; 
+    questionType: string; 
+    operationId?: string 
+  }) => Promise<{ 
+    success: boolean; 
+    previousCredits?: number; 
+    newCredits?: number; 
+    deductedAmount?: number; 
+    operationId?: string; 
+    error?: string 
+  }>
+  creditsRefund: (params: { 
+    operationId: string; 
+    amount: number; 
+    reason?: string 
+  }) => Promise<{ 
+    success: boolean; 
+    previousCredits?: number; 
+    newCredits?: number; 
+    refundedAmount?: number; 
+    error?: string 
+  }>
+
+  // 🆕 兼容旧系统的方法（逐步废弃）
   decrementCredits: () => Promise<void>
   setInitialCredits: (credits: number) => Promise<void>
   onCreditsUpdated: (callback: (credits: number) => void) => () => void
@@ -65,16 +99,7 @@ export interface ElectronAPI {
   // Web Authentication methods
   webAuthLogin: () => Promise<{ success: boolean; error?: string }>
   webAuthLogout: () => Promise<{ success: boolean; error?: string }>
-  webAuthStatus: () => Promise<{ 
-    authenticated: boolean; 
-    user: { 
-      id: string; 
-      username: string; 
-      email: string; 
-      createdAt: string 
-    } | null; 
-    error?: string 
-  }>
+  webAuthStatus: () => Promise<{ authenticated: boolean; user: any; sessionId: string; error?: string }>
   webSyncConfig: () => Promise<{ success: boolean; config?: any; error?: string }>
   webUpdateConfig: (config: any) => Promise<{ success: boolean; config?: any; error?: string }>
   webGetAIModels: () => Promise<{ success: boolean; models: any[]; error?: string }>
@@ -84,6 +109,15 @@ export interface ElectronAPI {
   // Web Authentication event listeners
   onWebAuthStatus?: (callback: (data: { authenticated: boolean; user: any }) => void) => () => void
   onConfigUpdated?: (callback: (config: any) => void) => () => void
+
+  // Credits API
+  creditsGet: () => Promise<{ success: boolean; credits?: number; error?: string }>
+  creditsCheck: (modelName: string, questionType: string) => Promise<{ success: boolean; sufficient?: boolean; current?: number; required?: number; error?: string }>
+  creditsDeduct: (modelName: string, questionType: string, operationId: string) => Promise<{ success: boolean; newCredits?: number; error?: string }>
+  creditsRefund: (amount: number, operationId: string, reason: string) => Promise<{ success: boolean; newCredits?: number; error?: string }>
+
+  // Notification listeners
+  onNotification: (callback: (notification: any) => void) => () => void
 }
 
 declare global {

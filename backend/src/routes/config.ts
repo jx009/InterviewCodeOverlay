@@ -65,9 +65,9 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
           programmingModel: 'claude-3-5-sonnet-20241022',
           multipleChoiceModel: 'claude-3-5-sonnet-20241022',
           selectedProvider: 'claude',
-          extractionModel: 'claude-3-7-sonnet-20250219',
-          solutionModel: 'claude-3-7-sonnet-20250219',
-          debuggingModel: 'claude-3-7-sonnet-20250219',
+          extractionModel: 'claude-sonnet-4-20250514',
+          solutionModel: 'claude-sonnet-4-20250514',
+          debuggingModel: 'claude-sonnet-4-20250514',
           language: 'python'
         } as any
       });
@@ -156,9 +156,9 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
         programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
         multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
         selectedProvider: updateData.selectedProvider || 'claude',
-        extractionModel: updateData.extractionModel || 'claude-3-7-sonnet-20250219',
-        solutionModel: updateData.solutionModel || 'claude-3-7-sonnet-20250219',
-        debuggingModel: updateData.debuggingModel || 'claude-3-7-sonnet-20250219',
+        extractionModel: updateData.extractionModel || 'claude-sonnet-4-20250514',
+        solutionModel: updateData.solutionModel || 'claude-sonnet-4-20250514',
+        debuggingModel: updateData.debuggingModel || 'claude-sonnet-4-20250514',
         language: updateData.language || 'python',
         opacity: updateData.opacity || 1.0,
         showCopyButton: updateData.showCopyButton !== undefined ? updateData.showCopyButton : true
@@ -259,9 +259,9 @@ router.post('/reset', authenticateToken, async (req: AuthenticatedRequest, res: 
       programmingModel: 'claude-3-5-sonnet-20241022',
       multipleChoiceModel: 'claude-3-5-sonnet-20241022',
       selectedProvider: 'claude',
-      extractionModel: 'claude-3-7-sonnet-20250219',
-      solutionModel: 'claude-3-7-sonnet-20250219',
-      debuggingModel: 'claude-3-7-sonnet-20250219',
+      extractionModel: 'claude-sonnet-4-20250514',
+      solutionModel: 'claude-sonnet-4-20250514',
+      debuggingModel: 'claude-sonnet-4-20250514',
       language: 'python',
       opacity: 1.0,
       showCopyButton: true
@@ -323,9 +323,9 @@ router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
           multipleChoiceModel: 'claude-3-5-sonnet-20241022',
           aiModel: 'claude-3-5-sonnet-20241022',
           selectedProvider: 'claude',
-          extractionModel: 'claude-3-7-sonnet-20250219',
-          solutionModel: 'claude-3-7-sonnet-20250219',
-          debuggingModel: 'claude-3-7-sonnet-20250219',
+          extractionModel: 'claude-sonnet-4-20250514',
+          solutionModel: 'claude-sonnet-4-20250514',
+          debuggingModel: 'claude-sonnet-4-20250514',
           language: 'python',
           theme: 'system'
         } as any
@@ -462,9 +462,9 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
         display: updateData.display || JSON.stringify({}),
         processing: updateData.processing || JSON.stringify({}),
         selectedProvider: updateData.selectedProvider || 'claude',
-        extractionModel: updateData.extractionModel || 'claude-3-7-sonnet-20250219',
-        solutionModel: updateData.solutionModel || 'claude-3-7-sonnet-20250219',
-        debuggingModel: updateData.debuggingModel || 'claude-3-7-sonnet-20250219',
+        extractionModel: updateData.extractionModel || 'claude-sonnet-4-20250514',
+        solutionModel: updateData.solutionModel || 'claude-sonnet-4-20250514',
+        debuggingModel: updateData.debuggingModel || 'claude-sonnet-4-20250514',
         opacity: updateData.opacity || 1.0,
         showCopyButton: updateData.showCopyButton !== undefined ? updateData.showCopyButton : true
       } as any

@@ -193,6 +193,16 @@ const electronAPI = {
       ipcRenderer.removeListener("update-downloaded", subscription)
     }
   },
+  // 🆕 新的积分管理方法
+  creditsGet: () => ipcRenderer.invoke("credits:get"),
+  creditsCheck: (params: { modelName: string; questionType: string }) => 
+    ipcRenderer.invoke("credits:check", params),
+  creditsDeduct: (params: { modelName: string; questionType: string; operationId?: string }) => 
+    ipcRenderer.invoke("credits:deduct", params),
+  creditsRefund: (params: { operationId: string; amount: number; reason?: string }) => 
+    ipcRenderer.invoke("credits:refund", params),
+
+  // 🆕 兼容旧系统的方法（逐步废弃）
   decrementCredits: () => ipcRenderer.invoke("decrement-credits"),
   onCreditsUpdated: (callback: (credits: number) => void) => {
     const subscription = (_event: any, credits: number) => callback(credits)

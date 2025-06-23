@@ -45,7 +45,7 @@ function App() {
     actionText: "",
     onActionClick: undefined as (() => void) | undefined
   })
-  const [credits, setCredits] = useState<number>(999) // Unlimited credits
+  const [credits, setCredits] = useState<number>(0) // Real credits from server
   const [currentLanguage, setCurrentLanguage] = useState<string>("python")
   const [isInitialized, setIsInitialized] = useState(false)
   
@@ -64,24 +64,45 @@ function App() {
   // 当未认证时自动显示登录对话框，认证后自动关闭
   const [isWebAuthOpen, setIsWebAuthOpen] = useState(false)
   
+  // Update credits from server
+  const updateCredits = useCallback((newCredits: number) => {
+    setCredits(newCredits)
+    window.__CREDITS__ = newCredits
+  }, [])
+
+  // 🆕 获取用户积分余额 (通过IPC)
+  const fetchUserCredits = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.creditsGet()
+      if (result.success) {
+        updateCredits(result.credits)
+        console.log('✅ (IPC) 积分余额获取成功:', result.credits)
+      } else {
+        console.error('❌ (IPC) 获取积分余额失败:', result.error)
+        updateCredits(0)
+      }
+    } catch (error) {
+      console.error('❌ (IPC) 获取积分余额错误:', error)
+      updateCredits(0)
+    }
+  }, [updateCredits])
+
   // 🆕 监听认证状态变化，自动控制对话框显示
   useEffect(() => {
     if (isInitialized && !authLoading) {
       if (!authenticated) {
         // 未认证时显示登录对话框
         setIsWebAuthOpen(true)
+        // 重置积分为0
+        updateCredits(0)
       } else {
         // 已认证时关闭登录对话框
         setIsWebAuthOpen(false)
+        // 🆕 认证成功后获取积分余额
+        fetchUserCredits()
       }
     }
-  }, [isInitialized, authenticated, authLoading])
-
-  // Set unlimited credits
-  const updateCredits = useCallback(() => {
-    setCredits(999) // No credit limit in this version
-    window.__CREDITS__ = 999
-  }, [])
+  }, [isInitialized, authenticated, authLoading, updateCredits, fetchUserCredits])
 
   // Helper function to safely update language
   const updateLanguage = useCallback((newLanguage: string) => {
@@ -226,8 +247,8 @@ function App() {
     // Load config and set values
     const initializeApp = async () => {
       try {
-        // Set unlimited credits
-        updateCredits()
+        // Initialize with 0 credits, will be loaded from server when authenticated
+        updateCredits(0)
         
         // Load config including language and model settings
         const loadedConfig = await window.electronAPI.getConfig()
