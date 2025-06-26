@@ -661,6 +661,410 @@ app.post('/api/logout', async (req, res) => {
   }
 });
 
+// 支付相关API路由
+// 支付套餐列表
+app.get('/api/payment/packages', async (req, res) => {
+  try {
+    console.log('📦 获取支付套餐列表请求');
+    
+    // 从数据库获取套餐列表
+    const [packages] = await mysqlConnection.execute(
+      'SELECT * FROM payment_packages WHERE is_active = 1 ORDER BY sort_order ASC'
+    );
+    
+    res.json({
+      success: true,
+      data: packages,
+      message: '获取套餐列表成功'
+    });
+    
+  } catch (error) {
+    console.error('❌ 获取支付套餐列表失败:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: `获取套餐列表失败: ${error.message}`
+    });
+  }
+});
+
+// 创建充值订单
+app.post('/api/payment/orders', async (req, res) => {
+  try {
+    const { packageId, paymentMethod = 'WECHAT_PAY' } = req.body;
+    const sessionId = req.cookies?.session_id;
+    const clientIP = getClientIP(req);
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: '用户未登录'
+      });
+    }
+    
+    // 获取用户信息
+    const sessionKey = `session:${sessionId}:${clientIP}`;
+    const sessionDataStr = await redisClient.get(sessionKey);
+    
+    if (!sessionDataStr) {
+      return res.status(401).json({
+        success: false,
+        message: '会话已过期'
+      });
+    }
+    
+    const sessionData = JSON.parse(sessionDataStr);
+    const userId = sessionData.userId;
+    
+    // 验证请求参数
+    if (!packageId) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少必要参数'
+      });
+    }
+    
+    // 获取套餐信息
+    const [packages] = await mysqlConnection.execute(
+      'SELECT * FROM payment_packages WHERE id = ?',
+      [packageId]
+    );
+    
+    if (packages.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '套餐不存在'
+      });
+    }
+    
+    const packageInfo = packages[0];
+    
+    // 生成订单号
+    const orderNo = 'PAY' + Date.now().toString() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const outTradeNo = 'OUT' + Date.now().toString() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    
+    // 计算过期时间 (15分钟后)
+    const expireTime = new Date();
+    expireTime.setMinutes(expireTime.getMinutes() + 15);
+    
+    // 创建订单记录
+    await mysqlConnection.execute(
+      `INSERT INTO payment_orders 
+       (order_no, out_trade_no, user_id, package_id, amount, points, bonus_points, payment_method, payment_status, expire_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)`,
+      [
+        orderNo,
+        outTradeNo,
+        userId,
+        packageId,
+        packageInfo.amount,
+        packageInfo.points,
+        packageInfo.bonus_points || 0,
+        paymentMethod,
+        expireTime
+      ]
+    );
+    
+    // 假设这里调用了支付网关获取支付二维码
+    const codeUrl = `https://example.com/pay/${orderNo}`;
+    
+    res.json({
+      success: true,
+      data: {
+        orderNo,
+        paymentData: {
+          codeUrl
+        },
+        expireTime: expireTime.toISOString()
+      },
+      message: '创建订单成功'
+    });
+    
+  } catch (error) {
+    console.error('❌ 创建充值订单失败:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: `创建订单失败: ${error.message}`
+    });
+  }
+});
+
+// 获取用户订单列表
+app.get('/api/payment/orders', async (req, res) => {
+  try {
+    const sessionId = req.cookies?.session_id;
+    const clientIP = getClientIP(req);
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: '用户未登录'
+      });
+    }
+    
+    // 获取用户信息
+    const sessionKey = `session:${sessionId}:${clientIP}`;
+    const sessionDataStr = await redisClient.get(sessionKey);
+    
+    if (!sessionDataStr) {
+      return res.status(401).json({
+        success: false,
+        message: '会话已过期'
+      });
+    }
+    
+    const sessionData = JSON.parse(sessionDataStr);
+    const userId = sessionData.userId;
+    
+    // 解析查询参数
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    
+    // 获取订单列表
+    const [orders] = await mysqlConnection.execute(
+      `SELECT o.*, p.name as package_name, p.description as package_description
+       FROM payment_orders o
+       LEFT JOIN payment_packages p ON o.package_id = p.id
+       WHERE o.user_id = ?
+       ORDER BY o.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, limit, offset]
+    );
+    
+    // 获取总订单数
+    const [countResult] = await mysqlConnection.execute(
+      'SELECT COUNT(*) as total FROM payment_orders WHERE user_id = ?',
+      [userId]
+    );
+    
+    const total = countResult[0].total;
+    const pages = Math.ceil(total / limit);
+    
+    // 处理返回数据
+    const formattedOrders = orders.map(order => ({
+      id: order.id,
+      orderNo: order.order_no,
+      outTradeNo: order.out_trade_no,
+      userId: order.user_id,
+      packageId: order.package_id,
+      amount: order.amount,
+      points: order.points,
+      bonusPoints: order.bonus_points,
+      paymentMethod: order.payment_method,
+      paymentStatus: order.payment_status,
+      paymentTime: order.payment_time,
+      expiredAt: order.expire_time,
+      createdAt: order.created_at,
+      updatedAt: order.updated_at,
+      package: {
+        name: order.package_name,
+        description: order.package_description
+      }
+    }));
+    
+    res.json({
+      success: true,
+      data: formattedOrders,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages
+      },
+      message: '获取订单列表成功'
+    });
+    
+  } catch (error) {
+    console.error('❌ 获取用户订单列表失败:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: `获取订单列表失败: ${error.message}`
+    });
+  }
+});
+
+// 查询订单状态
+app.get('/api/payment/orders/:orderNo', async (req, res) => {
+  try {
+    const { orderNo } = req.params;
+    const sessionId = req.cookies?.session_id;
+    const clientIP = getClientIP(req);
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: '用户未登录'
+      });
+    }
+    
+    // 获取用户信息
+    const sessionKey = `session:${sessionId}:${clientIP}`;
+    const sessionDataStr = await redisClient.get(sessionKey);
+    
+    if (!sessionDataStr) {
+      return res.status(401).json({
+        success: false,
+        message: '会话已过期'
+      });
+    }
+    
+    const sessionData = JSON.parse(sessionDataStr);
+    const userId = sessionData.userId;
+    
+    // 获取订单信息
+    const [orders] = await mysqlConnection.execute(
+      `SELECT o.*, p.name as package_name, p.description as package_description
+       FROM payment_orders o
+       LEFT JOIN payment_packages p ON o.package_id = p.id
+       WHERE o.order_no = ?`,
+      [orderNo]
+    );
+    
+    if (orders.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '订单不存在'
+      });
+    }
+    
+    const order = orders[0];
+    
+    // 验证订单所有权
+    if (order.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: '无权查看此订单'
+      });
+    }
+    
+    // 格式化订单数据
+    const formattedOrder = {
+      id: order.id,
+      orderNo: order.order_no,
+      outTradeNo: order.out_trade_no,
+      userId: order.user_id,
+      packageId: order.package_id,
+      amount: order.amount,
+      points: order.points,
+      bonusPoints: order.bonus_points,
+      paymentMethod: order.payment_method,
+      paymentStatus: order.payment_status,
+      paymentTime: order.payment_time,
+      expiredAt: order.expire_time,
+      createdAt: order.created_at,
+      updatedAt: order.updated_at,
+      package: {
+        name: order.package_name,
+        description: order.package_description
+      }
+    };
+    
+    res.json({
+      success: true,
+      data: {
+        order: formattedOrder,
+        tradeState: order.payment_status,
+        tradeStateDesc: order.payment_status === 'PAID' ? '支付成功' : 
+                        order.payment_status === 'PENDING' ? '待支付' : 
+                        order.payment_status === 'CANCELLED' ? '已取消' : 
+                        order.payment_status === 'EXPIRED' ? '已过期' : '支付失败'
+      },
+      message: '获取订单状态成功'
+    });
+    
+  } catch (error) {
+    console.error('❌ 查询订单状态失败:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: `查询订单失败: ${error.message}`
+    });
+  }
+});
+
+// 取消订单
+app.post('/api/payment/orders/:orderNo/cancel', async (req, res) => {
+  try {
+    const { orderNo } = req.params;
+    const sessionId = req.cookies?.session_id;
+    const clientIP = getClientIP(req);
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: '用户未登录'
+      });
+    }
+    
+    // 获取用户信息
+    const sessionKey = `session:${sessionId}:${clientIP}`;
+    const sessionDataStr = await redisClient.get(sessionKey);
+    
+    if (!sessionDataStr) {
+      return res.status(401).json({
+        success: false,
+        message: '会话已过期'
+      });
+    }
+    
+    const sessionData = JSON.parse(sessionDataStr);
+    const userId = sessionData.userId;
+    
+    // 获取订单信息
+    const [orders] = await mysqlConnection.execute(
+      'SELECT * FROM payment_orders WHERE order_no = ?',
+      [orderNo]
+    );
+    
+    if (orders.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '订单不存在'
+      });
+    }
+    
+    const order = orders[0];
+    
+    // 验证订单所有权
+    if (order.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: '无权取消此订单'
+      });
+    }
+    
+    // 验证订单状态
+    if (order.payment_status !== 'PENDING') {
+      return res.status(400).json({
+        success: false,
+        message: '只能取消待支付的订单'
+      });
+    }
+    
+    // 更新订单状态
+    await mysqlConnection.execute(
+      'UPDATE payment_orders SET payment_status = "CANCELLED", updated_at = NOW() WHERE id = ?',
+      [order.id]
+    );
+    
+    res.json({
+      success: true,
+      message: '订单取消成功'
+    });
+    
+  } catch (error) {
+    console.error('❌ 取消订单失败:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: `取消订单失败: ${error.message}`
+    });
+  }
+});
+
 // 启动服务器
 async function startServer() {
   try {

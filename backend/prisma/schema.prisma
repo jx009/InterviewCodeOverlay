@@ -25,6 +25,7 @@ model User {
   usage        UsageRecord[]
   sessions     UserSession[]
   transactions PointTransaction[] // 积分交易记录
+  paymentOrders PaymentOrder[]    // 支付订单记录
 
   @@map("users")
 }
@@ -191,4 +192,110 @@ enum TransactionType {
   REWARD   @map("reward")   // 奖励
 
   @@map("transaction_types")
+}
+
+// 💰 支付系统相关表
+
+// 支付订单表
+model PaymentOrder {
+  id            Int           @id @default(autoincrement())
+  orderNo       String        @unique @db.VarChar(64) @map("order_no") // 系统订单号
+  outTradeNo    String        @unique @db.VarChar(64) @map("out_trade_no") // 商户订单号
+  userId        Int           @map("user_id")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Decimal       @db.Decimal(10,2) // 支付金额(元)
+  points        Int           // 充值积分数量
+  bonusPoints   Int           @default(0) @map("bonus_points") // 赠送积分
+  paymentMethod PaymentMethod @map("payment_method") // 支付方式
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status") // 支付状态
+  transactionId String?       @db.VarChar(64) @map("transaction_id") // 第三方交易ID
+  paymentTime   DateTime?     @map("payment_time") // 支付完成时间
+  notifyTime    DateTime?     @map("notify_time") // 回调通知时间
+  expireTime    DateTime      @map("expire_time") // 订单过期时间
+  packageId     Int?          @map("package_id") // 关联的套餐ID
+  package       PaymentPackage? @relation(fields: [packageId], references: [id])
+  metadata      String?       @db.Text // 订单元数据(JSON格式)
+  failReason    String?       @db.Text @map("fail_reason") // 失败原因
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([orderNo])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@map("payment_orders")
+}
+
+// 支付充值套餐表
+model PaymentPackage {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100) // 套餐名称
+  description String?  @db.Text // 套餐描述
+  amount      Decimal  @db.Decimal(10,2) // 价格(元)
+  points      Int      // 获得积分
+  bonusPoints Int      @default(0) @map("bonus_points") // 赠送积分
+  isActive    Boolean  @default(true) @map("is_active") // 是否启用
+  sortOrder   Int      @default(0) @map("sort_order") // 排序权重
+  icon        String?  @db.VarChar(255) // 套餐图标
+  tags        String?  @db.Text // 标签(JSON格式: ["推荐", "限时"])
+  isRecommended Boolean @default(false) @map("is_recommended") // 是否推荐
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  orders      PaymentOrder[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("payment_packages")
+}
+
+// 支付回调日志表
+model PaymentNotifyLog {
+  id            Int           @id @default(autoincrement())
+  orderNo       String        @db.VarChar(64) @map("order_no") // 订单号
+  paymentMethod PaymentMethod @map("payment_method") // 支付方式
+  notifyType    String        @db.VarChar(50) @map("notify_type") // 通知类型
+  requestBody   String        @db.Text @map("request_body") // 回调请求体
+  requestHeaders String?      @db.Text @map("request_headers") // 请求头(JSON格式)
+  responseStatus Int          @default(200) @map("response_status") // 响应状态码
+  processStatus NotifyStatus  @default(PENDING) @map("process_status") // 处理状态
+  errorMessage  String?       @db.Text @map("error_message") // 错误信息
+  processTime   DateTime?     @map("process_time") // 处理时间
+  retryCount    Int           @default(0) @map("retry_count") // 重试次数
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@index([orderNo])
+  @@index([processStatus])
+  @@index([createdAt])
+  @@map("payment_notify_logs")
+}
+
+// 支付方式枚举
+enum PaymentMethod {
+  WECHAT_PAY @map("wechat_pay") // 微信支付
+  ALIPAY     @map("alipay")     // 支付宝
+  
+  @@map("payment_methods")
+}
+
+// 支付状态枚举
+enum PaymentStatus {
+  PENDING   @map("pending")   // 待支付
+  PAID      @map("paid")      // 已支付
+  FAILED    @map("failed")    // 支付失败
+  CANCELLED @map("cancelled") // 已取消
+  REFUNDED  @map("refunded")  // 已退款
+  EXPIRED   @map("expired")   // 已过期
+  
+  @@map("payment_statuses")
+}
+
+// 通知处理状态枚举
+enum NotifyStatus {
+  PENDING @map("pending") // 待处理
+  SUCCESS @map("success") // 处理成功
+  FAILED  @map("failed")  // 处理失败
+  
+  @@map("notify_statuses")
 } 

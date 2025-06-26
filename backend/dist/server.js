@@ -15,6 +15,7 @@ const email_1 = require("./utils/email");
 const response_1 = require("./utils/response");
 const auth_1 = __importDefault(require("./routes/auth"));
 const config_1 = __importDefault(require("./routes/config"));
+const payment_1 = require("./payment");
 const app = (0, express_1.default)();
 async function startServer() {
     try {
@@ -97,6 +98,7 @@ async function startServer() {
         });
         app.use('/api/auth', auth_1.default);
         app.use('/api/config', config_1.default);
+        app.use('/api/payment', payment_1.paymentRoutes);
         const pointsRoutes = require('./routes/points').default;
         app.use('/api/points', pointsRoutes);
         const searchRoutes = require('./routes/search').default;

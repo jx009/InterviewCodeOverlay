@@ -111,16 +111,8 @@ export declare const SUPPORTED_MODELS: {
         readonly name: "Claude Sonnet 4 (Thinking)";
         readonly category: "general";
     }, {
-        readonly id: "claude-3-7-sonnet-thinking";
-        readonly name: "Claude 3.7 Sonnet (Thinking)";
-        readonly category: "general";
-    }, {
         readonly id: "claude-opus-4-20250514-thinking";
         readonly name: "Claude Opus 4 (Thinking)";
-        readonly category: "general";
-    }, {
-        readonly id: "claude-3-7-sonnet-20250219";
-        readonly name: "Claude 3.7 Sonnet";
         readonly category: "general";
     }, {
         readonly id: "claude-sonnet-4-20250514";

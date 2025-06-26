@@ -14,6 +14,8 @@ import { ResponseUtils } from './utils/response';
 import authRoutes from './routes/auth';
 import authEnhancedRoutes, { initAuthEnhanced } from './routes/auth-enhanced';
 import configRoutes from './routes/config';
+// 导入支付路由
+import { paymentRoutes } from './payment';
 
 const app = express();
 
@@ -131,6 +133,26 @@ async function startServer() {
 
     app.use(generalLimiter);
 
+    // 添加调试中间件
+    app.use((req, res, next) => {
+      console.log(`📥 ${req.method} 请求: ${req.path}`);
+      console.log('📋 请求头:', {
+        'x-session-id': req.headers['x-session-id'] ? '存在' : '不存在',
+        'authorization': req.headers.authorization ? '存在' : '不存在',
+        'cookie': req.headers.cookie ? '存在' : '不存在',
+        'user-agent': req.headers['user-agent']?.substring(0, 30) + '...'
+      });
+      
+      // 记录响应发送时的状态码
+      const originalSend = res.send;
+      res.send = function(body) {
+        console.log(`📤 响应: ${res.statusCode}`);
+        return originalSend.call(this, body);
+      };
+      
+      next();
+    });
+
     // 6. 健康检查端点
     app.get('/health', async (req, res) => {
       try {
@@ -174,6 +196,87 @@ async function startServer() {
     // 8. API路由
     console.log('🔧 配置API路由...');
     
+    // 添加调试端点
+    app.get('/api/debug/session', (req, res) => {
+      res.json({
+        time: new Date().toISOString(),
+        headers: {
+          sessionId: req.headers['x-session-id'],
+          authorization: req.headers.authorization ? '存在' : '不存在',
+          cookie: req.headers.cookie
+        }
+      });
+    });
+
+    // 在此处添加会话状态检查路由
+    app.get('/api/session_status', async (req, res) => {
+      try {
+        console.log('📝 收到会话状态检查请求', { 
+          headers: {
+            'x-session-id': req.headers['x-session-id'] ? '存在' : '不存在',
+            'authorization': req.headers.authorization ? '存在' : '不存在'
+          }
+        });
+        
+        const sessionId = req.headers['x-session-id'] as string;
+        
+        if (!sessionId) {
+          console.log('❌ 未提供会话ID');
+          return res.json({
+            success: false,
+            message: '未提供会话ID'
+          });
+        }
+        
+        // 使用会话管理器验证会话
+        const { initAuthEnhanced } = require('./routes/auth-enhanced');
+        const { SessionManager } = require('./config/redis-working');
+        const sessionManager = new SessionManager();
+        const sessionValidation = await sessionManager.validateSession(sessionId);
+        
+        if (!sessionValidation.valid) {
+          console.log('❌ 会话无效', sessionValidation);
+          return res.json({
+            success: false,
+            message: '会话已过期或无效'
+          });
+        }
+        
+        // 获取用户信息
+        const { prisma } = require('./config/database');
+        const user = await prisma.user.findUnique({
+          where: { id: sessionValidation.userId },
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            createdAt: true
+          }
+        });
+
+        if (!user) {
+          console.log('❌ 用户不存在', { userId: sessionValidation.userId });
+          return res.json({
+            success: false,
+            message: '用户不存在'
+          });
+        }
+
+        console.log('✅ 会话有效', { userId: user.id, username: user.username });
+        return res.json({
+          success: true,
+          user,
+          sessionId
+        });
+      } catch (error) {
+        console.error('❌ 会话状态检查失败:', error);
+        return res.status(500).json({ 
+          success: false,
+          error: '服务器内部错误'
+        });
+      }
+    });
+    
     // 原有认证路由（保持兼容性）
     app.use('/api/auth', authRoutes);
     
@@ -182,6 +285,29 @@ async function startServer() {
     
     // 配置路由
     app.use('/api/config', configRoutes);
+    
+    // 支付路由
+    app.use('/api/payment', paymentRoutes);
+    
+    // 积分系统路由
+    const pointsRoutes = require('./routes/points').default;
+    app.use('/api/points', pointsRoutes);
+    
+    // 搜题路由
+    const searchRoutes = require('./routes/search').default;
+    app.use('/api/search', searchRoutes);
+    
+    // 管理员路由
+    const adminRoutes = require('./routes/admin').default;
+    app.use('/api/admin', adminRoutes);
+    
+    // 监控路由
+    const monitoringRoutes = require('./routes/monitoring').default;
+    app.use('/api/monitoring', monitoringRoutes);
+    
+    // API文档路由
+    const docsRoutes = require('./routes/docs').default;
+    app.use('/api/docs', docsRoutes);
 
     // 9. 404处理
     app.use('*', (req, res) => {

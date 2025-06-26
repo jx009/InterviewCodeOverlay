@@ -11,6 +11,45 @@ const Database = require('./database');
 // 创建数据库实例
 const db = new Database();
 
+// 添加支付套餐列表方法
+db.getPaymentPackages = function() {
+  return [
+    {
+      id: 1,
+      name: "入门套餐",
+      description: "基础AI功能使用",
+      points: 100,
+      bonusPoints: 0,
+      amount: 10.00,
+      status: "active",
+      isRecommended: false,
+      sortOrder: 1
+    },
+    {
+      id: 2,
+      name: "标准套餐",
+      description: "所有AI功能全部使用",
+      points: 500,
+      bonusPoints: 50,
+      amount: 45.00,
+      status: "active",
+      isRecommended: true,
+      sortOrder: 0
+    },
+    {
+      id: 3,
+      name: "高级套餐",
+      description: "无限使用所有功能",
+      points: 1200,
+      bonusPoints: 200,
+      amount: 98.00,
+      status: "active",
+      isRecommended: false,
+      sortOrder: 2
+    }
+  ];
+};
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -300,6 +339,50 @@ const authenticateSession = async (req, res, next) => {
       success: false,
       message: '认证服务异常' 
     });
+  }
+};
+
+// 验证token中间件
+const verifyToken = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+    if (!token) {
+      return res.status(401).json({ success: false, message: '未提供认证令牌' });
+    }
+
+    // 从会话存储中获取用户会话
+    const session = await SessionStore.get(token);
+    if (!session) {
+      return res.status(401).json({ success: false, message: '无效的会话令牌' });
+    }
+
+    req.user = session.user;
+    req.token = token;
+    next();
+  } catch (error) {
+    console.error('Token验证异常:', error);
+    return res.status(401).json({ success: false, message: '认证失败' });
+  }
+};
+
+// 可选验证token中间件（不强制需要登录）
+const optionalVerifyToken = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+    if (token) {
+      // 从会话存储中获取用户会话
+      const session = await SessionStore.get(token);
+      if (session) {
+        req.user = session.user;
+        req.token = token;
+      }
+    }
+    // 无论是否有有效令牌，都继续处理请求
+    next();
+  } catch (error) {
+    console.error('可选Token验证异常:', error);
+    // 出现异常时，仍然继续处理请求，但不设置用户信息
+    next();
   }
 };
 
@@ -1586,6 +1669,190 @@ app.post('/api/client/credits/refund', authenticateSession, async (req, res) => 
     res.status(500).json({ error: '服务器错误' })
   }
 })
+
+// 支付套餐API
+app.get('/api/payment/packages', optionalVerifyToken, (req, res) => {
+  try {
+    // 获取支付套餐列表
+    const packages = db.getPaymentPackages();
+    
+    res.json({
+      success: true, 
+      data: packages,
+      message: '获取套餐列表成功'
+    });
+  } catch (error) {
+    console.error('获取支付套餐列表失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取支付套餐列表失败: ' + error.message
+    });
+  }
+});
+
+// 创建支付订单API
+app.post('/api/payment/orders', verifyToken, (req, res) => {
+  try {
+    const { packageId, paymentMethod = 'WECHAT_PAY' } = req.body;
+    
+    if (!packageId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '缺少必要参数: packageId'
+      });
+    }
+    
+    // 查找套餐
+    const packages = db.getPaymentPackages();
+    const packageData = packages.find(pkg => pkg.id === packageId);
+    
+    if (!packageData) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '找不到指定的套餐'
+      });
+    }
+    
+    // 生成订单编号
+    const orderNo = 'PAY' + Date.now() + Math.floor(Math.random() * 1000);
+    const outTradeNo = 'OUT' + Date.now() + Math.floor(Math.random() * 1000);
+    
+    // 生成支付二维码URL (模拟)
+    const codeUrl = `https://example.com/pay/${orderNo}`;
+    
+    // 返回订单信息
+    res.json({
+      success: true,
+      data: {
+        orderNo,
+        paymentData: {
+          codeUrl,
+          outTradeNo,
+          amount: packageData.amount
+        },
+        expireTime: new Date(Date.now() + 30 * 60 * 1000) // 30分钟后过期
+      },
+      message: '创建订单成功'
+    });
+    
+  } catch (error) {
+    console.error('创建订单失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '创建订单失败: ' + error.message
+    });
+  }
+});
+
+// 查询订单状态API
+app.get('/api/payment/orders/:orderNo', verifyToken, (req, res) => {
+  try {
+    const { orderNo } = req.params;
+    
+    if (!orderNo) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少订单编号'
+      });
+    }
+    
+    // 模拟订单数据
+    const order = {
+      id: 1,
+      orderNo,
+      outTradeNo: 'OUT' + orderNo.substring(3),
+      userId: req.user.id,
+      packageId: 1,
+      amount: 10.00,
+      points: 100,
+      bonusPoints: 0,
+      paymentMethod: 'WECHAT_PAY',
+      paymentStatus: 'PENDING',
+      expiredAt: new Date(Date.now() + 30 * 60 * 1000),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    res.json({
+      success: true,
+      data: {
+        order,
+        tradeState: 'NOTPAY',
+        tradeStateDesc: '未支付'
+      },
+      message: '查询订单状态成功'
+    });
+    
+  } catch (error) {
+    console.error('查询订单状态失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '查询订单状态失败: ' + error.message
+    });
+  }
+});
+
+// 获取用户订单列表API
+app.get('/api/payment/orders', verifyToken, (req, res) => {
+  try {
+    // 获取分页参数
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    
+    // 模拟订单列表
+    const orders = [
+      {
+        id: 1,
+        orderNo: 'PAY1656789012345',
+        outTradeNo: 'OUT1656789012345',
+        userId: req.user.id,
+        packageId: 2,
+        amount: 45.00,
+        points: 500,
+        bonusPoints: 50,
+        paymentMethod: 'WECHAT_PAY',
+        paymentStatus: 'PAID',
+        expiredAt: new Date(Date.now() + 30 * 60 * 1000),
+        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+      },
+      {
+        id: 2,
+        orderNo: 'PAY1656789054321',
+        outTradeNo: 'OUT1656789054321',
+        userId: req.user.id,
+        packageId: 1,
+        amount: 10.00,
+        points: 100,
+        bonusPoints: 0,
+        paymentMethod: 'WECHAT_PAY',
+        paymentStatus: 'PENDING',
+        expiredAt: new Date(Date.now() + 30 * 60 * 1000),
+        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+      }
+    ];
+    
+    res.json({
+      success: true,
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total: 2,
+        pages: 1
+      },
+      message: '获取订单列表成功'
+    });
+    
+  } catch (error) {
+    console.error('获取订单列表失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取订单列表失败: ' + error.message
+    });
+  }
+});
 
 // 启动服务器
 app.listen(PORT, () => {

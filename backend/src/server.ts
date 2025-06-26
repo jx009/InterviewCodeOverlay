@@ -12,6 +12,8 @@ import { ResponseUtils } from './utils/response';
 // 导入路由
 import authRoutes from './routes/auth';
 import configRoutes from './routes/config';
+// 导入支付路由
+import { paymentRoutes } from './payment';
 
 const app = express();
 
@@ -122,6 +124,9 @@ async function startServer() {
     // API路由
     app.use('/api/auth', authRoutes);
     app.use('/api/config', configRoutes);
+    
+    // 支付路由
+    app.use('/api/payment', paymentRoutes);
     
     // 积分系统路由
     const pointsRoutes = require('./routes/points').default;
