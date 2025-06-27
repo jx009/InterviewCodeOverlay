@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuthContext } from '../contexts/AuthContext';
 import StepIndicator from '../components/shared/StepIndicator';
 
 // 🛠️ 复用登录页面的密码隐藏样式
@@ -38,7 +38,7 @@ export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPage
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const { sendResetCode, verifyResetCode, resetPassword, loading } = useAuth();
+  const { sendResetCode, verifyResetCode, resetPassword, loading } = useAuthContext();
 
   const steps = ['验证邮箱', '输入验证码', '设置新密码', '完成'];
 

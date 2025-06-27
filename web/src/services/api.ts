@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { SessionProtection } from '../utils/sessionProtection';
 // Import removed - will be added back when needed
 
 // 更新BASE_URL以确保正确连接到后端服务器
@@ -45,8 +46,17 @@ const api = axios.create({
 // 请求拦截器 - 添加认证信息
 api.interceptors.request.use(
   (config) => {
-    const sessionId = localStorage.getItem('sessionId');
+    // 使用SessionProtection获取sessionId，包含自动恢复功能
+    const sessionId = SessionProtection.getSessionId();
     const token = localStorage.getItem('token');
+    
+    // 添加调试信息
+    console.log(`🔍 请求拦截器检查: ${config.method?.toUpperCase()} ${config.url}`, {
+      hasSessionId: !!sessionId,
+      sessionIdPrefix: sessionId ? sessionId.substring(0, 10) + '...' : '无',
+      hasToken: !!token,
+      sessionInfo: SessionProtection.getSessionInfo()
+    });
     
     if (sessionId) {
       config.headers['X-Session-Id'] = sessionId;
@@ -68,16 +78,16 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
+      const currentSessionId = localStorage.getItem('sessionId');
       console.log('🚫 请求返回401未授权状态', {
         url: error.config?.url,
         method: error.config?.method,
+        hasSessionId: !!currentSessionId,
+        sessionIdPrefix: currentSessionId ? currentSessionId.substring(0, 10) + '...' : '无'
       });
       
       // 检查是否需要跳转到登录页面
       const currentPath = window.location.pathname;
-      
-      // 判断是否为支付相关API
-      const isPaymentAPI = error.config?.url?.includes('/payment/');
       
       // 排除某些不需要强制跳转的特殊路径
       const isLoginPage = currentPath === '/login';
@@ -85,25 +95,42 @@ api.interceptors.response.use(
       // 充值页面也阻止自动跳转，让页面自己的逻辑处理
       const isRechargePage = currentPath === '/recharge';
       
-      // 仅当不是公开页面且不是充值页面时才自动跳转
-      if (!isPublicPath && !isRechargePage) {
-        // 清除认证信息
-        localStorage.removeItem('sessionId');
-        localStorage.removeItem('token');
-        
-        // 保存当前URL，以便登录后可以跳回
-        sessionStorage.setItem('redirectAfterLogin', window.location.pathname + window.location.search);
-        
-        // 只有非登录页面才跳转
-        if (!isLoginPage) {
-          console.log('🔄 认证失效，跳转到登录页面...');
-          window.location.href = '/login';
-        }
-      } else {
-        console.log('⚠️ 在例外页面收到401错误，不自动跳转', {
+      // 检查是否是真的会话过期（而不是其他401错误）
+      const isSessionExpired = error.response?.data?.message?.includes('会话') || 
+                              error.response?.data?.message?.includes('过期') ||
+                              error.response?.data?.message?.includes('未登录');
+      
+      console.log('🔍 401错误分析:', {
+        isSessionExpired,
+        errorMessage: error.response?.data?.message,
+        currentPath,
+        isPublicPath,
+        isRechargePage
+      });
+      
+             // 仅当确实是会话过期且不是公开页面时才清除localStorage和跳转
+       if (isSessionExpired && !isPublicPath && !isRechargePage) {
+         console.log('💥 确认会话过期，清除认证信息');
+         
+         // 使用SessionProtection清除认证信息
+         SessionProtection.clearSessionId();
+         localStorage.removeItem('token');
+         
+         // 保存当前URL，以便登录后可以跳回
+         sessionStorage.setItem('redirectAfterLogin', window.location.pathname + window.location.search);
+         
+         // 只有非登录页面才跳转
+         if (!isLoginPage) {
+           console.log('🔄 认证失效，跳转到登录页面...');
+           window.location.href = '/login';
+         }
+       } else {
+        console.log('⚠️ 401错误但不清除会话信息', {
+          reason: isSessionExpired ? '在例外页面' : '不是会话过期错误',
           path: currentPath,
           isPublicPath,
-          isRechargePage
+          isRechargePage,
+          isSessionExpired
         });
       }
     }

@@ -527,11 +527,11 @@ app.post('/api/login', async (req, res) => {
     });
     
     // 设置会话数据（7天有效期）
-    await redisClient.setEx(sessionKey, 7 * 24 * 60 * 60, sessionData);
+    await redisClient.setEx(sessionKey, 14 * 24 * 60 * 60, sessionData);
     
     // 添加到用户会话列表
     await redisClient.sAdd(userSessionKey, `${sessionId}:${clientIP}`);
-    await redisClient.expire(userSessionKey, 7 * 24 * 60 * 60);
+    await redisClient.expire(userSessionKey, 14 * 24 * 60 * 60);
     
     console.log(`✅ 用户登录成功: ${user.username} (${email}), Session: ${sessionId}, IP: ${clientIP}`);
     
@@ -539,7 +539,7 @@ app.post('/api/login', async (req, res) => {
     res.cookie('session_id', sessionId, {
       httpOnly: true,
       secure: false, // 开发环境设为false
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7天
+      maxAge: 14 * 24 * 60 * 60 * 1000, // 14天 (2周)
       sameSite: 'lax'
     });
     
@@ -591,7 +591,7 @@ app.get('/api/session_status', async (req, res) => {
     
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
-    await redisClient.setEx(sessionKey, 7 * 24 * 60 * 60, JSON.stringify(sessionData));
+    await redisClient.setEx(sessionKey, 14 * 24 * 60 * 60, JSON.stringify(sessionData));
     
     res.json({
       success: true,

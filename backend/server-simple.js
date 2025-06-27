@@ -321,7 +321,7 @@ const authenticateSession = async (req, res, next) => {
     
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
-    await SessionStore.set(`session:${sessionId}`, sessionData);
+    await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
     
     // 将用户信息和sessionId添加到请求对象
     req.user = {
@@ -703,7 +703,7 @@ app.post('/api/login', async (req, res) => {
     };
     
     // 设置会话数据（7天有效期）
-    await SessionStore.set(`session:${sessionId}`, sessionData, 604800); // 7天TTL
+    await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
     
     console.log(`✅ 用户登录成功: ${user.username} (${email}), Session: ${sessionId}`);
     
@@ -789,7 +789,7 @@ app.get('/api/session_status', async (req, res) => {
     
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
-    await SessionStore.set(`session:${sessionId}`, sessionData, 604800);
+    await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
     
     res.json({
       success: true,
@@ -836,7 +836,7 @@ app.post('/api/create-shared-session', authenticateSession, async (req, res) => 
         createdAt: new Date().toISOString()
       },
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24小时
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() // 14天 (2周)
     };
     
     // 写入共享文件

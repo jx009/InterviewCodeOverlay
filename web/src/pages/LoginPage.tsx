@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuthContext } from '../contexts/AuthContext';
 import EmailVerification from '../components/EmailVerification';
 import ForgotPasswordPage from './ForgotPasswordPage';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 
 // 🛠️ 添加CSS样式来隐藏浏览器默认的密码显示图标
 const passwordInputStyles = `
@@ -47,9 +47,9 @@ export default function LoginPage() {
     login, 
     register, 
     isAuthenticated 
-  } = useAuth();
+  } = useAuthContext();
 
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   // 🆕 检查URL参数，支持注册成功后自动填入邮箱
   useEffect(() => {
@@ -175,16 +175,16 @@ export default function LoginPage() {
           // 清除重定向信息
           sessionStorage.removeItem('redirectAfterLogin');
           
-          // 登录成功后强制刷新页面或跳转
+          // 登录成功后跳转
           setTimeout(() => {
             if (redirectAfterLogin) {
               console.log('🔄 跳转到重定向路径:', redirectAfterLogin);
               window.location.href = redirectAfterLogin;
             } else {
-              console.log('🔄 强制刷新页面以应用认证状态');
-              window.location.reload();  // 强制刷新页面，App.tsx会重新渲染并显示DashboardPage
+              console.log('🔄 跳转到首页');
+              window.location.href = '/';  // 跳转到首页
             }
-          }, 1000);  // 1秒后刷新，让用户看到成功提示
+          }, 1000);  // 1秒后跳转，让用户看到成功提示
         } else {
           console.log('登录失败:', result.error);
           setError(result.error || '登录失败');

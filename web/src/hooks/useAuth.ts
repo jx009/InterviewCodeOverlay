@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { authApi } from '../services/api';
+import { SessionProtection } from '../utils/sessionProtection';
 
 interface User {
   id: string;
@@ -32,28 +33,32 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // 检查是否已登录
+  useEffect(() => {
+    const storedSessionId = SessionProtection.getSessionId();
+    setSessionId(storedSessionId);
+    console.log('🔄 初始化sessionId状态:', storedSessionId ? '存在' : '不存在');
+    console.log('📊 会话信息:', SessionProtection.getSessionInfo());
+  }, []);
+
   useEffect(() => {
     const initializeAuth = async () => {
-      const sessionId = localStorage.getItem('sessionId');
+      const storedSessionId = SessionProtection.getSessionId();
       const token = localStorage.getItem('token');
       
       console.log('🔄 初始化认证状态: ', {
-        hasSessionId: !!sessionId,
+        hasSessionId: !!storedSessionId,
         hasToken: !!token 
       });
       
-      if (sessionId) {
+      if (storedSessionId) {
         try {
           console.log('📡 检查会话状态...');
           
-          // 尝试从不同路径获取会话信息
           let response = null;
-          let error = null;
           
           try {
-            // 第一种尝试: /api/session_status
             console.log('🔍 尝试端点: /api/session_status');
             response = await authApi.getSessionStatus();
             if (response.success && response.user) {
@@ -61,21 +66,18 @@ export function useAuth() {
             }
           } catch (err) {
             console.warn('❌ 端点1失败，尝试下一个');
-            error = err;
             
             try {
-              // 第二种尝试: /api/auth-enhanced/session-status 
               console.log('🔍 尝试端点: /api/auth-enhanced/session-status');
-              response = await fetch(`http://localhost:3001/api/auth-enhanced/session-status?sessionId=${sessionId}`, {
+              response = await fetch(`http://localhost:3001/api/auth-enhanced/session-status?sessionId=${storedSessionId}`, {
                 headers: {
-                  'X-Session-Id': sessionId
+                  'X-Session-Id': storedSessionId
                 },
                 credentials: 'include'
               }).then(res => res.json());
               
               if (response.authenticated && response.user) {
                 console.log('✅ 端点2成功');
-                // 格式化响应以匹配预期格式
                 response = {
                   success: true,
                   user: response.user
@@ -85,20 +87,17 @@ export function useAuth() {
               console.warn('❌ 端点2失败，尝试下一个');
               
               try {
-                // 第三种尝试: 直接用sessionId查询后端
                 console.log('🔍 尝试端点: /api/debug/session');
                 await fetch(`http://localhost:3001/api/debug/session`, {
                   headers: {
-                    'X-Session-Id': sessionId
+                    'X-Session-Id': storedSessionId
                   },
                   credentials: 'include'
                 });
                 
-                // 如果没有报错，表示服务器正常，但可能会话已过期
                 console.log('⚠️ 服务器可访问，但会话可能过期');
               } catch (err3) {
                 console.error('❌ 所有端点均失败，服务器可能未启动', err3);
-                // 服务器可能未启动，保持用户会话而不是清除
                 setLoading(false);
                 return;
               }
@@ -107,19 +106,42 @@ export function useAuth() {
           
           if (response && response.success && response.user) {
             setUser(response.user);
+            setSessionId(storedSessionId);
             console.log('✅ 增强认证自动登录成功:', response.user);
             setLoading(false);
             return;
           } else {
-            console.log('❌ 增强认证会话无效，清理sessionId');
-            localStorage.removeItem('sessionId');
+            console.log('❌ 增强认证会话无效或API调用失败');
+            // 只有在明确收到会话过期的响应时才清除sessionId
+            const isSessionExpired = response && 
+              (response.status === 401 && 
+               (response.message?.includes('会话') || 
+                response.message?.includes('过期') ||
+                response.message?.includes('未登录')));
+            
+                         if (isSessionExpired) {
+               console.log('🔑 确认会话过期，清理sessionId');
+               SessionProtection.clearSessionId();
+               setSessionId(null);
+            } else {
+              console.log('⚠️ 保留sessionId，可能是临时网络问题或其他错误');
+            }
           }
         } catch (error) {
           console.error('❌ 检查增强认证会话状态失败:', error);
-          // 不要马上清除sessionId，可能是临时网络问题
-          if ((error as any).response?.status === 401) {
-            console.log('🔑 认证失败，清理sessionId');
-            localStorage.removeItem('sessionId');
+          // 只有在确认会话真正过期时才清除sessionId
+          const isSessionExpiredError = 
+            (error as any).response?.status === 401 && 
+            ((error as any).response?.data?.message?.includes('会话') || 
+             (error as any).response?.data?.message?.includes('过期') ||
+             (error as any).response?.data?.message?.includes('未登录'));
+          
+                     if (isSessionExpiredError) {
+             console.log('🔑 确认会话过期，清理sessionId');
+             SessionProtection.clearSessionId();
+             setSessionId(null);
+          } else {
+            console.log('⚠️ 网络或服务器错误，保留sessionId');
           }
         }
       }
@@ -137,7 +159,6 @@ export function useAuth() {
       
       console.log('开始登录流程:', params.email);
       
-      // 基本验证
       if (!params.email.trim()) {
         throw new Error('请输入邮箱');
       }
@@ -148,7 +169,6 @@ export function useAuth() {
         throw new Error('密码长度至少6位');
       }
       
-      // 邮箱格式验证
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(params.email)) {
         throw new Error('请输入有效的邮箱地址');
@@ -158,9 +178,9 @@ export function useAuth() {
       console.log('登录API响应:', response);
       
       if (response.success && response.sessionId && response.user) {
-        localStorage.setItem('sessionId', response.sessionId);
+        SessionProtection.saveSessionId(response.sessionId);
+        setSessionId(response.sessionId);
         
-        // 保存认证令牌
         if (response.token) {
           localStorage.setItem('token', response.token);
           console.log('🔑 已保存token:', response.token.substring(0, 10) + '...');
@@ -170,11 +190,9 @@ export function useAuth() {
         console.log('登录成功，用户信息:', response.user);
         console.log('🔑 已保存sessionId:', response.sessionId.substring(0, 10) + '...');
         
-        // 创建共享会话供Electron客户端使用
         try {
           console.log('🔄 开始创建共享会话...');
           
-          // 确保使用正确的sessionId调用API
           const createResponse = await authApi.createSharedSession();
           console.log('✅ 共享会话创建响应:', createResponse);
           
@@ -224,7 +242,6 @@ export function useAuth() {
       
       console.log('开始注册流程:', params.email);
       
-      // 基本验证
       if (!params.token || !params.verify_code || !params.email || !params.password || !params.username) {
         throw new Error('所有字段都不能为空');
       }
@@ -241,13 +258,12 @@ export function useAuth() {
       console.log('注册API响应:', response);
       
       if (response.success && response.user) {
-        // 保存会话ID和token
         if (response.sessionId) {
-          localStorage.setItem('sessionId', response.sessionId);
+          SessionProtection.saveSessionId(response.sessionId);
+          setSessionId(response.sessionId);
           console.log('🔑 已保存sessionId:', response.sessionId.substring(0, 10) + '...');
         }
         
-        // 保存认证令牌
         if (response.token) {
           localStorage.setItem('token', response.token);
           console.log('🔑 已保存token:', response.token.substring(0, 10) + '...');
@@ -285,10 +301,10 @@ export function useAuth() {
   const logout = async (): Promise<void> => {
     console.log('🚪 Web端开始登出流程...');
     try {
-      const sessionId = localStorage.getItem('sessionId');
-      console.log('📋 当前sessionId:', sessionId ? '存在' : '不存在');
+      const currentSessionId = sessionId || SessionProtection.getSessionId();
+      console.log('📋 当前sessionId:', currentSessionId ? '存在' : '不存在');
       
-      if (sessionId) {
+      if (currentSessionId) {
         console.log('📞 调用服务器登出API...');
         await authApi.enhancedLogout();
         console.log('✅ 服务器登出成功');
@@ -297,12 +313,12 @@ export function useAuth() {
       console.error('❌ 服务器登出失败:', error);
     } finally {
       console.log('🗑️ 清除本地数据...');
-      localStorage.removeItem('sessionId');
+      SessionProtection.clearSessionId();
       localStorage.removeItem('token');
+      setSessionId(null);
       setUser(null);
       setError(null);
       
-      // 🆕 登出后跳转到登录页面
       console.log('🔄 跳转到登录页面...');
       window.location.href = '/login';
     }
@@ -315,13 +331,15 @@ export function useAuth() {
         setUser(response.user);
         return true;
       } else {
-        localStorage.removeItem('sessionId');
+        SessionProtection.clearSessionId();
+        setSessionId(null);
         setUser(null);
         return false;
       }
     } catch (error) {
       console.error('检查会话状态失败:', error);
-      localStorage.removeItem('sessionId');
+      SessionProtection.clearSessionId();
+      setSessionId(null);
       setUser(null);
       return false;
     }
@@ -445,8 +463,15 @@ export function useAuth() {
     }
   };
 
-  // 计算是否已认证
-  const isAuthenticated = !!user;
+  const isAuthenticated = useMemo(() => {
+    const hasUser = !!user;
+    const hasSessionId = !!sessionId;
+    const result = hasUser || hasSessionId;
+    console.log('🔍 useAuth isAuthenticated计算:', { hasUser, hasSessionId, result });
+    return result;
+  }, [user, sessionId]);
+  
+
 
   return {
     user,
