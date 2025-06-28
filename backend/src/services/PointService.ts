@@ -482,6 +482,40 @@ export class PointService {
       };
     }
   }
+
+  /**
+   * 清理三个月前的积分交易记录
+   * 此方法应该由定时任务调用，例如每天凌晨执行一次
+   */
+  async cleanupOldTransactions(): Promise<{success: boolean, count: number}> {
+    try {
+      // 计算三个月前的时间
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      
+      // 删除三个月前的记录
+      const result = await prisma.pointTransaction.deleteMany({
+        where: {
+          createdAt: {
+            lt: threeMonthsAgo
+          }
+        }
+      });
+      
+      console.log(`已清理 ${result.count} 条三个月前的交易记录`);
+      
+      return {
+        success: true,
+        count: result.count
+      };
+    } catch (error) {
+      console.error('清理旧交易记录时出错:', error);
+      return {
+        success: false,
+        count: 0
+      };
+    }
+  }
 }
 
 // 导出单例

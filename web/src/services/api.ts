@@ -304,4 +304,22 @@ export const paymentApi = {
   },
 };
 
+// 积分交易记录API
+export const pointsApi = {
+  // 获取用户积分余额
+  getBalance: async () => {
+    const response = await api.get('/points/balance');
+    return response.data;
+  },
+
+  // 获取用户积分交易记录
+  getTransactions: async (params?: {
+    limit?: number;
+    offset?: number;
+  }) => {
+    const response = await api.get('/points/transactions', { params });
+    return response.data;
+  }
+};
+
 export default api; 

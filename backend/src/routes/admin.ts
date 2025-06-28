@@ -57,16 +57,26 @@ const sessionAuthMiddleware = async (req: any, res: Response, next: any) => {
 // 管理员权限检查中间件
 const adminMiddleware = async (req: any, res: Response, next: any) => {
   try {
-    const username = req.user?.username;
+    const userId = req.user?.userId;
     
-    if (!username) {
+    if (!userId) {
       return ResponseUtils.unauthorized(res, '用户未认证');
     }
 
-    if (username !== 'admin') {
+    // 查询用户角色
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    }) as any;
+
+    if (!user) {
+      return ResponseUtils.unauthorized(res, '用户不存在');
+    }
+
+    if (user.role !== 'ADMIN') {
       return ResponseUtils.forbidden(res, '需要管理员权限');
     }
 
+    console.log(`✅ 管理员权限验证成功: ${user.username} (角色: ${user.role})`);
     next();
   } catch (error) {
     console.error('管理员权限检查失败:', error);
@@ -133,66 +143,22 @@ router.get('/stats', async (req: Request, res: Response) => {
  */
 router.get('/users', async (req: Request, res: Response) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-    const search = req.query.search as string;
-    const offset = (page - 1) * limit;
+    console.log('🔍 获取用户列表...');
+    
+    const users = await prisma.user.findMany({
+      orderBy: [
+        { createdAt: 'desc' } // 创建时间倒序
+      ]
+    }) as any;
 
-    // 构建搜索条件
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { username: { contains: search } },
-        { email: { contains: search } }
-      ];
-    }
-
-    // 获取用户列表
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip: offset,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true
-        }
-      }),
-      prisma.user.count({ where })
-    ]);
-
-    // 使用原生SQL获取积分信息
-    const userIds = users.map(u => u.id);
-    const pointsData = await prisma.$queryRaw`
-      SELECT id, points FROM users WHERE id IN (${userIds.join(',')})
-    ` as any[];
-
-    // 合并积分数据
-    const usersWithPoints = users.map(user => {
-      const pointsInfo = pointsData.find(p => p.id === user.id);
-      return {
-        ...user,
-        points: pointsInfo?.points || 0
-      };
-    });
+    console.log(`✅ 获取用户列表成功，共 ${users.length} 个用户`);
 
     ResponseUtils.success(res, {
-      users: usersWithPoints,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      },
-      message: '获取用户列表成功'
-    });
+      users,
+      total: users.length
+    }, '获取用户列表成功');
   } catch (error) {
-    console.error('获取用户列表失败:', error);
+    console.error('❌ 获取用户列表失败:', error);
     ResponseUtils.internalError(res, '获取用户列表失败');
   }
 });
@@ -502,6 +468,66 @@ router.get('/points-stats', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('获取积分统计失败:', error);
     ResponseUtils.internalError(res, '获取积分统计失败');
+  }
+});
+
+// 更新用户角色 (管理员权限)
+router.put('/users/role', async (req: any, res: Response) => {
+  try {
+    const { userId, role } = req.body;
+    const currentUserId = req.user?.userId;
+
+    console.log('🔄 更新用户角色:', { userId, role, currentUserId });
+
+    // 验证输入
+    if (!userId || !role) {
+      return ResponseUtils.error(res, '用户ID和角色不能为空', 400);
+    }
+
+    if (!['USER', 'ADMIN'].includes(role)) {
+      return ResponseUtils.error(res, '角色必须是 USER 或 ADMIN', 400);
+    }
+
+    // 防止用户修改自己的角色
+    if (parseInt(userId) === currentUserId) {
+      return ResponseUtils.forbidden(res, '不能修改自己的角色');
+    }
+
+    // 查询目标用户
+    const targetUser = await prisma.user.findUnique({
+      where: { id: parseInt(userId) }
+    }) as any;
+
+    if (!targetUser) {
+      return ResponseUtils.notFound(res, '目标用户不存在');
+    }
+
+    // 检查是否是最后一个管理员
+    if (targetUser.role === 'ADMIN' && role === 'USER') {
+      const adminCount = await prisma.user.count({
+        where: { role: 'ADMIN' } as any
+      });
+
+      if (adminCount <= 1) {
+        return ResponseUtils.forbidden(res, '系统至少需要保留一个管理员账号');
+      }
+    }
+
+    // 更新用户角色
+    const updatedUser = await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: { role: role as any }
+    }) as any;
+
+    console.log(`✅ 用户角色更新成功: ${updatedUser.username} -> ${role}`);
+
+    ResponseUtils.success(res, {
+      user: updatedUser
+    }, `用户 ${updatedUser.username} 的角色已更新为 ${role === 'ADMIN' ? '管理员' : '普通用户'}`);
+
+  } catch (error: any) {
+    console.error('❌ 更新用户角色失败:', error);
+    ResponseUtils.internalError(res, `更新用户角色失败: ${error.message}`);
   }
 });
 

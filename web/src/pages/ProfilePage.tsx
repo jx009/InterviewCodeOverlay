@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
-import { configApi } from '../services/api';
+import { configApi, pointsApi } from '../services/api';
 
 interface UserConfig {
   aiModel: string;
@@ -26,6 +26,18 @@ interface UserConfig {
   };
 }
 
+// 积分交易记录类型
+interface PointTransaction {
+  id: number;
+  transactionType: 'RECHARGE' | 'DEDUCT';
+  amount: number;
+  balanceAfter: number;
+  modelName?: string;
+  questionType?: string;
+  description?: string;
+  createdAt: string;
+}
+
 export default function ProfilePage() {
   const { user, logout, isAuthenticated, loading: authLoading } = useAuthContext()
   const [config, setConfig] = useState<UserConfig | null>(null)
@@ -35,6 +47,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [currentTab, setCurrentTab] = useState('config')
+  // 添加积分交易记录状态
+  const [transactions, setTransactions] = useState<PointTransaction[]>([])
+  const [transactionsLoading, setTransactionsLoading] = useState(false)
 
   // 检查认证状态，与ProtectedRoute保持一致
   const hasSessionId = !!localStorage.getItem('sessionId');
@@ -49,6 +64,25 @@ export default function ProfilePage() {
       console.log('⏳ ProfilePage: 等待认证状态确认', { authLoading, hasValidSession });
     }
   }, [authLoading, hasValidSession])
+
+  // 加载积分交易记录
+  useEffect(() => {
+    if (currentTab === 'history' && hasValidSession) {
+      loadTransactionHistory();
+    }
+  }, [currentTab, hasValidSession]);
+
+  const loadTransactionHistory = async () => {
+    try {
+      setTransactionsLoading(true);
+      const result = await pointsApi.getTransactions({ limit: 50 });
+      setTransactions(result.transactions || []);
+    } catch (error) {
+      console.error('加载交易记录失败:', error);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -79,7 +113,7 @@ export default function ProfilePage() {
     }
   }
 
-  const isAdmin = user?.username === 'admin'
+  const isAdmin = user?.role === 'ADMIN'
 
   const handleNavigateToManager = () => {
     window.location.href = '/manager';
@@ -127,8 +161,37 @@ export default function ProfilePage() {
     }
   }
 
+  // 格式化交易类型
+  const formatTransactionType = (transaction: PointTransaction) => {
+    if (transaction.transactionType === 'RECHARGE') {
+      return '充值';
+    }
+    
+    if (transaction.transactionType === 'DEDUCT') {
+      if (transaction.questionType === 'MULTIPLE_CHOICE') {
+        return '选择题搜题';
+      } else if (transaction.questionType === 'PROGRAMMING') {
+        return '编程题搜题';
+      }
+      return '消费';
+    }
+    
+    return transaction.transactionType;
+  };
 
-  
+  // 格式化交易日期
+  const formatTransactionDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
   if (!hasValidSession) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -234,18 +297,16 @@ export default function ProfilePage() {
           >
             个人配置
           </button>
-          {isAdmin && (
-            <button
-              onClick={() => setCurrentTab('admin')}
-              className={`px-4 py-2 font-medium transition-colors ${
-                currentTab === 'admin'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              管理员面板
-            </button>
-          )}
+          <button
+            onClick={() => setCurrentTab('history')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              currentTab === 'history'
+                ? 'text-blue-400 border-b-2 border-blue-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            历史记录
+          </button>
         </div>
 
         {currentTab === 'config' && (
@@ -352,38 +413,78 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {currentTab === 'admin' && isAdmin && (
+        {currentTab === 'history' && (
           <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">🛠️ 管理员控制面板</h2>
+            <h2 className="text-xl font-semibold mb-4">📊 积分消费历史</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-lg font-medium mb-2">📊 系统统计</h3>
-                <p className="text-gray-400 mb-4">查看系统使用情况和用户统计</p>
-                <button className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded transition-colors">
-                  查看统计
-                </button>
+            {transactionsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
               </div>
-
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-lg font-medium mb-2">⚙️ 积分配置</h3>
-                <p className="text-gray-400 mb-4">管理AI模型的积分消耗配置</p>
-                <button 
-                  onClick={handleNavigateToManager}
-                  className="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded transition-colors"
-                >
-                  配置管理
-                </button>
+            ) : transactions.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        类型
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        积分变动
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        剩余积分
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        使用模型
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        描述
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        时间
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {transactions.map((transaction) => (
+                      <tr key={transaction.id} className="hover:bg-gray-700">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            transaction.transactionType === 'RECHARGE' 
+                              ? 'bg-green-600 text-green-100' 
+                              : 'bg-red-600 text-red-100'
+                          }`}>
+                            {formatTransactionType(transaction)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <span className={transaction.transactionType === 'RECHARGE' ? 'text-green-400' : 'text-red-400'}>
+                            {transaction.transactionType === 'RECHARGE' ? '+' : '-'}{transaction.amount}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          {transaction.balanceAfter}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
+                          {transaction.modelName || '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
+                          {transaction.description || '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
+                          {formatTransactionDate(transaction.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-lg font-medium mb-2">👥 用户管理</h3>
-                <p className="text-gray-400 mb-4">管理用户账户和权限</p>
-                <button className="w-full bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded transition-colors">
-                  用户管理
-                </button>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <p>暂无交易记录</p>
               </div>
-            </div>
+            )}
           </div>
         )}
 

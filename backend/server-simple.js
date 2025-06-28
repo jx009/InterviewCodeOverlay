@@ -698,6 +698,7 @@ app.post('/api/login', async (req, res) => {
       userId: user.id,
       username: user.username,
       email: user.email,
+      role: user.role, // 添加角色信息
       loginTime: new Date().toISOString(),
       lastActivity: new Date().toISOString()
     };
@@ -714,7 +715,8 @@ app.post('/api/login', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
+        email: user.email,
+        role: user.role
       }
     });
     
@@ -787,6 +789,19 @@ app.get('/api/session_status', async (req, res) => {
       });
     }
     
+    // 如果session中没有role信息，从数据库获取
+    if (!sessionData.role) {
+      try {
+        const userWithRole = await db.getUserById(sessionData.userId);
+        if (userWithRole && userWithRole.role) {
+          sessionData.role = userWithRole.role;
+          console.log(`🔄 为用户 ${sessionData.username} 更新session中的role: ${userWithRole.role}`);
+        }
+      } catch (error) {
+        console.error('获取用户角色失败:', error);
+      }
+    }
+    
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
     await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
@@ -797,7 +812,8 @@ app.get('/api/session_status', async (req, res) => {
       user: {
         id: sessionData.userId,
         username: sessionData.username,
-        email: sessionData.email
+        email: sessionData.email,
+        role: sessionData.role
       },
       loginTime: sessionData.loginTime,
       lastActivity: sessionData.lastActivity
@@ -1234,16 +1250,27 @@ const adminAuthMiddleware = async (req, res, next) => {
       });
     }
 
-    // 检查是否为管理员
-    if (sessionData.username !== 'admin') {
-      return res.status(403).json({
+    // 查询用户角色来检查是否为管理员
+    try {
+      const user = await db.getUserById(sessionData.userId);
+      
+      if (!user || user.role !== 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          message: '权限不足，需要管理员权限'
+        });
+      }
+
+      console.log(`✅ 管理员权限验证成功: ${user.username} (角色: ${user.role})`);
+      req.user = { ...sessionData, role: user.role };
+      next();
+    } catch (dbError) {
+      console.error('查询用户角色失败:', dbError);
+      return res.status(500).json({
         success: false,
-        message: '权限不足，需要管理员权限'
+        message: '权限验证失败'
       });
     }
-
-    req.user = sessionData;
-    next();
   } catch (error) {
     console.error('管理员认证失败:', error);
     res.status(500).json({
@@ -1854,8 +1881,130 @@ app.get('/api/payment/orders', verifyToken, (req, res) => {
   }
 });
 
+// 获取所有用户列表API - 添加这个新的API端点
+app.get('/api/admin/users', adminAuthMiddleware, async (req, res) => {
+  try {
+    console.log('🔍 获取用户列表...');
+    
+    // 查询所有用户
+    const users = await db.prisma.user.findMany({
+      orderBy: [
+        { createdAt: 'desc' } // 创建时间倒序
+      ],
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        points: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    console.log(`✅ 获取用户列表成功，共 ${users.length} 个用户`);
+
+    // 返回用户列表
+    res.json({
+      success: true,
+      data: {
+        users,
+        total: users.length
+      },
+      message: '获取用户列表成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取用户列表失败:', error);
+    res.status(500).json({
+      success: false,
+      message: `获取用户列表失败: ${error.message}`
+    });
+  }
+});
+
+// 更新用户角色API - 添加这个新的API端点
+app.put('/api/admin/users/role', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { userId, role } = req.body;
+    const currentUserId = req.user?.userId;
+
+    console.log('🔄 更新用户角色:', { userId, role, currentUserId });
+
+    // 验证输入
+    if (!userId || !role) {
+      return res.status(400).json({
+        success: false,
+        message: '用户ID和角色不能为空'
+      });
+    }
+
+    if (!['USER', 'ADMIN'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: '角色必须是 USER 或 ADMIN'
+      });
+    }
+
+    // 防止用户修改自己的角色
+    if (parseInt(userId) === parseInt(currentUserId)) {
+      return res.status(403).json({
+        success: false,
+        message: '不能修改自己的角色'
+      });
+    }
+
+    // 查询目标用户
+    const targetUser = await db.getUserById(userId);
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: '目标用户不存在'
+      });
+    }
+
+    // 检查是否是最后一个管理员
+    if (targetUser.role === 'ADMIN' && role === 'USER') {
+      const adminCount = await db.prisma.user.count({
+        where: { role: 'ADMIN' }
+      });
+
+      if (adminCount <= 1) {
+        return res.status(403).json({
+          success: false,
+          message: '系统至少需要保留一个管理员账号'
+        });
+      }
+    }
+
+    // 更新用户角色
+    const updatedUser = await db.prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: { role }
+    });
+
+    console.log(`✅ 用户角色更新成功: ${updatedUser.username} -> ${role}`);
+
+    res.json({
+      success: true,
+      data: {
+        user: updatedUser
+      },
+      message: `用户 ${updatedUser.username} 的角色已更新为 ${role === 'ADMIN' ? '管理员' : '普通用户'}`
+    });
+
+  } catch (error) {
+    console.error('❌ 更新用户角色失败:', error);
+    res.status(500).json({
+      success: false,
+      message: `更新用户角色失败: ${error.message}`
+    });
+  }
+});
+
 // 启动服务器
 app.listen(PORT, () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-}); 
+});

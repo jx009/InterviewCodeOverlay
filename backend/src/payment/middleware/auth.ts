@@ -170,9 +170,8 @@ export const optionalAuth = (req: AuthenticatedRequest, res: Response, next: Nex
 
 /**
  * 管理员权限验证中间件
- * 注意：这个中间件需要依赖数据库查询来验证管理员权限
  */
-export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const requireAdmin = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -181,18 +180,22 @@ export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: Nex
       });
     }
 
-    // 这里应该通过userId查询用户角色来确定是否为管理员
-    // 临时解决方案：通过userId判断（实际应用中需要查询数据库）
-    const isAdmin = req.user.userId === 1 || req.user.userId === 100; // 假设id为1和100的是管理员
+    // 查询用户角色来确定是否为管理员
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
     
-    if (!isAdmin) {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId }
+    }) as any;
+
+    if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
 
-    console.log('✅ 管理员权限验证成功:', req.user.userId);
+    console.log(`✅ 管理员权限验证成功: ${user.username} (角色: ${user.role})`);
     next();
 
   } catch (error: any) {

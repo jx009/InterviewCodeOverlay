@@ -25,7 +25,6 @@ const Hero: React.FC = () => {
           <p className="text-xl sm:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
             AI驱动的笔试助手，让你在技术笔试中更加自信
           </p>
-
           {/* 特性标签 */}
           <div className="flex flex-wrap justify-center gap-3 mb-12">
             <span className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-full text-sm font-medium border border-blue-500/30">

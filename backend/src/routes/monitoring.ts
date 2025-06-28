@@ -14,19 +14,19 @@ const adminMiddleware = async (req: any, res: Response, next: any) => {
       return ResponseUtils.unauthorized(res, '用户未认证');
     }
 
-    // 检查用户是否为管理员（检查用户名是否为admin）
+    // 检查用户是否为管理员（检查role字段）
     const { PrismaClient } = require('@prisma/client');
     const prisma = new PrismaClient();
     
     const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { username: true }
-    });
+      where: { id: userId }
+    }) as any;
 
-    if (!user || user.username !== 'admin') {
+    if (!user || user.role !== 'ADMIN') {
       return ResponseUtils.forbidden(res, '需要管理员权限');
     }
 
+    console.log(`✅ 管理员权限验证成功: ${user.username} (角色: ${user.role})`);
     next();
   } catch (error) {
     console.error('管理员权限检查失败:', error);

@@ -15,6 +15,7 @@ model User {
   username  String   @unique @db.VarChar(50)
   email     String?  @unique @db.VarChar(100)
   password  String   @db.VarChar(255)
+  role      UserRole @default(USER) // 用户角色，默认为普通用户
   isActive  Boolean  @default(true)
   points    Int      @default(100) // 用户积分余额，新用户默认100积分
   createdAt DateTime @default(now()) @map("created_at")
@@ -298,4 +299,12 @@ enum NotifyStatus {
   FAILED  @map("failed")  // 处理失败
   
   @@map("notify_statuses")
+}
+
+// 用户角色枚举
+enum UserRole {
+  USER  @map("user")  // 普通用户
+  ADMIN @map("admin") // 管理员
+  
+  @@map("user_roles")
 } 

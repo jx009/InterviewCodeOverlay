@@ -2,6 +2,9 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  role: 'USER' | 'ADMIN';
+  points?: number;
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
 }
