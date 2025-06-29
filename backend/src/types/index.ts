@@ -174,4 +174,17 @@ export const PROGRAMMING_LANGUAGES = [
   { value: 'php', label: 'PHP' },
   { value: 'ruby', label: 'Ruby' },
   { value: 'scala', label: 'Scala' }
-] as const; 
+] as const;
+
+// 扩展Express Request类型
+declare module 'express' {
+  interface Request {
+    userId?: number;
+    user?: {
+      userId: number;
+      username?: string;
+      email?: string;
+      role?: string;
+    };
+  }
+} 

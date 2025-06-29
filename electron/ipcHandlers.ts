@@ -5,7 +5,6 @@ import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
 import { simpleAuthManager } from "./SimpleAuthManager"
-import { SettingsManager } from './SettingsManager'
 import { SimpleAuthManager } from './SimpleAuthManager'
 import fetch from 'node-fetch'
 

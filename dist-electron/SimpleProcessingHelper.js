@@ -29,6 +29,11 @@ class SimpleProcessingHelper {
         this.currentExtraProcessingAbortController = null;
         // 🆕 积分管理相关
         this.pendingCreditOperations = new Map();
+        // 🆕 积分缓存
+        this.userCredits = null;
+        this.lastCreditsFetchTime = 0;
+        this.CREDITS_CACHE_TTL = 60000; // 1分钟缓存时间
+        this.creditModelsCache = new Map(); // 缓存模型积分配置
         this.deps = deps;
         this.screenshotHelper = deps.getScreenshotHelper();
         // Initialize AI client
@@ -307,6 +312,9 @@ class SimpleProcessingHelper {
      * 使用AI处理截图（简化版本）
      */
     async processScreenshotsWithAI(screenshots, userConfig, language, signal) {
+        // 生成唯一操作ID，用于跟踪整个处理过程中的积分消费
+        const operationId = `ai_call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`📝 创建操作ID: ${operationId}`);
         try {
             const mainWindow = this.deps.getMainWindow();
             if (!this.ismaqueClient) {
@@ -334,9 +342,82 @@ class SimpleProcessingHelper {
                     progress: 20
                 });
             }
+            // 确定要使用的模型
+            const modelName = questionType === 'programming'
+                ? userConfig.programmingModel || userConfig.aiModel || 'gpt-4'
+                : userConfig.multipleChoiceModel || userConfig.aiModel || 'gpt-3.5-turbo';
+            // Step 1.5: 积分检查和扣除
+            if (mainWindow) {
+                mainWindow.webContents.send("processing-status", {
+                    message: "检查积分余额...",
+                    progress: 15
+                });
+            }
+            // 使用直接的检查方式，避免类型错误
+            try {
+                // 先获取token
+                const token = SimpleAuthManager_1.simpleAuthManager.getToken();
+                if (!token) {
+                    return {
+                        success: false,
+                        error: "用户未登录，请先登录"
+                    };
+                }
+                const BASE_URL = 'http://localhost:3001';
+                // 1. 检查积分
+                const checkResponse = await (0, node_fetch_1.default)(`${BASE_URL}/api/client/credits/check`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+                    body: JSON.stringify({ modelName, questionType })
+                });
+                const checkResult = await checkResponse.json();
+                console.log('✅ 积分检查结果:', checkResult);
+                if (!checkResponse.ok || !checkResult.sufficient) {
+                    return {
+                        success: false,
+                        error: checkResult.error || `积分不足 (需要 ${checkResult.requiredCredits || '未知'} 积分)`
+                    };
+                }
+                // 2. 扣除积分
+                const deductResponse = await (0, node_fetch_1.default)(`${BASE_URL}/api/client/credits/deduct`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+                    body: JSON.stringify({ modelName, questionType, operationId })
+                });
+                const deductResult = await deductResponse.json();
+                console.log('💰 积分扣除结果:', deductResult);
+                if (!deductResponse.ok || !deductResult.success) {
+                    return {
+                        success: false,
+                        error: deductResult.error || '积分扣除失败'
+                    };
+                }
+                // 记录积分操作，便于后续退款
+                this.pendingCreditOperations.set(operationId, {
+                    modelName,
+                    questionType,
+                    amount: checkResult.requiredCredits || 0
+                });
+                console.log(`✅ 积分检查通过，扣除成功，剩余积分: ${deductResult.newCredits || '未知'}`);
+            }
+            catch (creditsError) {
+                console.error("积分检查或扣除失败:", creditsError);
+                return {
+                    success: false,
+                    error: `积分处理失败: ${creditsError.message || '未知错误'}`
+                };
+            }
             // 根据题目类型提取不同的信息
             const problemInfo = await this.extractProblemInfo(imageDataList, questionType, userConfig, language, signal);
             if (!problemInfo.success) {
+                // 提取信息失败，退款积分
+                try {
+                    await this.refundCredits(operationId, 0, "题目信息提取失败: " + (problemInfo.error || "未知错误"));
+                }
+                catch (refundError) {
+                    console.error("退款失败:", refundError);
+                    // 继续处理，不中断流程
+                }
                 return problemInfo;
             }
             console.log("✅ 题目信息提取成功:", problemInfo.data);
@@ -355,6 +436,14 @@ class SimpleProcessingHelper {
             }
             const solutionsResult = await this.generateSolutions(userConfig, language, problemInfo.data, signal);
             if (solutionsResult.success) {
+                // 🆕 积分操作标记为完成
+                try {
+                    await this.completeCreditsOperation(operationId);
+                }
+                catch (completeError) {
+                    console.error("标记积分操作完成失败:", completeError);
+                    // 继续处理，不中断流程
+                }
                 // 清除额外截图队列
                 this.screenshotHelper.clearExtraScreenshotQueue();
                 if (mainWindow) {
@@ -366,6 +455,14 @@ class SimpleProcessingHelper {
                 return { success: true, data: solutionsResult.data };
             }
             else {
+                // 生成解决方案失败，退款积分
+                try {
+                    await this.refundCredits(operationId, 0, "生成解决方案失败: " + (solutionsResult.error || "未知错误"));
+                }
+                catch (refundError) {
+                    console.error("退款失败:", refundError);
+                    // 继续处理，不中断流程
+                }
                 throw new Error(solutionsResult.error || "生成解决方案失败");
             }
         }
@@ -422,6 +519,12 @@ class SimpleProcessingHelper {
         try {
             const model = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514';
             deductionInfo = await this.checkAndDeductCredits(model, 'programming', operationId);
+            if (!deductionInfo.success) {
+                return {
+                    success: false,
+                    error: deductionInfo.message || "积分检查失败"
+                };
+            }
             const promptText = `
 为以下编程题目生成详细的解决方案：
 
@@ -469,7 +572,9 @@ ${problemInfo.example_output || "未提供示例输出。"}
             catch (error) {
                 console.error('❌ 编程题AI调用失败:', error);
                 // AI调用失败，退还积分
-                await this.refundCredits(operationId, deductionInfo.requiredCredits, '编程题AI调用失败');
+                if (deductionInfo.requiredPoints) {
+                    await this.refundCredits(operationId, deductionInfo.requiredPoints, '编程题AI调用失败');
+                }
                 throw error;
             }
             const responseContent = solutionResponse.choices[0].message.content;
@@ -539,6 +644,12 @@ ${problemInfo.example_output || "未提供示例输出。"}
         try {
             const model = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-sonnet-4-20250514';
             deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
+            if (!deductionInfo.success) {
+                return {
+                    success: false,
+                    error: deductionInfo.message || "积分检查失败"
+                };
+            }
             console.log('🎯 开始生成选择题解决方案...');
             const questions = problemInfo.multiple_choice_questions || [];
             console.log('📝 处理题目数量:', questions.length);
@@ -594,68 +705,70 @@ ${questionsText}
                         { role: "user", content: promptText }
                     ],
                     max_tokens: 4000,
-                    temperature: 0.1
+                    temperature: 0.2
                 }, { signal });
                 console.log('✅ 选择题AI调用成功');
             }
             catch (error) {
                 console.error('❌ 选择题AI调用失败:', error);
                 // AI调用失败，退还积分
-                await this.refundCredits(operationId, deductionInfo.requiredCredits, '选择题AI调用失败');
+                if (deductionInfo.requiredPoints) {
+                    await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI调用失败');
+                }
                 throw error;
             }
             const responseContent = solutionResponse.choices[0].message.content;
             console.log('✅ 选择题AI响应完成');
-            console.log('📄 AI回复内容:', responseContent?.substring(0, 500) + '...');
             // 解析答案
             console.log('🔍 开始解析选择题答案...');
             const answers = [];
-            // 尝试多种答案格式
-            const answerPatterns = [
-                /题目(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
-                /(\d+|[A-Z])\s*[-–—]\s*([A-Z])/g,
-                /答案[：:]\s*([A-Z])/g,
-                /选择[：:]?\s*([A-Z])/g
-            ];
-            let foundAnswers = false;
-            for (const pattern of answerPatterns) {
-                pattern.lastIndex = 0; // 重置正则表达式索引
-                let match;
-                while ((match = pattern.exec(responseContent)) !== null) {
-                    const questionNum = match[1] || questions[0]?.question_number || '1';
-                    const answer = match[match.length - 1]; // 取最后一个匹配组作为答案
-                    answers.push({
-                        question_number: questionNum,
-                        answer: answer,
-                        reasoning: `题目${questionNum}的解答分析`
-                    });
-                    foundAnswers = true;
+            // 提取答案部分
+            const answerMatch = responseContent.match(/答案[:：]?\s*([\s\S]*?)(?=\n\s*(?:解题思路|整体思路|$))/i);
+            if (answerMatch) {
+                const answerLines = answerMatch[1].split('\n').filter(line => line.trim());
+                for (const line of answerLines) {
+                    const match = line.match(/题目(\d+)\s*[-－]\s*([A-D])/i);
+                    if (match) {
+                        const questionNumber = match[1];
+                        const answer = match[2].toUpperCase();
+                        answers.push({
+                            question_number: questionNumber,
+                            answer: answer,
+                            reasoning: `题目${questionNumber}的解答分析`
+                        });
+                    }
                 }
-                if (foundAnswers)
-                    break;
             }
             console.log('🎯 解析到的答案数量:', answers.length);
             console.log('📋 答案详情:', answers);
-            // 提取整体思路
-            const thoughtsRegex = /(?:整体思路|解题思路|思路|关键点)[:：]([\s\S]*?)(?:$)/i;
-            const thoughtsMatch = responseContent.match(thoughtsRegex);
+            // 提取解题思路
+            const thoughtsMatch = responseContent.match(/解题思路[:：]?\s*([\s\S]*?)(?=\n\s*(?:整体思路|$))/i);
             let thoughts = [];
             if (thoughtsMatch && thoughtsMatch[1]) {
-                const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g);
-                if (bulletPoints) {
-                    thoughts = bulletPoints.map(point => point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()).filter(Boolean);
-                }
-                else {
-                    thoughts = thoughtsMatch[1].split('\n')
+                thoughts = thoughtsMatch[1].split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean);
+            }
+            // 如果没有找到解题思路，尝试提取整体思路
+            if (thoughts.length === 0) {
+                const overallMatch = responseContent.match(/整体思路[:：]?\s*([\s\S]*?)$/i);
+                if (overallMatch && overallMatch[1]) {
+                    thoughts = overallMatch[1].split('\n')
                         .map((line) => line.trim())
                         .filter(Boolean);
                 }
             }
+            // 如果还是没有，使用整个响应内容
+            if (thoughts.length === 0) {
+                thoughts = responseContent.split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .slice(0, 10); // 只取前10行
+            }
             const formattedResponse = {
                 type: 'multiple_choice',
                 answers: answers,
-                thoughts: thoughts.length > 0 ? thoughts : ["选择题分析和推理过程"]
-                // time_complexity 和 space_complexity 对选择题留空
+                thoughts: thoughts
             };
             // 🆕 AI调用成功，完成积分操作
             await this.completeCreditsOperation(operationId);
@@ -672,7 +785,10 @@ ${questionsText}
                 };
             }
             console.error("AI处理错误:", error);
-            return { success: false, error: error.message || "AI处理失败，请重试" };
+            return {
+                success: false,
+                error: error.message || "AI处理失败，请重试"
+            };
         }
     }
     /**
@@ -1250,34 +1366,164 @@ ${problemInfo.example_output || "未提供示例输出。"}
         this.pendingCreditOperations.delete(operationId);
         console.log('✅ 积分操作完成:', operationId);
     }
-    // 积分检查和扣除的逻辑
-    async checkAndDeductCredits(model, type, operationId) {
-        const token = SimpleAuthManager_1.simpleAuthManager.getToken();
-        if (!token)
-            throw new Error('User not authenticated for credits check');
-        const BASE_URL = 'http://localhost:3001';
-        // 1. 检查积分
-        const checkResponse = await (0, node_fetch_1.default)(`${BASE_URL}/api/client/credits/check`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
-            body: JSON.stringify({ modelName: model, questionType: type })
-        });
-        const checkResult = await checkResponse.json();
-        if (!checkResponse.ok || !checkResult.sufficient) {
-            throw new Error(checkResult.error || `积分不足 (需要 ${checkResult.requiredCredits})`);
+    /**
+     * 🆕 获取用户积分余额(带缓存)
+     */
+    async getUserCredits(forceRefresh = false) {
+        // 如果有缓存且未过期，直接返回缓存数据
+        const now = Date.now();
+        if (!forceRefresh && this.userCredits !== null && (now - this.lastCreditsFetchTime) < this.CREDITS_CACHE_TTL) {
+            return this.userCredits;
         }
-        // 2. 扣除积分
-        const deductResponse = await (0, node_fetch_1.default)(`${BASE_URL}/api/client/credits/deduct`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
-            body: JSON.stringify({ modelName: model, questionType: type, operationId })
-        });
-        const deductResult = await deductResponse.json();
-        if (!deductResponse.ok) {
-            throw new Error(deductResult.error || '积分扣除失败');
+        try {
+            const token = SimpleAuthManager_1.simpleAuthManager.getToken();
+            if (!token)
+                return null;
+            const BASE_URL = 'http://localhost:3001';
+            const response = await (0, node_fetch_1.default)(`${BASE_URL}/api/client/credits`, {
+                method: 'GET',
+                headers: {
+                    'X-Session-Id': token,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                // 更新缓存
+                this.userCredits = data.credits;
+                this.lastCreditsFetchTime = now;
+                return data.credits;
+            }
+            return null;
         }
-        // 将所需积分附加到成功结果中，以便退款
-        return { ...deductResult, requiredCredits: checkResult.requiredCredits };
+        catch (error) {
+            console.error('获取积分失败:', error);
+            return null;
+        }
+    }
+    /**
+     * 🆕 检查并扣除积分（使用合并API，一次网络请求完成）
+     */
+    async checkAndDeductCredits(modelName, questionType, operationId) {
+        try {
+            const token = SimpleAuthManager_1.simpleAuthManager.getToken();
+            if (!token) {
+                return { success: false, message: '未登录，无法获取积分' };
+            }
+            console.time('credits-check-and-deduct-api');
+            const BASE_URL = 'http://localhost:3001';
+            const response = await (0, node_fetch_1.default)(`${BASE_URL}/api/client/credits/check-and-deduct`, {
+                method: 'POST',
+                headers: {
+                    'X-Session-Id': token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    modelName,
+                    questionType,
+                    operationId
+                })
+            });
+            console.timeEnd('credits-check-and-deduct-api');
+            const data = await response.json();
+            // 更新本地缓存
+            if (data.success && data.newBalance !== undefined) {
+                this.userCredits = data.newBalance;
+                this.lastCreditsFetchTime = Date.now();
+            }
+            return {
+                success: data.success,
+                sufficient: data.sufficient,
+                currentPoints: data.currentPoints,
+                newBalance: data.newBalance,
+                requiredPoints: data.requiredPoints,
+                message: data.message
+            };
+        }
+        catch (error) {
+            console.error('检查并扣除积分失败:', error);
+            return { success: false, message: '检查并扣除积分失败' };
+        }
+    }
+    /**
+     * 处理选择题搜索
+     */
+    async processMultipleChoiceSearch(window, params) {
+        try {
+            if (!await SimpleAuthManager_1.simpleAuthManager.isAuthenticated()) {
+                window.webContents.send('multiple-choice-search-error', { error: '请先登录' });
+                return;
+            }
+            // 图片存在性检查
+            if (!node_fs_1.default.existsSync(params.screenshot_path)) {
+                window.webContents.send('multiple-choice-search-error', { error: '截图文件不存在' });
+                return;
+            }
+            const operationId = (0, crypto_1.randomUUID)();
+            window.webContents.send('processing-start', { type: 'multiple_choice' });
+            this.currentProcessingAbortController = new AbortController();
+            // 模型名称 - 使用默认值
+            const modelName = 'gpt-4o';
+            // 🆕 使用合并的API进行积分检查和扣除
+            const creditResult = await this.checkAndDeductCredits(modelName, 'multiple_choice', operationId);
+            if (!creditResult.success || !creditResult.sufficient) {
+                window.webContents.send('multiple-choice-search-error', {
+                    error: creditResult.message || '积分检查失败',
+                    credits: creditResult.currentPoints || 0,
+                    requiredCredits: creditResult.requiredPoints || 0
+                });
+                return;
+            }
+            // 积分检查通过，继续处理
+            window.webContents.send('processing-credits-check-passed', {
+                credits: creditResult.newBalance || 0
+            });
+            // ... [现有的处理逻辑]
+        }
+        catch (error) {
+            console.error("选择题搜索处理错误:", error);
+            window.webContents.send('multiple-choice-search-error', { error: '处理失败:' + error.message });
+        }
+    }
+    /**
+     * 处理编程题搜索
+     */
+    async processProgrammingSearch(window, params) {
+        try {
+            if (!await SimpleAuthManager_1.simpleAuthManager.isAuthenticated()) {
+                window.webContents.send('programming-search-error', { error: '请先登录' });
+                return;
+            }
+            // 图片存在性检查
+            if (!node_fs_1.default.existsSync(params.screenshot_path)) {
+                window.webContents.send('programming-search-error', { error: '截图文件不存在' });
+                return;
+            }
+            const operationId = (0, crypto_1.randomUUID)();
+            window.webContents.send('processing-start', { type: 'programming' });
+            this.currentProcessingAbortController = new AbortController();
+            // 模型名称 - 使用默认值
+            const modelName = 'gpt-4o';
+            // 🆕 使用合并的API进行积分检查和扣除
+            const creditResult = await this.checkAndDeductCredits(modelName, 'programming', operationId);
+            if (!creditResult.success || !creditResult.sufficient) {
+                window.webContents.send('programming-search-error', {
+                    error: creditResult.message || '积分检查失败',
+                    credits: creditResult.currentPoints || 0,
+                    requiredCredits: creditResult.requiredPoints || 0
+                });
+                return;
+            }
+            // 积分检查通过，继续处理
+            window.webContents.send('processing-credits-check-passed', {
+                credits: creditResult.newBalance || 0
+            });
+            // ... [现有的处理逻辑]
+        }
+        catch (error) {
+            console.error("编程题搜索处理错误:", error);
+            window.webContents.send('programming-search-error', { error: '处理失败:' + error.message });
+        }
     }
 }
 exports.SimpleProcessingHelper = SimpleProcessingHelper;

@@ -277,6 +277,9 @@ async function startServer() {
       }
     });
     
+    // 处理验证错误的中间件
+    const validateRequestMiddleware = require('./middleware/validation').validateRequest;
+    
     // 原有认证路由（保持兼容性）
     app.use('/api/auth', authRoutes);
     
@@ -292,6 +295,10 @@ async function startServer() {
     // 积分系统路由
     const pointsRoutes = require('./routes/points').default;
     app.use('/api/points', pointsRoutes);
+    
+    // 客户端积分API路由
+    const clientCreditsRoutes = require('./routes/client-credits').default;
+    app.use('/api/client/credits', clientCreditsRoutes);
     
     // 搜题路由
     const searchRoutes = require('./routes/search').default;

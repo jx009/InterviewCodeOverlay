@@ -1697,6 +1697,95 @@ app.post('/api/client/credits/refund', authenticateSession, async (req, res) => 
   }
 })
 
+// 检查并扣除积分（合并操作，减少网络请求）
+app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const { modelName, questionType, operationId } = req.body
+    
+    if (!modelName || !questionType || !operationId) {
+      return res.status(400).json({ 
+        success: false,
+        error: '缺少必需参数: modelName, questionType, operationId' 
+      })
+    }
+    
+    console.time('credits-check-and-deduct')
+    
+    // 获取用户当前积分
+    const user = await db.getUserById(userId)
+    if (!user) {
+      console.timeEnd('credits-check-and-deduct')
+      return res.status(404).json({ 
+        success: false,
+        error: '用户不存在' 
+      })
+    }
+    
+    // 获取积分配置
+    const dbQuestionType = questionType.toUpperCase()
+    const config = await db.getModelPointConfig(modelName, dbQuestionType)
+    if (!config) {
+      console.timeEnd('credits-check-and-deduct')
+      return res.status(404).json({ 
+        success: false,
+        error: `未找到模型 ${modelName} 的 ${questionType} 类型配置` 
+      })
+    }
+    
+    const currentCredits = user.points || 0
+    const requiredCredits = config.cost
+    const sufficient = currentCredits >= requiredCredits
+    
+    // 检查积分是否充足
+    if (!sufficient) {
+      console.timeEnd('credits-check-and-deduct')
+      return res.status(400).json({
+        success: false,
+        sufficient: false,
+        currentPoints: currentCredits,
+        requiredPoints: requiredCredits,
+        message: `积分不足。本次操作需要 ${requiredCredits} 积分，您当前拥有 ${currentCredits} 积分。`
+      })
+    }
+    
+    // 扣除积分
+    const newCredits = currentCredits - requiredCredits
+    await db.updateUserCredits(userId, newCredits)
+    
+    // 记录积分交易
+    const transactionData = {
+      userId,
+      type: 'consume',
+      amount: requiredCredits,
+      modelName,
+      questionType,
+      operationId,
+      createdAt: new Date()
+    }
+    
+    console.log('✅ 积分检查和扣除成功:', transactionData)
+    console.timeEnd('credits-check-and-deduct')
+    
+    res.json({
+      success: true,
+      sufficient: true,
+      currentPoints: currentCredits,
+      newBalance: newCredits,
+      deductedAmount: requiredCredits,
+      operationId,
+      message: `成功扣除 ${requiredCredits} 积分，余额: ${newCredits}`
+    })
+  } catch (error) {
+    console.error('检查并扣除积分失败:', error)
+    console.timeEnd('credits-check-and-deduct')
+    res.status(500).json({ 
+      success: false,
+      error: '服务器错误' 
+    })
+  }
+})
+
 // 支付套餐API
 app.get('/api/payment/packages', optionalVerifyToken, (req, res) => {
   try {
