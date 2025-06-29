@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
-import { configApi, pointsApi } from '../services/api';
+import { configApi, pointsApi, clientCreditsApi } from '../services/api';
 
 interface UserConfig {
   aiModel: string;
@@ -29,12 +29,13 @@ interface UserConfig {
 // 积分交易记录类型
 interface PointTransaction {
   id: number;
-  transactionType: 'RECHARGE' | 'DEDUCT';
+  transactionType: 'RECHARGE' | 'DEDUCT' | 'CONSUME' | 'REFUND';
   amount: number;
   balanceAfter: number;
   modelName?: string;
   questionType?: string;
   description?: string;
+  displayText?: string; // 🆕 后端格式化的显示文本
   createdAt: string;
 }
 
@@ -50,6 +51,10 @@ export default function ProfilePage() {
   // 添加积分交易记录状态
   const [transactions, setTransactions] = useState<PointTransaction[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const recordsPerPage = 10
+  const maxPages = 100
 
   // 检查认证状态，与ProtectedRoute保持一致
   const hasSessionId = !!localStorage.getItem('sessionId');
@@ -68,15 +73,49 @@ export default function ProfilePage() {
   // 加载积分交易记录
   useEffect(() => {
     if (currentTab === 'history' && hasValidSession) {
-      loadTransactionHistory();
+      loadTransactionHistory(1); // 默认加载第一页
     }
   }, [currentTab, hasValidSession]);
 
-  const loadTransactionHistory = async () => {
+  const loadTransactionHistory = async (page: number = 1) => {
     try {
       setTransactionsLoading(true);
-      const result = await pointsApi.getTransactions({ limit: 50 });
-      setTransactions(result.transactions || []);
+      // 🆕 使用新的客户端API，支持分页
+      const offset = (page - 1) * recordsPerPage;
+      const result = await clientCreditsApi.getTransactions({ 
+        limit: recordsPerPage,
+        offset 
+      });
+      
+      // 转换数据格式以兼容现有组件
+      const formattedTransactions = (result.data?.transactions || []).map((tx: any) => ({
+        id: tx.id,
+        transactionType: tx.type === 'CONSUME' ? 'DEDUCT' : tx.type, // 兼容现有类型
+        amount: tx.amount,
+        balanceAfter: tx.balanceAfter,
+        modelName: tx.modelName,
+        questionType: tx.questionType,
+        description: tx.description,
+        displayText: tx.displayText, // 使用后端格式化的显示文本
+        createdAt: tx.createdAt
+      }));
+      
+      setTransactions(formattedTransactions);
+      
+      // 使用后端返回的分页信息
+      const pagination = result.data?.pagination;
+      if (pagination) {
+        setTotalPages(Math.min(pagination.totalPages || 1, maxPages));
+        setCurrentPage(pagination.currentPage || page);
+      } else {
+        // 兜底逻辑：如果没有分页信息，使用原来的估算方式
+        if (formattedTransactions.length === recordsPerPage) {
+          setTotalPages(Math.min(page + 1, maxPages));
+        } else {
+          setTotalPages(page);
+        }
+        setCurrentPage(page);
+      }
     } catch (error) {
       console.error('加载交易记录失败:', error);
     } finally {
@@ -163,20 +202,22 @@ export default function ProfilePage() {
 
   // 格式化交易类型
   const formatTransactionType = (transaction: PointTransaction) => {
-    if (transaction.transactionType === 'RECHARGE') {
-      return '充值';
+    switch (transaction.transactionType) {
+      case 'RECHARGE':
+        return '充值';
+      case 'CONSUME':
+      case 'DEDUCT':
+        if (transaction.questionType === 'MULTIPLE_CHOICE') {
+          return '选择题搜题';
+        } else if (transaction.questionType === 'PROGRAMMING') {
+          return '编程题搜题';
+        }
+        return '消费';
+      case 'REFUND':
+        return '退款';
+      default:
+        return transaction.transactionType;
     }
-    
-    if (transaction.transactionType === 'DEDUCT') {
-      if (transaction.questionType === 'MULTIPLE_CHOICE') {
-        return '选择题搜题';
-      } else if (transaction.questionType === 'PROGRAMMING') {
-        return '编程题搜题';
-      }
-      return '消费';
-    }
-    
-    return transaction.transactionType;
   };
 
   // 格式化交易日期
@@ -439,9 +480,6 @@ export default function ProfilePage() {
                         使用模型
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        描述
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                         时间
                       </th>
                     </tr>
@@ -451,7 +489,7 @@ export default function ProfilePage() {
                       <tr key={transaction.id} className="hover:bg-gray-700">
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            transaction.transactionType === 'RECHARGE' 
+                            ['RECHARGE', 'REFUND'].includes(transaction.transactionType)
                               ? 'bg-green-600 text-green-100' 
                               : 'bg-red-600 text-red-100'
                           }`}>
@@ -459,8 +497,8 @@ export default function ProfilePage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
-                          <span className={transaction.transactionType === 'RECHARGE' ? 'text-green-400' : 'text-red-400'}>
-                            {transaction.transactionType === 'RECHARGE' ? '+' : '-'}{transaction.amount}
+                          <span className={['RECHARGE', 'REFUND'].includes(transaction.transactionType) ? 'text-green-400' : 'text-red-400'}>
+                            {transaction.amount > 0 ? '+' : ''}{transaction.amount}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -468,9 +506,6 @@ export default function ProfilePage() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
                           {transaction.modelName || '-'}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
-                          {transaction.description || '-'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
                           {formatTransactionDate(transaction.createdAt)}
@@ -483,6 +518,48 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-8 text-gray-400">
                 <p>暂无交易记录</p>
+              </div>
+            )}
+            
+            {/* 🆕 分页控件 */}
+            {transactions.length > 0 && (
+              <div className="flex justify-between items-center mt-6">
+                <div className="text-sm text-gray-400">
+                  第 {currentPage} 页，每页 {recordsPerPage} 条记录
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => loadTransactionHistory(1)}
+                    disabled={currentPage === 1 || transactionsLoading}
+                    className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                  >
+                    首页
+                  </button>
+                  <button
+                    onClick={() => loadTransactionHistory(currentPage - 1)}
+                    disabled={currentPage === 1 || transactionsLoading}
+                    className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                  >
+                    上一页
+                  </button>
+                  <span className="px-3 py-1 text-sm bg-blue-600 rounded">
+                    {currentPage}
+                  </span>
+                  <button
+                    onClick={() => loadTransactionHistory(currentPage + 1)}
+                    disabled={currentPage >= totalPages || transactionsLoading}
+                    className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                  >
+                    下一页
+                  </button>
+                  <button
+                    onClick={() => loadTransactionHistory(Math.min(totalPages, maxPages))}
+                    disabled={currentPage >= totalPages || transactionsLoading}
+                    className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                  >
+                    末页
+                  </button>
+                </div>
               </div>
             )}
           </div>

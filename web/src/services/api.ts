@@ -322,4 +322,31 @@ export const pointsApi = {
   }
 };
 
+// 🆕 客户端积分API (server-simple.js)
+export const clientCreditsApi = {
+  // 获取用户积分交易记录
+  getTransactions: async (params?: {
+    limit?: number;
+    offset?: number;
+  }) => {
+    const response = await api.get('/client/credits/transactions', { params });
+    return response.data;
+  },
+
+  // 获取积分统计
+  getStats: async () => {
+    const response = await api.get('/client/credits/stats');
+    return response.data;
+  },
+
+  // 充值积分
+  recharge: async (data: {
+    amount: number;
+    description?: string;
+  }) => {
+    const response = await api.post('/client/credits/recharge', data);
+    return response.data;
+  }
+};
+
 export default api; 

@@ -1672,17 +1672,28 @@ app.post('/api/client/credits/refund', authenticateSession, async (req, res) => 
     const newCredits = currentCredits + amount
     await db.updateUserCredits(userId, newCredits)
     
-    // 记录退款交易
-    const refundData = {
-      userId,
-      type: 'refund',
-      amount,
-      operationId,
-      reason: reason || 'AI调用失败',
-      createdAt: new Date()
+    // 🆕 记录退款交易到数据库
+    try {
+      const description = `积分退款 [${operationId}]: ${reason || 'AI调用失败'}`
+      await db.recordPointTransaction({
+        userId,
+        transactionType: 'REFUND',
+        amount: parseInt(amount),
+        balanceAfter: newCredits,
+        description
+      })
+      console.log('✅ 退款交易记录已保存到数据库')
+    } catch (recordError) {
+      console.error('❌ 记录退款交易失败:', recordError)
+      // 不中断主流程，只记录错误
     }
     
-    console.log('✅ 积分退还成功:', refundData)
+    console.log('✅ 积分退还成功:', {
+      userId,
+      amount,
+      newBalance: newCredits,
+      operationId
+    })
     
     res.json({
       success: true,
@@ -1753,18 +1764,30 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
     const newCredits = currentCredits - requiredCredits
     await db.updateUserCredits(userId, newCredits)
     
-    // 记录积分交易
-    const transactionData = {
-      userId,
-      type: 'consume',
-      amount: requiredCredits,
-      modelName,
-      questionType,
-      operationId,
-      createdAt: new Date()
+    // 🆕 记录积分交易到数据库
+    try {
+      const description = `搜题操作 [${operationId}]: 使用${modelName}模型处理${questionType === 'multiple_choice' ? '选择题' : '编程题'}`
+      await db.recordPointTransaction({
+        userId,
+        transactionType: 'CONSUME',
+        amount: -requiredCredits,
+        balanceAfter: newCredits,
+        modelName,
+        questionType: questionType.toUpperCase(),
+        description
+      })
+      console.log('✅ 积分交易记录已保存到数据库')
+    } catch (recordError) {
+      console.error('❌ 记录积分交易失败:', recordError)
+      // 不中断主流程，只记录错误
     }
     
-    console.log('✅ 积分检查和扣除成功:', transactionData)
+    console.log('✅ 积分检查和扣除成功:', {
+      userId,
+      amount: -requiredCredits,
+      newBalance: newCredits,
+      operationId
+    })
     console.timeEnd('credits-check-and-deduct')
     
     res.json({
@@ -1782,6 +1805,191 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
     res.status(500).json({ 
       success: false,
       error: '服务器错误' 
+    })
+  }
+})
+
+// 🆕 获取用户积分交易记录
+app.get('/api/client/credits/transactions', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100) // 最多100条
+    const offset = parseInt(req.query.offset) || 0
+    
+    const result = await db.getUserPointTransactions(userId, limit, offset)
+    
+    // 格式化交易记录，便于前端显示
+    const formattedTransactions = result.transactions.map(transaction => ({
+      id: transaction.id,
+      type: transaction.transactionType,
+      amount: transaction.amount,
+      balanceAfter: transaction.balanceAfter,
+      modelName: transaction.modelName,
+      questionType: transaction.questionType,
+      description: transaction.description,
+      createdAt: transaction.createdAt,
+      // 添加格式化的显示文本
+      displayText: formatTransactionDisplay(transaction)
+    }))
+    
+    // 计算分页信息
+    const totalPages = Math.ceil(result.total / limit)
+    const currentPage = Math.floor(offset / limit) + 1
+    
+    res.json({
+      success: true,
+      data: {
+        transactions: formattedTransactions,
+        pagination: {
+          limit,
+          offset,
+          currentPage,
+          totalPages: Math.min(totalPages, 100), // 最多100页
+          total: result.total,
+          hasMore: result.hasMore
+        }
+      },
+      message: '获取交易记录成功'
+    })
+  } catch (error) {
+    console.error('获取积分交易记录失败:', error)
+    res.status(500).json({ 
+      success: false,
+      error: '获取交易记录失败' 
+    })
+  }
+})
+
+// 🆕 获取用户积分交易统计
+app.get('/api/client/credits/stats', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const stats = await db.getPointTransactionStats(userId)
+    
+    // 格式化统计数据
+    const formattedStats = {
+      totalConsumed: 0,
+      totalRecharged: 0,
+      totalRefunded: 0,
+      consumeCount: 0,
+      rechargeCount: 0,
+      refundCount: 0
+    }
+    
+    stats.forEach(stat => {
+      switch (stat.transactionType) {
+        case 'CONSUME':
+          formattedStats.totalConsumed = Math.abs(stat._sum.amount || 0)
+          formattedStats.consumeCount = stat._count.id
+          break
+        case 'RECHARGE':
+          formattedStats.totalRecharged = stat._sum.amount || 0
+          formattedStats.rechargeCount = stat._count.id
+          break
+        case 'REFUND':
+          formattedStats.totalRefunded = stat._sum.amount || 0
+          formattedStats.refundCount = stat._count.id
+          break
+      }
+    })
+    
+    res.json({
+      success: true,
+      data: formattedStats,
+      message: '获取积分统计成功'
+    })
+  } catch (error) {
+    console.error('获取积分统计失败:', error)
+    res.status(500).json({ 
+      success: false,
+      error: '获取积分统计失败' 
+    })
+  }
+})
+
+// 🆕 格式化交易记录显示文本的辅助函数
+function formatTransactionDisplay(transaction) {
+  const time = new Date(transaction.createdAt).toLocaleString('zh-CN')
+  const amount = transaction.amount
+  const absAmount = Math.abs(amount)
+  
+  switch (transaction.transactionType) {
+    case 'CONSUME':
+      const questionTypeText = transaction.questionType === 'MULTIPLE_CHOICE' ? '选择题' : '编程题'
+      return `${time}，${questionTypeText}使用${transaction.modelName}模型，-${absAmount}积分`
+    case 'RECHARGE':
+      return `${time}，充值，+${amount}积分`
+    case 'REFUND':
+      return `${time}，退款，+${amount}积分`
+    case 'REWARD':
+      return `${time}，奖励，+${amount}积分`
+    default:
+      return `${time}，${transaction.description || '积分变动'}，${amount > 0 ? '+' : ''}${amount}积分`
+  }
+}
+
+// 🆕 充值积分API (用于管理员或测试)
+app.post('/api/client/credits/recharge', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const { amount, description } = req.body
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: '充值金额必须大于0' 
+      })
+    }
+    
+    // 获取用户当前积分
+    const user = await db.getUserById(userId)
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        error: '用户不存在' 
+      })
+    }
+    
+    const currentCredits = user.points || 0
+    const newCredits = currentCredits + parseInt(amount)
+    
+    // 更新用户积分
+    await db.updateUserCredits(userId, newCredits)
+    
+    // 🆕 记录充值交易到数据库
+    try {
+      const rechargeDescription = description || `手动充值 +${amount}积分`
+      await db.recordPointTransaction({
+        userId,
+        transactionType: 'RECHARGE',
+        amount: parseInt(amount),
+        balanceAfter: newCredits,
+        description: rechargeDescription
+      })
+      console.log('✅ 充值交易记录已保存到数据库')
+    } catch (recordError) {
+      console.error('❌ 记录充值交易失败:', recordError)
+      // 不中断主流程，只记录错误
+    }
+    
+    console.log('✅ 积分充值成功:', {
+      userId,
+      amount: parseInt(amount),
+      newBalance: newCredits
+    })
+    
+    res.json({
+      success: true,
+      previousCredits: currentCredits,
+      newCredits,
+      rechargedAmount: parseInt(amount),
+      message: `成功充值 ${amount} 积分，余额: ${newCredits}`
+    })
+  } catch (error) {
+    console.error('充值积分失败:', error)
+    res.status(500).json({ 
+      success: false,
+      error: '充值积分失败' 
     })
   }
 })

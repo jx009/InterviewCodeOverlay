@@ -174,6 +174,80 @@ class Database {
     }
   }
 
+  // 🆕 记录积分交易
+  async recordPointTransaction(transactionData) {
+    try {
+      const transaction = await this.prisma.pointTransaction.create({
+        data: {
+          userId: parseInt(transactionData.userId),
+          transactionType: transactionData.transactionType,
+          amount: parseInt(transactionData.amount),
+          balanceAfter: parseInt(transactionData.balanceAfter),
+          modelName: transactionData.modelName || null,
+          questionType: transactionData.questionType || null,
+          description: transactionData.description || null,
+          metadata: transactionData.metadata || null
+        }
+      });
+      return transaction;
+    } catch (error) {
+      console.error('记录积分交易失败:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 获取用户积分交易记录
+  async getUserPointTransactions(userId, limit = 50, offset = 0) {
+    try {
+      const [transactions, total] = await Promise.all([
+        this.prisma.pointTransaction.findMany({
+          where: { userId: parseInt(userId) },
+          orderBy: { createdAt: 'desc' },
+          take: parseInt(limit),
+          skip: parseInt(offset),
+          select: {
+            id: true,
+            transactionType: true,
+            amount: true,
+            balanceAfter: true,
+            modelName: true,
+            questionType: true,
+            description: true,
+            createdAt: true
+          }
+        }),
+        this.prisma.pointTransaction.count({
+          where: { userId: parseInt(userId) }
+        })
+      ]);
+      
+      return {
+        transactions,
+        total,
+        hasMore: (offset + transactions.length) < total
+      };
+    } catch (error) {
+      console.error('获取积分交易记录失败:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 获取积分交易统计
+  async getPointTransactionStats(userId) {
+    try {
+      const stats = await this.prisma.pointTransaction.groupBy({
+        by: ['transactionType'],
+        where: { userId: parseInt(userId) },
+        _sum: { amount: true },
+        _count: { id: true }
+      });
+      return stats;
+    } catch (error) {
+      console.error('获取积分交易统计失败:', error);
+      throw error;
+    }
+  }
+
   async getUserConfig(userId) {
     try {
       let config = await this.prisma.userConfig.findUnique({
