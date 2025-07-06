@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import EmailVerification from '../components/EmailVerification';
 import ForgotPasswordPage from './ForgotPasswordPage';
+import { UrlUtils } from '../utils/urlUtils';
 // import { useNavigate } from 'react-router-dom';
 
 // 🛠️ 添加CSS样式来隐藏浏览器默认的密码显示图标
@@ -198,14 +199,26 @@ export default function LoginPage() {
           return;
         }
         
+        // 获取设备绑定的邀请人ID（如果有）
+        const inviterId = UrlUtils.getInviterIdForRegistration();
+        console.log('🎯 注册时检测到的邀请人ID:', inviterId);
+        
         // 使用验证过的邮箱进行注册
-        const result = await register({
+        const registerData: any = {
           token: verificationToken,
           verify_code: verificationCode,
           email: formData.email,
           password: formData.password,
           username: formData.username || formData.email.split('@')[0]
-        });
+        };
+        
+        // 如果有邀请人ID，添加到注册数据中
+        if (inviterId) {
+          registerData.inviterId = inviterId;
+          console.log('✅ 注册时包含邀请人ID:', inviterId);
+        }
+        
+        const result = await register(registerData);
         
         if (result.success) {
           console.log('注册成功');

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
-import { configApi, pointsApi, clientCreditsApi } from '../services/api';
+import { configApi, pointsApi, clientCreditsApi, inviteApi } from '../services/api';
+import { UrlUtils } from '../utils/urlUtils';
 
 interface UserConfig {
   aiModel: string;
@@ -39,6 +40,34 @@ interface PointTransaction {
   createdAt: string;
 }
 
+// 邀请相关类型
+interface InviteData {
+  inviteCode: string;
+  inviteUrl: string;
+  userId: number;
+}
+
+interface InviteRegistration {
+  id: number;
+  userId: number;
+  email: string;
+  username: string;
+  registrationTime: string;
+  status: string;
+}
+
+interface InviteRecharge {
+  id: number;
+  userId: number;
+  email: string;
+  username: string;
+  amount: number | string; // 允许字符串类型，因为后端可能返回字符串
+  points: number;
+  bonusPoints: number;
+  rechargeTime: string;
+  orderNo: string;
+}
+
 export default function ProfilePage() {
   const { user, logout, isAuthenticated, loading: authLoading } = useAuthContext()
   const [config, setConfig] = useState<UserConfig | null>(null)
@@ -55,6 +84,22 @@ export default function ProfilePage() {
   const [totalPages, setTotalPages] = useState(1)
   const recordsPerPage = 10
   const maxPages = 100
+
+  // 邀请功能状态
+  const [inviteData, setInviteData] = useState<InviteData | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
+  
+  // 邀请记录状态
+  const [inviteDetailTab, setInviteDetailTab] = useState<'overview' | 'registrations' | 'recharges'>('overview')
+  const [registrations, setRegistrations] = useState<InviteRegistration[]>([])
+  const [recharges, setRecharges] = useState<InviteRecharge[]>([])
+  const [registrationsLoading, setRegistrationsLoading] = useState(false)
+  const [rechargesLoading, setRechargesLoading] = useState(false)
+  const [registrationsPage, setRegistrationsPage] = useState(1)
+  const [rechargesPage, setRechargesPage] = useState(1)
+  const [registrationsTotalPages, setRegistrationsTotalPages] = useState(1)
+  const [rechargesTotalPages, setRechargesTotalPages] = useState(1)
 
   // 检查认证状态，与ProtectedRoute保持一致
   const hasSessionId = !!localStorage.getItem('sessionId');
@@ -76,6 +121,137 @@ export default function ProfilePage() {
       loadTransactionHistory(1); // 默认加载第一页
     }
   }, [currentTab, hasValidSession]);
+
+  // 加载邀请数据
+  useEffect(() => {
+    if (currentTab === 'invite' && hasValidSession) {
+      loadInviteData();
+    }
+  }, [currentTab, hasValidSession]);
+
+  // 加载邀请详细记录
+  useEffect(() => {
+    if (currentTab === 'invite' && hasValidSession) {
+      if (inviteDetailTab === 'registrations') {
+        loadInviteRegistrations(1);
+      } else if (inviteDetailTab === 'recharges') {
+        loadInviteRecharges(1);
+      } else if (inviteDetailTab === 'overview') {
+        // 加载总览数据
+        loadInviteRegistrations(1);
+        loadInviteRecharges(1);
+      }
+    }
+  }, [currentTab, inviteDetailTab, hasValidSession]);
+
+  const loadInviteData = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setInviteLoading(true);
+      
+      // 生成基于用户ID的邀请链接
+      const userId = user.id;
+      const inviteUrl = UrlUtils.generateInviteUrl(userId);
+      
+      setInviteData({
+        inviteCode: userId.toString(),
+        inviteUrl,
+        userId: parseInt(userId)
+      });
+      
+      console.log('✅ 邀请数据加载成功:', { userId, inviteUrl });
+    } catch (error) {
+      console.error('❌ 加载邀请数据失败:', error);
+      setMessage('加载邀请数据失败');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const loadInviteRegistrations = async (page: number = 1) => {
+    if (!user?.id) return;
+    
+    try {
+      setRegistrationsLoading(true);
+      console.log('🔍 调用邀请注册记录API:', { userId: user.id, page, limit: recordsPerPage });
+      const result = await inviteApi.getInviteRegistrations({ 
+        page, 
+        limit: recordsPerPage, 
+        userId: user.id 
+      });
+      
+      if (result.success) {
+        setRegistrations(result.data.registrations);
+        setRegistrationsPage(result.data.page);
+        setRegistrationsTotalPages(result.data.totalPages);
+      }
+    } catch (error) {
+      console.error('❌ 加载邀请注册记录失败:', error);
+      setMessage('加载邀请注册记录失败');
+    } finally {
+      setRegistrationsLoading(false);
+    }
+  };
+
+  const loadInviteRecharges = async (page: number = 1) => {
+    if (!user?.id) return;
+    
+    try {
+      setRechargesLoading(true);
+      console.log('🔍 调用邀请充值记录API:', { userId: user.id, page, limit: recordsPerPage });
+      const result = await inviteApi.getInviteRecharges({ 
+        page, 
+        limit: recordsPerPage, 
+        userId: user.id 
+      });
+      
+      if (result.success) {
+        setRecharges(result.data.recharges);
+        setRechargesPage(result.data.page);
+        setRechargesTotalPages(result.data.totalPages);
+      }
+    } catch (error) {
+      console.error('❌ 加载邀请充值记录失败:', error);
+      setMessage('加载邀请充值记录失败');
+    } finally {
+      setRechargesLoading(false);
+    }
+  };
+
+  const copyInviteUrl = async () => {
+    if (!inviteData?.inviteUrl) return;
+    
+    try {
+      await navigator.clipboard.writeText(inviteData.inviteUrl);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+      console.log('✅ 邀请链接已复制到剪贴板');
+    } catch (error) {
+      console.error('❌ 复制失败:', error);
+      // 备用方案：选择文本
+      const textArea = document.createElement('textarea');
+      textArea.value = inviteData.inviteUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   const loadTransactionHistory = async (page: number = 1) => {
     try {
@@ -348,6 +524,16 @@ export default function ProfilePage() {
           >
             历史记录
           </button>
+          <button
+            onClick={() => setCurrentTab('invite')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              currentTab === 'invite'
+                ? 'text-blue-400 border-b-2 border-blue-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            邀请管理
+          </button>
         </div>
 
         {currentTab === 'config' && (
@@ -562,6 +748,293 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {currentTab === 'invite' && (
+          <div className="space-y-6">
+            {/* 邀请链接卡片 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h2 className="text-xl font-semibold mb-4">👥 邀请管理</h2>
+              
+              {inviteLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                </div>
+              ) : inviteData ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">您的邀请码</label>
+                    <div className="bg-gray-700 rounded-lg p-3">
+                      <code className="text-green-400">{inviteData.inviteCode}</code>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">邀请链接</label>
+                    <div className="bg-gray-700 rounded-lg p-3 break-all">
+                      <code className="text-blue-400">{inviteData.inviteUrl}</code>
+                    </div>
+                  </div>
+                  <button
+                    onClick={copyInviteUrl}
+                    className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                      copySuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    {copySuccess ? '已复制' : '复制邀请链接'}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <p>暂无邀请数据</p>
+                </div>
+              )}
+            </div>
+
+            {/* 邀请记录详情 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4">📊 邀请记录详情</h3>
+              
+              {/* 子标签页 */}
+              <div className="flex border-b border-gray-700 mb-4">
+                <button
+                  onClick={() => setInviteDetailTab('overview')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    inviteDetailTab === 'overview'
+                      ? 'text-blue-400 border-b-2 border-blue-400'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  总览
+                </button>
+                <button
+                  onClick={() => setInviteDetailTab('registrations')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    inviteDetailTab === 'registrations'
+                      ? 'text-blue-400 border-b-2 border-blue-400'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  注册明细
+                </button>
+                <button
+                  onClick={() => setInviteDetailTab('recharges')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    inviteDetailTab === 'recharges'
+                      ? 'text-blue-400 border-b-2 border-blue-400'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  充值明细
+                </button>
+              </div>
+
+              {/* 总览内容 */}
+              {inviteDetailTab === 'overview' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-green-400">{registrations.length}</div>
+                    <div className="text-sm text-gray-400">成功邀请注册</div>
+                  </div>
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-blue-400">{recharges.length}</div>
+                    <div className="text-sm text-gray-400">用户充值次数</div>
+                  </div>
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-yellow-400">
+                      ¥{recharges.reduce((sum, r) => sum + (typeof r.amount === 'string' ? parseFloat(r.amount) || 0 : r.amount || 0), 0).toFixed(2)}
+                    </div>
+                    <div className="text-sm text-gray-400">累计充值金额</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 注册明细 */}
+              {inviteDetailTab === 'registrations' && (
+                <div>
+                  {registrationsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                    </div>
+                  ) : registrations.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-700">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户ID</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">注册时间</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">状态</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-700">
+                            {registrations.map((registration) => (
+                              <tr key={registration.id} className="hover:bg-gray-700">
+                                <td className="px-4 py-3 text-sm">{registration.userId}</td>
+                                <td className="px-4 py-3 text-sm">{registration.email}</td>
+                                <td className="px-4 py-3 text-sm">{registration.username}</td>
+                                <td className="px-4 py-3 text-sm">{formatDateTime(registration.registrationTime)}</td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    registration.status === 'REGISTERED' ? 'bg-green-600 text-green-100' : 'bg-gray-600 text-gray-100'
+                                  }`}>
+                                    {registration.status === 'REGISTERED' ? '已注册' : registration.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* 注册记录分页 */}
+                      {registrationsTotalPages > 1 && (
+                        <div className="flex justify-between items-center">
+                          <div className="text-sm text-gray-400">
+                            第 {registrationsPage} 页，共 {registrationsTotalPages} 页
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => loadInviteRegistrations(1)}
+                              disabled={registrationsPage === 1 || registrationsLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              首页
+                            </button>
+                            <button
+                              onClick={() => loadInviteRegistrations(registrationsPage - 1)}
+                              disabled={registrationsPage === 1 || registrationsLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              上一页
+                            </button>
+                            <span className="px-3 py-1 text-sm bg-blue-600 rounded">
+                              {registrationsPage}
+                            </span>
+                            <button
+                              onClick={() => loadInviteRegistrations(registrationsPage + 1)}
+                              disabled={registrationsPage >= registrationsTotalPages || registrationsLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              下一页
+                            </button>
+                            <button
+                              onClick={() => loadInviteRegistrations(registrationsTotalPages)}
+                              disabled={registrationsPage >= registrationsTotalPages || registrationsLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              末页
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <p>暂无注册记录</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 充值明细 */}
+              {inviteDetailTab === 'recharges' && (
+                <div>
+                  {rechargesLoading ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                    </div>
+                  ) : recharges.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-700">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户ID</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值金额</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">获得积分</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值时间</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-700">
+                            {recharges.map((recharge) => (
+                              <tr key={recharge.id} className="hover:bg-gray-700">
+                                <td className="px-4 py-3 text-sm">{recharge.userId}</td>
+                                <td className="px-4 py-3 text-sm">{recharge.email}</td>
+                                <td className="px-4 py-3 text-sm">{recharge.username}</td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className="text-green-400 font-medium">¥{(typeof recharge.amount === 'string' ? parseFloat(recharge.amount) : recharge.amount).toFixed(2)}</span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                  <span className="text-blue-400">{recharge.points}</span>
+                                  {recharge.bonusPoints > 0 && (
+                                    <span className="text-yellow-400 ml-1">+{recharge.bonusPoints}</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-sm">{formatDateTime(recharge.rechargeTime)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* 充值记录分页 */}
+                      {rechargesTotalPages > 1 && (
+                        <div className="flex justify-between items-center">
+                          <div className="text-sm text-gray-400">
+                            第 {rechargesPage} 页，共 {rechargesTotalPages} 页
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => loadInviteRecharges(1)}
+                              disabled={rechargesPage === 1 || rechargesLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              首页
+                            </button>
+                            <button
+                              onClick={() => loadInviteRecharges(rechargesPage - 1)}
+                              disabled={rechargesPage === 1 || rechargesLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              上一页
+                            </button>
+                            <span className="px-3 py-1 text-sm bg-blue-600 rounded">
+                              {rechargesPage}
+                            </span>
+                            <button
+                              onClick={() => loadInviteRecharges(rechargesPage + 1)}
+                              disabled={rechargesPage >= rechargesTotalPages || rechargesLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              下一页
+                            </button>
+                            <button
+                              onClick={() => loadInviteRecharges(rechargesTotalPages)}
+                              disabled={rechargesPage >= rechargesTotalPages || rechargesLoading}
+                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                            >
+                              末页
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <p>暂无充值记录</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

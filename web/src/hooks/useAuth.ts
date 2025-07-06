@@ -19,6 +19,7 @@ interface RegisterParams {
   email: string;
   password: string;
   username: string;
+  inviterId?: string; // 邀请人ID（可选）
 }
 
 interface AuthResponse {

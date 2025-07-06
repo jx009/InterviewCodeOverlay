@@ -268,7 +268,8 @@ initializeServices();
 // 中间件
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:3002'],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Session-Id']
 }));
 app.use(express.json());
 
@@ -2177,6 +2178,246 @@ app.get('/api/payment/orders', verifyToken, (req, res) => {
     });
   }
 });
+
+// =====================================
+// 邀请系统API路由
+// =====================================
+
+// 简单的用户ID提取中间件
+const getUserId = (req, res, next) => {
+  const userId = req.headers['x-user-id'] || req.query.userId;
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      error: '请提供用户ID'
+    });
+  }
+  req.userId = parseInt(userId);
+  next();
+};
+
+/**
+ * 获取邀请注册记录
+ * GET /api/invite/registrations?userId=8&page=1&limit=10
+ */
+app.get('/api/invite/registrations', getUserId, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    console.log('🎯 获取邀请注册记录:', { userId, page, limit });
+    
+    // 直接查询数据库：查找被该用户邀请的用户
+    const invitedUsers = await db.prisma.user.findMany({
+      where: {
+        inviterId: userId // 查找被当前用户邀请的用户
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip: offset,
+      take: limit
+    });
+    
+    // 获取总数
+    const total = await db.prisma.user.count({
+      where: {
+        inviterId: userId
+      }
+    });
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    console.log('✅ 邀请注册记录获取成功:', { total, page, records: invitedUsers.length });
+    
+    res.json({
+      success: true,
+      data: {
+        registrations: invitedUsers,
+        total,
+        page,
+        limit,
+        totalPages
+      },
+      message: '获取邀请注册记录成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取邀请注册记录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取邀请注册记录失败'
+    });
+  }
+});
+
+/**
+ * 获取邀请用户充值记录
+ * GET /api/invite/recharges?userId=8&page=1&limit=10
+ */
+app.get('/api/invite/recharges', getUserId, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    console.log('🎯 获取邀请用户充值记录:', { userId, page, limit });
+    
+    // 查找被该用户邀请的用户列表
+    const invitedUserIds = await db.prisma.user.findMany({
+      where: {
+        inviterId: userId
+      },
+      select: {
+        id: true
+      }
+    });
+    
+    const invitedIds = invitedUserIds.map(u => u.id);
+    
+    // 查找这些用户的充值记录
+    const rechargeRecords = await db.prisma.paymentOrder.findMany({
+      where: {
+        userId: {
+          in: invitedIds
+        },
+        paymentStatus: 'PAID' // 只查询已支付的订单
+      },
+      include: {
+        user: {
+          select: {
+            username: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip: offset,
+      take: limit
+    });
+    
+    // 获取总数
+    const total = await db.prisma.paymentOrder.count({
+      where: {
+        userId: {
+          in: invitedIds
+        },
+        paymentStatus: 'PAID'
+      }
+    });
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    console.log('✅ 邀请用户充值记录获取成功:', { total, page, records: rechargeRecords.length });
+    
+    res.json({
+      success: true,
+      data: {
+        recharges: rechargeRecords,
+        total,
+        page,
+        limit,
+        totalPages
+      },
+      message: '获取邀请用户充值记录成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取邀请用户充值记录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取邀请用户充值记录失败'
+    });
+  }
+});
+
+/**
+ * 获取邀请统计数据
+ * GET /api/invite/stats?userId=8
+ */
+app.get('/api/invite/stats', getUserId, async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    console.log('🎯 获取邀请统计数据:', { userId });
+    
+    // 1. 统计邀请注册人数
+    const totalInvitedUsers = await db.prisma.user.count({
+      where: {
+        inviterId: userId
+      }
+    });
+    
+    // 2. 获取被邀请用户的ID列表
+    const invitedUserIds = await db.prisma.user.findMany({
+      where: {
+        inviterId: userId
+      },
+      select: {
+        id: true
+      }
+    });
+    
+    const invitedIds = invitedUserIds.map(u => u.id);
+    
+    // 3. 统计充值用户数量
+    const totalRechargeUsers = await db.prisma.paymentOrder.groupBy({
+      by: ['userId'],
+      where: {
+        userId: {
+          in: invitedIds
+        },
+        paymentStatus: 'PAID'
+      }
+    });
+    
+    // 4. 统计累计充值金额
+    const totalRechargeAmount = await db.prisma.paymentOrder.aggregate({
+      where: {
+        userId: {
+          in: invitedIds
+        },
+        paymentStatus: 'PAID'
+      },
+      _sum: {
+        amount: true
+      }
+    });
+    
+    const stats = {
+      totalInvitedUsers,
+      totalRechargeUsers: totalRechargeUsers.length,
+      totalRechargeAmount: totalRechargeAmount._sum.amount || 0
+    };
+    
+    console.log('✅ 邀请统计数据获取成功:', stats);
+    
+    res.json({
+      success: true,
+      data: stats,
+      message: '获取邀请统计数据成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取邀请统计数据失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取邀请统计数据失败'
+    });
+  }
+});
+
+// =====================================
+// 管理员API路由
+// =====================================
 
 // 获取所有用户列表API - 添加这个新的API端点
 app.get('/api/admin/users', adminAuthMiddleware, async (req, res) => {

@@ -18,6 +18,12 @@ model User {
   role      UserRole @default(USER) // 用户角色，默认为普通用户
   isActive  Boolean  @default(true)
   points    Int      @default(100) // 用户积分余额，新用户默认100积分
+  
+  // 邀请系统字段
+  inviteCode String?  @unique @db.VarChar(20) @map("invite_code") // 邀请码
+  inviterId  Int?     @map("inviter_id") // 邀请人ID
+  invitedAt  DateTime? @map("invited_at") // 被邀请时间
+  
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -27,6 +33,12 @@ model User {
   sessions     UserSession[]
   transactions PointTransaction[] // 积分交易记录
   paymentOrders PaymentOrder[]    // 支付订单记录
+  
+  // 邀请系统关系
+  inviteRecords InviteRecord[] @relation("InviterRecords") // 作为邀请人的记录
+  invitedRecords InviteRecord[] @relation("InviteeRecords") // 作为被邀请人的记录
+  inviteRewards InviteReward[] @relation("InviterRewards") // 作为邀请人的奖励
+  invitedRewards InviteReward[] @relation("InviteeRewards") // 作为被邀请人的奖励
 
   @@map("users")
 }
@@ -307,4 +319,51 @@ enum UserRole {
   ADMIN @map("admin") // 管理员
   
   @@map("user_roles")
+}
+
+// 🎯 邀请系统相关表
+
+// 邀请记录表
+model InviteRecord {
+  id                  Int      @id @default(autoincrement())
+  inviterId           Int      @map("inviter_id") // 邀请人ID
+  inviteeId           Int      @map("invitee_id") // 被邀请人ID
+  inviteCode          String   @db.VarChar(20) @map("invite_code") // 邀请码
+  status              String   @default("REGISTERED") @db.VarChar(20) // 状态：REGISTERED, ACTIVATED
+  firstRechargeAmount Decimal  @default(0) @db.Decimal(10,2) @map("first_recharge_amount") // 首次充值金额
+  commissionAmount    Decimal  @default(0) @db.Decimal(10,2) @map("commission_amount") // 佣金金额
+  commissionStatus    String   @default("PENDING") @db.VarChar(20) @map("commission_status") // 佣金状态
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  inviter User @relation("InviterRecords", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User @relation("InviteeRecords", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@unique([inviteeId]) // 每个用户只能被邀请一次
+  @@index([inviterId])
+  @@index([status])
+  @@map("invite_records")
+}
+
+// 邀请奖励记录表
+model InviteReward {
+  id           Int      @id @default(autoincrement())
+  inviterId    Int      @map("inviter_id") // 邀请人ID
+  inviteeId    Int      @map("invitee_id") // 被邀请人ID
+  rewardType   String   @db.VarChar(20) @map("reward_type") // 奖励类型：REGISTER, FIRST_RECHARGE, COMMISSION
+  rewardAmount Int      @map("reward_amount") // 奖励积分数量
+  description  String?  @db.Text // 奖励描述
+  status       String   @default("GRANTED") @db.VarChar(20) // 状态：PENDING, GRANTED, FAILED
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  inviter User @relation("InviterRewards", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User @relation("InviteeRewards", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([inviterId])
+  @@index([rewardType])
+  @@index([status])
+  @@map("invite_rewards")
 } 

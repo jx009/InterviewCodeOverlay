@@ -200,7 +200,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       return;
     }
 
-    const { email, username, password, token, code } = req.body;
+    const { email, username, password, token, code, inviterId } = req.body;
     const config = getConfig();
 
     // 1. 验证邮箱验证码
@@ -260,15 +260,38 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       }
     });
 
-    // 5. 创建会话
+    // 5. 处理邀请关系（如果有）
+    if (inviterId) {
+      try {
+        console.log('🎯 处理用户注册的邀请关系:', { inviterId, newUserId: user.id });
+        
+        // 动态导入InviteService避免循环依赖
+        const { InviteService } = await import('../services/InviteService');
+        const inviteService = new InviteService();
+        
+        // 处理邀请注册
+        const inviteResult = await inviteService.handleInviteRegistration(inviterId, user.id);
+        
+        if (inviteResult) {
+          console.log('✅ 邀请关系建立成功');
+        } else {
+          console.log('⚠️ 邀请关系建立失败，但不影响注册');
+        }
+      } catch (error) {
+        console.error('❌ 处理邀请关系失败:', error);
+        // 邀请关系处理失败不影响注册成功
+      }
+    }
+
+    // 6. 创建会话
     const userAgent = req.headers['user-agent'] || '';
     const ipAddress = getClientIP(req);
     const sessionId = await sessionManager.createSession(user.id, userAgent, ipAddress);
 
-    // 6. 生成JWT token
+    // 7. 生成JWT token
     const jwtToken = jwt.sign({ userId: user.id }, config.security.jwtSecret, { expiresIn: '7d' });
 
-    // 7. 发送欢迎邮件（异步，不影响注册结果）
+    // 8. 发送欢迎邮件（异步，不影响注册结果）
     EmailService.sendWelcomeEmail(email, username).catch(error => {
       console.error('发送欢迎邮件失败:', error);
     });

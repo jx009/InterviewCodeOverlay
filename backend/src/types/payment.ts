@@ -4,6 +4,7 @@ import {
   PaymentStatus as PrismaPaymentStatus,
   NotifyStatus as PrismaNotifyStatus
 } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 // 使用Prisma生成的枚举类型
 export type PaymentMethod = PrismaPaymentMethod;
@@ -37,7 +38,7 @@ export interface PaymentOrder {
   orderNo: string;
   outTradeNo: string;
   userId: number;
-  amount: number;
+  amount: Decimal;
   points: number;
   bonusPoints: number;
   paymentMethod: PaymentMethod;
@@ -58,7 +59,7 @@ export interface PaymentPackage {
   id: number;
   name: string;
   description?: string | null;
-  amount: number;
+  amount: Decimal;
   points: number;
   bonusPoints: number;
   isActive: boolean;

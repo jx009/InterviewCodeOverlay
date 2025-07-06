@@ -211,7 +211,7 @@ export class PaymentNotifyService {
         };
       }
 
-      if (notifyLog.status === NotifyStatus.SUCCESS) {
+      if (notifyLog.processStatus === NotifyStatus.SUCCESS) {
         return {
           success: true,
           message: '通知已处理成功，无需重试'
@@ -225,12 +225,12 @@ export class PaymentNotifyService {
       });
 
       // 根据通知类型重新处理
-      const headers = JSON.parse(notifyLog.headers);
+      const headers = JSON.parse(notifyLog.requestHeaders || '{}');
       
       if (notifyLog.notifyType === 'payment') {
-        return await this.handleWechatNotify(headers, notifyLog.body, notifyLog.clientIp);
+        return await this.handleWechatNotify(headers, notifyLog.requestBody, '');
       } else if (notifyLog.notifyType === 'refund') {
-        return await this.handleWechatRefundNotify(headers, notifyLog.body, notifyLog.clientIp);
+        return await this.handleWechatRefundNotify(headers, notifyLog.requestBody, '');
       }
 
       return {
@@ -278,7 +278,7 @@ export class PaymentNotifyService {
       }
 
       if (options.status) {
-        where.status = options.status;
+        where.processStatus = options.status;
       }
 
       if (options.startDate || options.endDate) {
@@ -339,12 +339,12 @@ export class PaymentNotifyService {
         
         // 成功通知数
         prisma.paymentNotifyLog.count({
-          where: { status: NotifyStatus.SUCCESS }
+          where: { processStatus: NotifyStatus.SUCCESS }
         }),
         
         // 失败通知数
         prisma.paymentNotifyLog.count({
-          where: { status: NotifyStatus.FAILED }
+          where: { processStatus: NotifyStatus.FAILED }
         }),
         
         // 今日通知数
@@ -355,7 +355,7 @@ export class PaymentNotifyService {
         // 待重试通知数
         prisma.paymentNotifyLog.count({
           where: {
-            status: NotifyStatus.FAILED,
+            processStatus: NotifyStatus.FAILED,
             retryCount: { lt: 3 }
           }
         })

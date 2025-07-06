@@ -85,6 +85,27 @@ export function getWechatPayConfig(): WechatPayConfig {
     'WECHAT_PAY_SERIAL_NO'
   ];
 
+  // 在开发环境下，如果缺少微信支付配置，返回默认配置
+  if (process.env.NODE_ENV === 'development') {
+    for (const env of requiredEnvs) {
+      if (!process.env[env]) {
+        console.warn(`⚠️  开发环境缺少微信支付配置 ${env}，使用默认配置`);
+        return {
+          appId: process.env.WECHAT_PAY_APP_ID || 'dev_app_id',
+          mchId: process.env.WECHAT_PAY_MCH_ID || 'dev_mch_id',
+          apiKey: process.env.WECHAT_PAY_API_KEY || 'dev_api_key',
+          apiV3Key: process.env.WECHAT_PAY_API_V3_KEY || 'dev_api_v3_key',
+          certPath: process.env.WECHAT_PAY_CERT_PATH || '/dev/null',
+          keyPath: process.env.WECHAT_PAY_KEY_PATH || '/dev/null',
+          serialNo: process.env.WECHAT_PAY_SERIAL_NO || 'dev_serial_no',
+          notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL || `${process.env.BASE_URL || 'http://localhost:3001'}/api/payment/notify/wechat`,
+          environment: PAYMENT_CONFIG.ENVIRONMENT as 'sandbox' | 'production'
+        };
+      }
+    }
+  }
+
+  // 生产环境仍然要求所有配置
   for (const env of requiredEnvs) {
     if (!process.env[env]) {
       throw new Error(`Missing required environment variable: ${env}`);

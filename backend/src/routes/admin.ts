@@ -9,7 +9,7 @@ import { SessionManager } from '../config/redis-simple';
 const router = Router();
 const prisma = new PrismaClient();
 const pointService = new PointService();
-const sessionManager = new SessionManager();
+let sessionManager: SessionManager;
 
 // Session认证中间件
 const sessionAuthMiddleware = async (req: any, res: Response, next: any) => {
@@ -18,6 +18,11 @@ const sessionAuthMiddleware = async (req: any, res: Response, next: any) => {
     
     if (!sessionId) {
       return ResponseUtils.unauthorized(res, '未提供会话ID');
+    }
+
+    // 延迟初始化SessionManager
+    if (!sessionManager) {
+      sessionManager = new SessionManager();
     }
 
     const sessionValidation = await sessionManager.validateSession(sessionId);

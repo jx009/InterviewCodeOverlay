@@ -25,7 +25,7 @@ router.get('/packages', optionalAuth, async (req: AuthenticatedRequest, res: Res
 
     const packages = await paymentService.getPaymentPackages();
 
-    res.json({
+    return res.json({
       success: true,
       data: packages,
       message: '获取套餐列表成功'
@@ -34,7 +34,7 @@ router.get('/packages', optionalAuth, async (req: AuthenticatedRequest, res: Res
   } catch (error: any) {
     console.error('❌ 获取支付套餐列表失败:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: `获取套餐列表失败: ${error.message}`
     });
@@ -67,7 +67,7 @@ router.get('/packages/:id', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: packageData,
       message: '获取套餐详情成功'
@@ -76,7 +76,7 @@ router.get('/packages/:id', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('❌ 获取支付套餐详情失败:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: `获取套餐详情失败: ${error.message}`
     });
@@ -118,7 +118,7 @@ router.post('/orders', authenticateToken, rateLimit(10, 60000), async (req: Auth
     );
 
     if (result.success) {
-      res.json({
+      return res.json({
         success: true,
         data: {
           orderNo: result.orderNo,
@@ -128,7 +128,7 @@ router.post('/orders', authenticateToken, rateLimit(10, 60000), async (req: Auth
         message: result.message
       });
     } else {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         message: result.message
       });
@@ -137,7 +137,7 @@ router.post('/orders', authenticateToken, rateLimit(10, 60000), async (req: Auth
   } catch (error: any) {
     console.error('❌ 创建充值订单失败:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: `创建订单失败: ${error.message}`
     });
@@ -182,7 +182,7 @@ router.get('/orders/:orderNo', authenticateToken, async (req: AuthenticatedReque
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           order: result.order,
@@ -192,7 +192,7 @@ router.get('/orders/:orderNo', authenticateToken, async (req: AuthenticatedReque
         message: result.message
       });
     } else {
-      res.status(404).json({
+      return res.status(404).json({
         success: false,
         message: result.message
       });
@@ -201,7 +201,7 @@ router.get('/orders/:orderNo', authenticateToken, async (req: AuthenticatedReque
   } catch (error: any) {
     console.error('❌ 查询订单状态失败:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: `查询订单失败: ${error.message}`
     });
@@ -229,12 +229,12 @@ router.post('/orders/:orderNo/cancel', authenticateToken, async (req: Authentica
     const result = await paymentService.cancelOrder(orderNo, userId);
 
     if (result.success) {
-      res.json({
+      return res.json({
         success: true,
         message: result.message
       });
     } else {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         message: result.message
       });
@@ -243,7 +243,7 @@ router.post('/orders/:orderNo/cancel', authenticateToken, async (req: Authentica
   } catch (error: any) {
     console.error('❌ 取消订单失败:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: `取消订单失败: ${error.message}`
     });
@@ -294,7 +294,7 @@ router.get('/orders', authenticateToken, async (req: AuthenticatedRequest, res: 
       endDate
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: result.data,
       pagination: result.pagination,
@@ -304,7 +304,7 @@ router.get('/orders', authenticateToken, async (req: AuthenticatedRequest, res: 
   } catch (error: any) {
     console.error('❌ 获取用户订单列表失败:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: `获取订单列表失败: ${error.message}`
     });
@@ -334,21 +334,21 @@ router.post('/notify/wechat', async (req: Request, res: Response) => {
 
     if (result.success) {
       console.log('✅ 微信支付回调处理成功');
-      res.status(200).send('SUCCESS');
+      return res.status(200).send('SUCCESS');
     } else {
       console.error('❌ 微信支付回调处理失败:', result.message);
       
       // 如果需要重试，返回500状态码
       if (result.shouldRetry) {
-        res.status(500).send('FAIL');
+        return res.status(500).send('FAIL');
       } else {
-        res.status(400).send('FAIL');
+        return res.status(400).send('FAIL');
       }
     }
 
   } catch (error: any) {
     console.error('❌ 微信支付回调处理异常:', error);
-    res.status(500).send('FAIL');
+    return res.status(500).send('FAIL');
   }
 });
 
@@ -368,20 +368,20 @@ router.post('/notify/wechat/refund', async (req: Request, res: Response) => {
 
     if (result.success) {
       console.log('✅ 微信退款回调处理成功');
-      res.status(200).send('SUCCESS');
+      return res.status(200).send('SUCCESS');
     } else {
       console.error('❌ 微信退款回调处理失败:', result.message);
       
       if (result.shouldRetry) {
-        res.status(500).send('FAIL');
+        return res.status(500).send('FAIL');
       } else {
-        res.status(400).send('FAIL');
+        return res.status(400).send('FAIL');
       }
     }
 
   } catch (error: any) {
     console.error('❌ 微信退款回调处理异常:', error);
-    res.status(500).send('FAIL');
+    return res.status(500).send('FAIL');
   }
 });
 

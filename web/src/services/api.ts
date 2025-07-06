@@ -159,6 +159,7 @@ export const authApi = {
     email: string; 
     password: string; 
     username: string;
+    inviterId?: string; // 邀请人ID（可选）
   }) => {
     const response = await api.post('/user_register', userData);
     return response.data;
@@ -345,6 +346,47 @@ export const clientCreditsApi = {
     description?: string;
   }) => {
     const response = await api.post('/client/credits/recharge', data);
+    return response.data;
+  }
+};
+
+// 邀请相关API
+export const inviteApi = {
+  // 生成邀请链接
+  generateInviteUrl: async () => {
+    const response = await api.post('/invite/generate');
+    return response.data;
+  },
+
+  // 验证邀请标识
+  validateInviteIdentifier: async (identifier: string) => {
+    const response = await api.get(`/invite/validate/${identifier}`);
+    return response.data;
+  },
+
+  // 获取邀请注册记录
+  getInviteRegistrations: async (params: { page?: number; limit?: number; userId?: string } = {}) => {
+    const { page = 1, limit = 10, userId } = params;
+    const response = await api.get('/invite/registrations', {
+      params: { page, limit, userId }
+    });
+    return response.data;
+  },
+
+  // 获取邀请用户充值记录
+  getInviteRecharges: async (params: { page?: number; limit?: number; userId?: string } = {}) => {
+    const { page = 1, limit = 10, userId } = params;
+    const response = await api.get('/invite/recharges', {
+      params: { page, limit, userId }
+    });
+    return response.data;
+  },
+
+  // 获取邀请统计数据
+  getInviteStats: async (userId?: string) => {
+    const response = await api.get('/invite/stats', {
+      params: { userId }
+    });
     return response.data;
   }
 };

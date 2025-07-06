@@ -24,6 +24,15 @@ export class WechatCrypto {
   // 加载证书和私钥
   private loadKeys() {
     try {
+      // 在开发环境下，如果证书路径是默认的开发路径，则使用模拟证书
+      if (process.env.NODE_ENV === 'development' && 
+          (this.config.keyPath === '/dev/null' || this.config.certPath === '/dev/null')) {
+        console.log('⚠️  开发环境使用模拟微信支付证书');
+        this.privateKey = 'dev_private_key';
+        this.publicKey = 'dev_public_key';
+        return;
+      }
+
       // 加载商户私钥
       const keyPath = path.resolve(this.config.keyPath);
       if (!fs.existsSync(keyPath)) {
@@ -62,6 +71,11 @@ export class WechatCrypto {
   // 生成请求签名
   generateSignature(method: string, url: string, timestamp: string, nonce: string, body: string = ''): string {
     try {
+      // 开发环境使用模拟签名
+      if (process.env.NODE_ENV === 'development' && this.privateKey === 'dev_private_key') {
+        return 'dev_signature_' + Math.random().toString(36).substring(2, 15);
+      }
+
       // 构建签名字符串
       const signString = [method, url, timestamp, nonce, body].join('\n') + '\n';
       
@@ -102,6 +116,11 @@ export class WechatCrypto {
     wechatPublicKey?: string
   ): boolean {
     try {
+      // 开发环境总是返回true
+      if (process.env.NODE_ENV === 'development' && this.publicKey === 'dev_public_key') {
+        return true;
+      }
+
       // 构建验签字符串
       const signString = [timestamp, nonce, body].join('\n') + '\n';
       

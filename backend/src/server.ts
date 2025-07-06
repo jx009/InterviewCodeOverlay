@@ -12,6 +12,7 @@ import { ResponseUtils } from './utils/response';
 // 导入路由
 import authRoutes from './routes/auth';
 import configRoutes from './routes/config';
+import inviteRoutes from './routes/invite-simple';
 // 导入支付路由
 import { paymentRoutes } from './payment';
 
@@ -61,7 +62,7 @@ async function startServer() {
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Session-Id'],
     };
     app.use(cors(corsOptions));
 
@@ -124,6 +125,7 @@ async function startServer() {
     // API路由
     app.use('/api/auth', authRoutes);
     app.use('/api/config', configRoutes);
+    app.use('/api/invite', inviteRoutes);
     
     // 支付路由
     app.use('/api/payment', paymentRoutes);

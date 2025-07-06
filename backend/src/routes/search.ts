@@ -29,7 +29,15 @@ const getUserId = (req: express.Request, res: express.Response, next: express.Ne
     });
     return;
   }
-  req.userId = parseInt(userId as string);
+  const parsedUserId = parseInt(userId as string);
+  if (isNaN(parsedUserId)) {
+    res.status(400).json({
+      success: false,
+      error: '用户ID格式错误'
+    });
+    return;
+  }
+  req.userId = parsedUserId;
   next();
 };
 
@@ -48,7 +56,7 @@ router.post('/check-cost',
     try {
       const { modelName, questionType } = req.body;
       const result = await searchService.preCheckSearchCost(
-        req.userId,
+        req.userId!,
         modelName,
         questionType as QuestionType
       );
@@ -82,7 +90,7 @@ router.post('/execute',
       const { modelName, questionType, query, metadata } = req.body;
       
       const result = await searchService.searchWithPointsCheck({
-        userId: req.userId,
+        userId: req.userId!,
         modelName,
         questionType: questionType as QuestionType,
         query,
@@ -162,7 +170,7 @@ router.post('/batch',
       // 串行执行搜题（避免并发问题）
       for (const search of searches) {
         const result = await searchService.searchWithPointsCheck({
-          userId: req.userId,
+          userId: req.userId!,
           modelName: search.modelName,
           questionType: search.questionType as QuestionType,
           query: search.query,

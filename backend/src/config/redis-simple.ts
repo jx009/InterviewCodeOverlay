@@ -175,7 +175,11 @@ export class SessionManager {
 
   // 获取会话
   async getSession(sessionId: string): Promise<any> {
-    const sessionData = await this.redis.get(`session:${sessionId}`);
+    // 尝试不同的键前缀格式
+    let sessionData = await this.redis.get(`interview_coder:session:${sessionId}`);
+    if (!sessionData) {
+      sessionData = await this.redis.get(`session:${sessionId}`);
+    }
     if (!sessionData) {
       return null;
     }

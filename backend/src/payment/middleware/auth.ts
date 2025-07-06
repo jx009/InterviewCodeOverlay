@@ -18,7 +18,7 @@ export const authenticateToken = async (
   req: AuthenticatedRequest,
   res: Response<ApiResponse>,
   next: NextFunction
-): Promise<void> => {
+) => {
   console.log('🔒 支付模块认证检查...');
   
   // 检查Session ID
@@ -92,10 +92,10 @@ export const authenticateToken = async (
     console.log('✅ 用户认证成功:', { userId: decoded.userId });
     // 设置用户信息
     req.user = { userId: decoded.userId };
-    next();
+    return next();
   } catch (error) {
     console.error('❌ 令牌验证失败:', error);
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       error: '访问令牌无效或已过期'
     });
@@ -196,12 +196,12 @@ export const requireAdmin = async (req: AuthenticatedRequest, res: Response, nex
     }
 
     console.log(`✅ 管理员权限验证成功: ${user.username} (角色: ${user.role})`);
-    next();
+    return next();
 
   } catch (error: any) {
     console.error('❌ 管理员权限验证异常:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: '权限验证失败'
     });
@@ -227,8 +227,7 @@ export const rateLimit = (maxRequests: number = 100, windowMs: number = 15 * 60 
           count: 1,
           resetTime: now + windowMs
         });
-        next();
-        return;
+        return next();
       }
       
       if (clientData.count >= maxRequests) {
@@ -239,11 +238,11 @@ export const rateLimit = (maxRequests: number = 100, windowMs: number = 15 * 60 
       }
       
       clientData.count++;
-      next();
+      return next();
 
     } catch (error: any) {
       console.error('❌ 速率限制中间件异常:', error);
-      next(); // 出错时不阻止请求
+      return next(); // 出错时不阻止请求
     }
   };
 };

@@ -150,7 +150,8 @@ export const sendVerificationEmail = async (
       html: htmlContent,
     };
 
-    const result = await transporter.sendMail(mailOptions);
+    const emailTransporter = getTransporter();
+    const result = await emailTransporter.sendMail(mailOptions);
     console.log(`✅ 验证码邮件发送成功: ${email} (MessageId: ${result.messageId})`);
     return true;
   } catch (error) {
@@ -162,7 +163,11 @@ export const sendVerificationEmail = async (
 // 验证邮件配置
 export const verifyEmailConfig = async (): Promise<boolean> => {
   try {
-    await transporter.verify();
+    if (!transporter) {
+      console.error('❌ 邮件传输器未初始化');
+      return false;
+    }
+    await (transporter as any).verify();
     console.log(`✅ 邮件服务配置验证成功 (${config.email.smtp.host}:${config.email.smtp.port})`);
     return true;
   } catch (error) {
@@ -226,7 +231,7 @@ export const initEmailTransporter = async (): Promise<void> => {
     transporter = nodemailer.createTransport(smtpConfig);
 
     // 验证SMTP连接
-    await transporter.verify();
+    await (transporter as any).verify();
     console.log('✅ SMTP邮件服务初始化成功');
     
   } catch (error) {
