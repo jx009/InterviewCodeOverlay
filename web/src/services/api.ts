@@ -365,27 +365,43 @@ export const inviteApi = {
   },
 
   // 获取邀请注册记录
-  getInviteRegistrations: async (params: { page?: number; limit?: number; userId?: string } = {}) => {
-    const { page = 1, limit = 10, userId } = params;
+  getInviteRegistrations: async (params: { 
+    page?: number; 
+    limit?: number; 
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+    email?: string;
+  } = {}) => {
     const response = await api.get('/invite/registrations', {
-      params: { page, limit, userId }
+      params
     });
     return response.data;
   },
 
   // 获取邀请用户充值记录
-  getInviteRecharges: async (params: { page?: number; limit?: number; userId?: string } = {}) => {
-    const { page = 1, limit = 10, userId } = params;
+  getInviteRecharges: async (params: { 
+    page?: number; 
+    limit?: number; 
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+    email?: string;
+  } = {}) => {
     const response = await api.get('/invite/recharges', {
-      params: { page, limit, userId }
+      params
     });
     return response.data;
   },
 
   // 获取邀请统计数据
-  getInviteStats: async (userId?: string) => {
+  getInviteStats: async (params: { 
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}) => {
     const response = await api.get('/invite/stats', {
-      params: { userId }
+      params
     });
     return response.data;
   }

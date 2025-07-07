@@ -49,23 +49,21 @@ interface InviteData {
 
 interface InviteRegistration {
   id: number;
-  userId: number;
   email: string;
   username: string;
-  registrationTime: string;
-  status: string;
+  createdAt: string;
 }
 
 interface InviteRecharge {
   id: number;
   userId: number;
-  email: string;
-  username: string;
   amount: number | string; // 允许字符串类型，因为后端可能返回字符串
-  points: number;
-  bonusPoints: number;
-  rechargeTime: string;
+  createdAt: string;
   orderNo: string;
+  user?: {
+    email: string;
+    username: string;
+  };
 }
 
 export default function ProfilePage() {
@@ -100,6 +98,25 @@ export default function ProfilePage() {
   const [rechargesPage, setRechargesPage] = useState(1)
   const [registrationsTotalPages, setRegistrationsTotalPages] = useState(1)
   const [rechargesTotalPages, setRechargesTotalPages] = useState(1)
+  
+  // 筛选状态
+  const [inviteFilters, setInviteFilters] = useState(() => {
+    const now = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(now.getMonth() - 1);
+    
+    return {
+      startDate: oneMonthAgo.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0],
+      email: ''
+    };
+  })
+  const [inviteStats, setInviteStats] = useState({
+    totalInvitedUsers: 0,
+    totalRechargeUsers: 0,
+    totalRechargeAmount: 0,
+    totalRechargeCount: 0
+  })
 
   // 检查认证状态，与ProtectedRoute保持一致
   const hasSessionId = !!localStorage.getItem('sessionId');
@@ -129,20 +146,19 @@ export default function ProfilePage() {
     }
   }, [currentTab, hasValidSession]);
 
-  // 加载邀请详细记录
+  // 加载邀请详细记录（应用默认筛选）
   useEffect(() => {
     if (currentTab === 'invite' && hasValidSession) {
-      if (inviteDetailTab === 'registrations') {
-        loadInviteRegistrations(1);
+      console.log('🎯 加载邀请数据，使用默认筛选:', inviteFilters);
+      if (inviteDetailTab === 'overview') {
+        loadInviteStats(inviteFilters);
+      } else if (inviteDetailTab === 'registrations') {
+        loadInviteRegistrations(1, inviteFilters);
       } else if (inviteDetailTab === 'recharges') {
-        loadInviteRecharges(1);
-      } else if (inviteDetailTab === 'overview') {
-        // 加载总览数据
-        loadInviteRegistrations(1);
-        loadInviteRecharges(1);
+        loadInviteRecharges(1, inviteFilters);
       }
     }
-  }, [currentTab, inviteDetailTab, hasValidSession]);
+  }, [currentTab, hasValidSession, inviteDetailTab]); // 注意：这里不包含inviteFilters，避免循环
 
   const loadInviteData = async () => {
     if (!user?.id) return;
@@ -169,17 +185,20 @@ export default function ProfilePage() {
     }
   };
 
-  const loadInviteRegistrations = async (page: number = 1) => {
+  const loadInviteRegistrations = async (page: number = 1, filters?: any) => {
     if (!user?.id) return;
     
     try {
       setRegistrationsLoading(true);
-      console.log('🔍 调用邀请注册记录API:', { userId: user.id, page, limit: recordsPerPage });
-      const result = await inviteApi.getInviteRegistrations({ 
+      const params = { 
         page, 
         limit: recordsPerPage, 
-        userId: user.id 
-      });
+        userId: user.id,
+        ...(filters || inviteFilters)
+      };
+      console.log('🔍 调用邀请注册记录API，参数:', params);
+      const result = await inviteApi.getInviteRegistrations(params);
+      console.log('📋 邀请注册记录API返回结果:', result);
       
       if (result.success) {
         setRegistrations(result.data.registrations);
@@ -194,17 +213,20 @@ export default function ProfilePage() {
     }
   };
 
-  const loadInviteRecharges = async (page: number = 1) => {
+  const loadInviteRecharges = async (page: number = 1, filters?: any) => {
     if (!user?.id) return;
     
     try {
       setRechargesLoading(true);
-      console.log('🔍 调用邀请充值记录API:', { userId: user.id, page, limit: recordsPerPage });
-      const result = await inviteApi.getInviteRecharges({ 
+      const params = { 
         page, 
         limit: recordsPerPage, 
-        userId: user.id 
-      });
+        userId: user.id,
+        ...(filters || inviteFilters)
+      };
+      console.log('🔍 调用邀请充值记录API，参数:', params);
+      const result = await inviteApi.getInviteRecharges(params);
+      console.log('💰 邀请充值记录API返回结果:', result);
       
       if (result.success) {
         setRecharges(result.data.recharges);
@@ -216,6 +238,89 @@ export default function ProfilePage() {
       setMessage('加载邀请充值记录失败');
     } finally {
       setRechargesLoading(false);
+    }
+  };
+
+  const loadInviteStats = async (filters?: any) => {
+    if (!user?.id) return;
+    
+    try {
+      const params = { 
+        userId: user.id,
+        ...(filters || inviteFilters)
+      };
+      console.log('🔍 调用邀请统计API，参数:', params);
+      const result = await inviteApi.getInviteStats(params);
+      console.log('📊 邀请统计API返回结果:', result);
+      
+      if (result.success) {
+        // 确保所有数值都是有效的数字
+        const stats = {
+          totalInvitedUsers: Number(result.data.totalInvitedUsers) || 0,
+          totalRechargeUsers: Number(result.data.totalRechargeUsers) || 0,
+          totalRechargeAmount: Number(result.data.totalRechargeAmount) || 0,
+          totalRechargeCount: Number(result.data.totalRechargeCount) || 0
+        };
+        console.log('📊 处理后的统计数据:', stats);
+        setInviteStats(stats);
+      }
+    } catch (error) {
+      console.error('❌ 加载邀请统计失败:', error);
+      setMessage('加载邀请统计失败');
+    }
+  };
+
+  // 处理筛选
+  const handleInviteFilter = () => {
+    console.log('🔍 确认筛选被点击，当前筛选条件:', inviteFilters);
+    
+    // 验证日期格式
+    if (inviteFilters.startDate && inviteFilters.endDate) {
+      const startDate = new Date(inviteFilters.startDate);
+      const endDate = new Date(inviteFilters.endDate);
+      if (startDate > endDate) {
+        setMessage('开始日期不能晚于结束日期');
+        return;
+      }
+    }
+    
+    // 重置页码
+    setRegistrationsPage(1);
+    setRechargesPage(1);
+    
+    // 重新加载数据
+    loadInviteStats(inviteFilters);
+    if (inviteDetailTab === 'registrations') {
+      loadInviteRegistrations(1, inviteFilters);
+    } else if (inviteDetailTab === 'recharges') {
+      loadInviteRecharges(1, inviteFilters);
+    }
+  };
+
+  // 重置筛选
+  const handleResetInviteFilter = () => {
+    const now = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(now.getMonth() - 1);
+    
+    const defaultFilters = {
+      startDate: oneMonthAgo.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0],
+      email: ''
+    };
+    
+    setInviteFilters(defaultFilters);
+    
+    // 重置页码
+    setRegistrationsPage(1);
+    setRechargesPage(1);
+    
+    // 重新加载数据
+    loadInviteStats(defaultFilters);
+    if (inviteDetailTab === 'registrations') {
+      loadInviteRegistrations(1, defaultFilters);
+    } else if (inviteDetailTab === 'recharges') {
+      loadInviteRecharges(1, defaultFilters);
     }
   };
 
@@ -832,20 +937,75 @@ export default function ProfilePage() {
                 </button>
               </div>
 
+              {/* 筛选条件 */}
+              <div className="bg-gray-700 rounded-lg p-4 mb-4">
+                <h4 className="text-sm font-medium text-gray-300 mb-3">🔍 筛选条件</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">开始日期</label>
+                    <input
+                      type="date"
+                      value={inviteFilters.startDate}
+                      onChange={(e) => setInviteFilters({...inviteFilters, startDate: e.target.value})}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">结束日期</label>
+                    <input
+                      type="date"
+                      value={inviteFilters.endDate}
+                      onChange={(e) => setInviteFilters({...inviteFilters, endDate: e.target.value})}
+                      className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm"
+                    />
+                  </div>
+                  {(inviteDetailTab === 'registrations' || inviteDetailTab === 'recharges') && (
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">邮箱搜索</label>
+                      <input
+                        type="email"
+                        value={inviteFilters.email}
+                        onChange={(e) => setInviteFilters({...inviteFilters, email: e.target.value})}
+                        placeholder="输入邮箱进行搜索"
+                        className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm placeholder-gray-400"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handleInviteFilter}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
+                  >
+                    确认筛选
+                  </button>
+                  <button
+                    onClick={handleResetInviteFilter}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+                  >
+                    重置筛选
+                  </button>
+                </div>
+              </div>
+
               {/* 总览内容 */}
               {inviteDetailTab === 'overview' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-2xl font-bold text-green-400">{registrations.length}</div>
+                    <div className="text-2xl font-bold text-green-400">{inviteStats.totalInvitedUsers || 0}</div>
                     <div className="text-sm text-gray-400">成功邀请注册</div>
                   </div>
                   <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-2xl font-bold text-blue-400">{recharges.length}</div>
-                    <div className="text-sm text-gray-400">用户充值次数</div>
+                    <div className="text-2xl font-bold text-blue-400">{inviteStats.totalRechargeUsers || 0}</div>
+                    <div className="text-sm text-gray-400">充值用户数</div>
+                  </div>
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-purple-400">{inviteStats.totalRechargeCount || 0}</div>
+                    <div className="text-sm text-gray-400">总充值次数</div>
                   </div>
                   <div className="bg-gray-700 rounded-lg p-4">
                     <div className="text-2xl font-bold text-yellow-400">
-                      ¥{recharges.reduce((sum, r) => sum + (typeof r.amount === 'string' ? parseFloat(r.amount) || 0 : r.amount || 0), 0).toFixed(2)}
+                      ¥{(inviteStats.totalRechargeAmount || 0).toFixed(2)}
                     </div>
                     <div className="text-sm text-gray-400">累计充值金额</div>
                   </div>
@@ -869,23 +1029,15 @@ export default function ProfilePage() {
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">注册时间</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">状态</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-700">
                             {registrations.map((registration) => (
                               <tr key={registration.id} className="hover:bg-gray-700">
-                                <td className="px-4 py-3 text-sm">{registration.userId}</td>
+                                <td className="px-4 py-3 text-sm">{registration.id}</td>
                                 <td className="px-4 py-3 text-sm">{registration.email}</td>
                                 <td className="px-4 py-3 text-sm">{registration.username}</td>
-                                <td className="px-4 py-3 text-sm">{formatDateTime(registration.registrationTime)}</td>
-                                <td className="px-4 py-3 text-sm">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    registration.status === 'REGISTERED' ? 'bg-green-600 text-green-100' : 'bg-gray-600 text-gray-100'
-                                  }`}>
-                                    {registration.status === 'REGISTERED' ? '已注册' : registration.status}
-                                  </span>
-                                </td>
+                                <td className="px-4 py-3 text-sm">{formatDateTime(registration.createdAt)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -900,14 +1052,14 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => loadInviteRegistrations(1)}
+                              onClick={() => loadInviteRegistrations(1, inviteFilters)}
                               disabled={registrationsPage === 1 || registrationsLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
                               首页
                             </button>
                             <button
-                              onClick={() => loadInviteRegistrations(registrationsPage - 1)}
+                              onClick={() => loadInviteRegistrations(registrationsPage - 1, inviteFilters)}
                               disabled={registrationsPage === 1 || registrationsLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
@@ -917,14 +1069,14 @@ export default function ProfilePage() {
                               {registrationsPage}
                             </span>
                             <button
-                              onClick={() => loadInviteRegistrations(registrationsPage + 1)}
+                              onClick={() => loadInviteRegistrations(registrationsPage + 1, inviteFilters)}
                               disabled={registrationsPage >= registrationsTotalPages || registrationsLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
                               下一页
                             </button>
                             <button
-                              onClick={() => loadInviteRegistrations(registrationsTotalPages)}
+                              onClick={() => loadInviteRegistrations(registrationsTotalPages, inviteFilters)}
                               disabled={registrationsPage >= registrationsTotalPages || registrationsLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
@@ -959,7 +1111,6 @@ export default function ProfilePage() {
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值金额</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">获得积分</th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值时间</th>
                             </tr>
                           </thead>
@@ -967,18 +1118,12 @@ export default function ProfilePage() {
                             {recharges.map((recharge) => (
                               <tr key={recharge.id} className="hover:bg-gray-700">
                                 <td className="px-4 py-3 text-sm">{recharge.userId}</td>
-                                <td className="px-4 py-3 text-sm">{recharge.email}</td>
-                                <td className="px-4 py-3 text-sm">{recharge.username}</td>
+                                <td className="px-4 py-3 text-sm">{recharge.user?.email || '-'}</td>
+                                <td className="px-4 py-3 text-sm">{recharge.user?.username || '-'}</td>
                                 <td className="px-4 py-3 text-sm">
                                   <span className="text-green-400 font-medium">¥{(typeof recharge.amount === 'string' ? parseFloat(recharge.amount) : recharge.amount).toFixed(2)}</span>
                                 </td>
-                                <td className="px-4 py-3 text-sm">
-                                  <span className="text-blue-400">{recharge.points}</span>
-                                  {recharge.bonusPoints > 0 && (
-                                    <span className="text-yellow-400 ml-1">+{recharge.bonusPoints}</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-sm">{formatDateTime(recharge.rechargeTime)}</td>
+                                <td className="px-4 py-3 text-sm">{formatDateTime(recharge.createdAt)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -993,14 +1138,14 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => loadInviteRecharges(1)}
+                              onClick={() => loadInviteRecharges(1, inviteFilters)}
                               disabled={rechargesPage === 1 || rechargesLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
                               首页
                             </button>
                             <button
-                              onClick={() => loadInviteRecharges(rechargesPage - 1)}
+                              onClick={() => loadInviteRecharges(rechargesPage - 1, inviteFilters)}
                               disabled={rechargesPage === 1 || rechargesLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
@@ -1010,14 +1155,14 @@ export default function ProfilePage() {
                               {rechargesPage}
                             </span>
                             <button
-                              onClick={() => loadInviteRecharges(rechargesPage + 1)}
+                              onClick={() => loadInviteRecharges(rechargesPage + 1, inviteFilters)}
                               disabled={rechargesPage >= rechargesTotalPages || rechargesLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
                               下一页
                             </button>
                             <button
-                              onClick={() => loadInviteRecharges(rechargesTotalPages)}
+                              onClick={() => loadInviteRecharges(rechargesTotalPages, inviteFilters)}
                               disabled={rechargesPage >= rechargesTotalPages || rechargesLoading}
                               className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                             >
