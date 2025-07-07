@@ -20,13 +20,49 @@ interface EditingConfig {
   description: string;
 }
 
+interface InviteFilters {
+  startDate: string;
+  endDate: string;
+  inviterEmail: string;
+  inviteeEmail: string;
+}
+
+interface InviteRegistration {
+  id: number;
+  inviterEmail: string;
+  inviterUsername: string;
+  inviteeEmail: string;
+  inviteeUsername: string;
+  createdAt: string;
+}
+
+interface InviteRecharge {
+  id: number;
+  inviterEmail: string;
+  inviterUsername: string;
+  inviteeEmail: string;
+  inviteeUsername: string;
+  amount: number;
+  createdAt: string;
+}
+
+interface InviteSummary {
+  inviterId: number;
+  inviterEmail: string;
+  inviterUsername: string;
+  totalInvitedUsers: number;
+  totalRechargeUsers: number;
+  totalRechargeAmount: number;
+  totalRechargeCount: number;
+}
+
 export default function ManagerPage() {
   const { user, logout } = useAuthContext();
   const [configs, setConfigs] = useState<ModelPointConfig[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchEmail, setSearchEmail] = useState<string>('');
-  const [currentTab, setCurrentTab] = useState<'configs' | 'users'>('configs');
+  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'invites'>('configs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -37,6 +73,25 @@ export default function ManagerPage() {
     cost: 1,
     description: ''
   });
+
+  // 邀请管理相关状态
+  const [inviteTab, setInviteTab] = useState<'summary' | 'registrations' | 'recharges'>('summary');
+  const [inviteFilters, setInviteFilters] = useState<InviteFilters>(() => {
+    const now = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(now.getMonth() - 1);
+    
+    return {
+      startDate: oneMonthAgo.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0],
+      inviterEmail: '',
+      inviteeEmail: ''
+    };
+  });
+  const [inviteRegistrations, setInviteRegistrations] = useState<InviteRegistration[]>([]);
+  const [inviteRecharges, setInviteRecharges] = useState<InviteRecharge[]>([]);
+  const [inviteSummary, setInviteSummary] = useState<InviteSummary[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   // 检查管理员权限
   const isAdmin = user?.role === 'ADMIN';
@@ -51,9 +106,18 @@ export default function ManagerPage() {
         loadConfigs();
       } else if (currentTab === 'users') {
         loadUsers();
+      } else if (currentTab === 'invites') {
+        loadInviteData();
       }
     }
   }, [isAdmin, currentTab]);
+
+  // 当邀请子标签页或筛选条件变化时，重新加载数据
+  useEffect(() => {
+    if (isAdmin && currentTab === 'invites') {
+      loadInviteData();
+    }
+  }, [inviteTab]);
 
   // 筛选用户的Effect
   useEffect(() => {
@@ -143,6 +207,95 @@ export default function ManagerPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadInviteData = async () => {
+    try {
+      setInviteLoading(true);
+      if (inviteTab === 'summary') {
+        await loadInviteSummary();
+      } else if (inviteTab === 'registrations') {
+        await loadInviteRegistrations();
+      } else {
+        await loadInviteRecharges();
+      }
+    } catch (error) {
+      console.error('加载邀请数据失败:', error);
+      setMessage(`加载邀请数据失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const loadInviteSummary = async () => {
+    const sessionId = localStorage.getItem('sessionId');
+    const queryParams = new URLSearchParams();
+    
+    if (inviteFilters.startDate) queryParams.append('startDate', inviteFilters.startDate);
+    if (inviteFilters.endDate) queryParams.append('endDate', inviteFilters.endDate);
+    if (inviteFilters.inviterEmail) queryParams.append('inviterEmail', inviteFilters.inviterEmail);
+    
+    const response = await fetch(`/api/admin/invites/summary?${queryParams.toString()}`, {
+      headers: {
+        'X-Session-Id': sessionId || '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取邀请汇总数据失败');
+    }
+
+    const data = await response.json();
+    setInviteSummary(data.data.summary || []);
+  };
+
+  const loadInviteRegistrations = async () => {
+    const sessionId = localStorage.getItem('sessionId');
+    const queryParams = new URLSearchParams();
+    
+    if (inviteFilters.startDate) queryParams.append('startDate', inviteFilters.startDate);
+    if (inviteFilters.endDate) queryParams.append('endDate', inviteFilters.endDate);
+    if (inviteFilters.inviterEmail) queryParams.append('inviterEmail', inviteFilters.inviterEmail);
+    if (inviteFilters.inviteeEmail) queryParams.append('inviteeEmail', inviteFilters.inviteeEmail);
+    
+    const response = await fetch(`/api/admin/invites/registrations?${queryParams.toString()}`, {
+      headers: {
+        'X-Session-Id': sessionId || '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取邀请注册记录失败');
+    }
+
+    const data = await response.json();
+    setInviteRegistrations(data.data.registrations || []);
+  };
+
+  const loadInviteRecharges = async () => {
+    const sessionId = localStorage.getItem('sessionId');
+    const queryParams = new URLSearchParams();
+    
+    if (inviteFilters.startDate) queryParams.append('startDate', inviteFilters.startDate);
+    if (inviteFilters.endDate) queryParams.append('endDate', inviteFilters.endDate);
+    if (inviteFilters.inviterEmail) queryParams.append('inviterEmail', inviteFilters.inviterEmail);
+    if (inviteFilters.inviteeEmail) queryParams.append('inviteeEmail', inviteFilters.inviteeEmail);
+    
+    const response = await fetch(`/api/admin/invites/recharges?${queryParams.toString()}`, {
+      headers: {
+        'X-Session-Id': sessionId || '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取邀请充值记录失败');
+    }
+
+    const data = await response.json();
+    setInviteRecharges(data.data.recharges || []);
   };
 
   const handleUpdateUserRole = async (userId: string, newRole: 'USER' | 'ADMIN') => {
@@ -401,6 +554,16 @@ export default function ManagerPage() {
                 }`}
               >
                 用户角色管理
+              </button>
+              <button
+                onClick={() => setCurrentTab('invites')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  currentTab === 'invites'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                用户邀请管理
               </button>
             </nav>
           </div>
@@ -773,6 +936,367 @@ export default function ManagerPage() {
                 <div>• <span className="text-yellow-400">注意</span>：系统至少需要保留一个管理员账号</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* 用户邀请管理标签页 */}
+        {currentTab === 'invites' && (
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <h3 className="text-lg font-semibold">用户邀请管理</h3>
+                             <p className="text-gray-400 text-sm mt-1">
+                 管理所有用户的邀请记录，包括注册和充值详情
+                 {inviteTab === 'summary' && <span className="block mt-1 text-xs">💡 汇总统计基于时间范围和邀请人筛选，显示每个邀请人的整体表现</span>}
+               </p>
+              
+                             {/* 筛选条件 */}
+               <div className={`mt-4 grid grid-cols-1 md:grid-cols-2 ${inviteTab === 'summary' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
+                 <div>
+                   <label className="block text-sm font-medium mb-2">开始日期</label>
+                   <input
+                     type="date"
+                     value={inviteFilters.startDate}
+                     onChange={(e) => setInviteFilters({...inviteFilters, startDate: e.target.value})}
+                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                   />
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium mb-2">结束日期</label>
+                   <input
+                     type="date"
+                     value={inviteFilters.endDate}
+                     onChange={(e) => setInviteFilters({...inviteFilters, endDate: e.target.value})}
+                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                   />
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium mb-2">邀请人邮箱</label>
+                   <input
+                     type="email"
+                     value={inviteFilters.inviterEmail}
+                     onChange={(e) => setInviteFilters({...inviteFilters, inviterEmail: e.target.value})}
+                     placeholder="输入邀请人邮箱"
+                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                   />
+                 </div>
+                 {inviteTab !== 'summary' && (
+                   <div>
+                     <label className="block text-sm font-medium mb-2">被邀请人邮箱</label>
+                     <input
+                       type="email"
+                       value={inviteFilters.inviteeEmail}
+                       onChange={(e) => setInviteFilters({...inviteFilters, inviteeEmail: e.target.value})}
+                       placeholder="输入被邀请人邮箱"
+                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                     />
+                   </div>
+                 )}
+               </div>
+              
+              {/* 筛选按钮 */}
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={loadInviteData}
+                  disabled={inviteLoading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
+                >
+                  {inviteLoading ? '筛选中...' : '确认筛选'}
+                </button>
+                <button
+                  onClick={() => {
+                    const now = new Date();
+                    const oneMonthAgo = new Date();
+                    oneMonthAgo.setMonth(now.getMonth() - 1);
+                    
+                    setInviteFilters({
+                      startDate: oneMonthAgo.toISOString().split('T')[0],
+                      endDate: now.toISOString().split('T')[0],
+                      inviterEmail: '',
+                      inviteeEmail: ''
+                    });
+                    setTimeout(() => loadInviteData(), 100);
+                  }}
+                  className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  重置筛选
+                </button>
+              </div>
+            </div>
+
+            {/* 子标签页 */}
+            <div className="px-6 py-4 border-b border-gray-700">
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setInviteTab('summary');
+                    setTimeout(() => loadInviteData(), 100);
+                  }}
+                  className={`py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+                    inviteTab === 'summary'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  汇总统计
+                </button>
+                <button
+                  onClick={() => {
+                    setInviteTab('registrations');
+                    setTimeout(() => loadInviteData(), 100);
+                  }}
+                  className={`py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+                    inviteTab === 'registrations'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  注册记录
+                </button>
+                <button
+                  onClick={() => {
+                    setInviteTab('recharges');
+                    setTimeout(() => loadInviteData(), 100);
+                  }}
+                  className={`py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+                    inviteTab === 'recharges'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  充值记录
+                </button>
+              </div>
+            </div>
+
+            {/* 汇总统计 */}
+            {inviteTab === 'summary' && (
+              <div className="overflow-x-auto">
+                {inviteLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人邮箱
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人用户名
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请注册人数
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          充值用户数
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          充值总金额
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          充值次数
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {inviteSummary.map((summary) => (
+                        <tr key={summary.inviterId} className="hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {summary.inviterId}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {summary.inviterEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {summary.inviterUsername}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <span className="text-blue-400 font-medium">{summary.totalInvitedUsers}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <span className="text-green-400 font-medium">{summary.totalRechargeUsers}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <span className="text-green-400 font-medium">
+                              ¥{summary.totalRechargeAmount.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <span className="text-yellow-400 font-medium">{summary.totalRechargeCount}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                
+                {!inviteLoading && inviteSummary.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p>暂无汇总数据</p>
+                    <p className="text-sm mt-2">尝试调整筛选条件</p>
+                  </div>
+                )}
+
+                {/* 汇总统计说明 */}
+                {!inviteLoading && inviteSummary.length > 0 && (
+                  <div className="p-6 border-t border-gray-700 bg-gray-900">
+                    <h4 className="font-medium mb-2">统计说明：</h4>
+                    <div className="text-sm text-gray-400 space-y-1">
+                      <div>• <span className="text-blue-400 font-medium">邀请注册人数</span>：该用户成功邀请注册的总人数</div>
+                      <div>• <span className="text-green-400 font-medium">充值用户数</span>：被邀请用户中进行过充值的人数</div>
+                      <div>• <span className="text-green-400 font-medium">充值总金额</span>：被邀请用户的累计充值金额</div>
+                      <div>• <span className="text-yellow-400 font-medium">充值次数</span>：被邀请用户的总充值次数</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 注册记录 */}
+            {inviteTab === 'registrations' && (
+              <div className="overflow-x-auto">
+                {inviteLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          记录ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人邮箱
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人用户名
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          被邀请人邮箱
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          被邀请人用户名
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          注册时间
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {inviteRegistrations.map((registration) => (
+                        <tr key={registration.id} className="hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {registration.id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {registration.inviterEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {registration.inviterUsername}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {registration.inviteeEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {registration.inviteeUsername}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {new Date(registration.createdAt).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                
+                {!inviteLoading && inviteRegistrations.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p>暂无注册记录</p>
+                    <p className="text-sm mt-2">尝试调整筛选条件</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 充值记录 */}
+            {inviteTab === 'recharges' && (
+              <div className="overflow-x-auto">
+                {inviteLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          记录ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人邮箱
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          邀请人用户名
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          被邀请人邮箱
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          被邀请人用户名
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          充值金额
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          充值时间
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {inviteRecharges.map((recharge) => (
+                        <tr key={recharge.id} className="hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {recharge.id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {recharge.inviterEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {recharge.inviterUsername}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {recharge.inviteeEmail}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {recharge.inviteeUsername}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            <span className="text-green-400 font-medium">
+                              ¥{recharge.amount.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {new Date(recharge.createdAt).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                
+                {!inviteLoading && inviteRecharges.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p>暂无充值记录</p>
+                    <p className="text-sm mt-2">尝试调整筛选条件</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
