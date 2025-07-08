@@ -15,6 +15,7 @@ const email_1 = require("./utils/email");
 const response_1 = require("./utils/response");
 const auth_1 = __importDefault(require("./routes/auth"));
 const config_1 = __importDefault(require("./routes/config"));
+const invite_simple_1 = __importDefault(require("./routes/invite-simple"));
 const payment_1 = require("./payment");
 const app = (0, express_1.default)();
 async function startServer() {
@@ -50,7 +51,7 @@ async function startServer() {
             ],
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-            allowedHeaders: ['Content-Type', 'Authorization'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Session-Id'],
         };
         app.use((0, cors_1.default)(corsOptions));
         if (config.app.debug) {
@@ -98,6 +99,7 @@ async function startServer() {
         });
         app.use('/api/auth', auth_1.default);
         app.use('/api/config', config_1.default);
+        app.use('/api/invite', invite_simple_1.default);
         app.use('/api/payment', payment_1.paymentRoutes);
         const pointsRoutes = require('./routes/points').default;
         app.use('/api/points', pointsRoutes);

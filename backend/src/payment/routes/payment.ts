@@ -318,17 +318,10 @@ router.get('/orders', authenticateToken, async (req: AuthenticatedRequest, res: 
 router.post('/notify/wechat', async (req: Request, res: Response) => {
   try {
     const headers = req.headers as Record<string, string>;
-    const body = JSON.stringify(req.body);
+    const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     const clientIp = req.ip || req.connection.remoteAddress || '';
 
-    console.log('📨 接收微信支付回调通知:', { clientIp, headers: Object.keys(headers) });
-
-    // 验证回调头部
-    const headerValidation = validateWechatNotifyHeaders(headers);
-    if (!headerValidation.valid) {
-      console.error('❌ 微信支付回调头部验证失败:', headerValidation.message);
-      return res.status(400).send('FAIL');
-    }
+    console.log('📨 接收微信支付V2回调通知:', { clientIp, contentType: headers['content-type'] });
 
     const result = await notifyService.handleWechatNotify(headers, body, clientIp);
 
@@ -337,13 +330,7 @@ router.post('/notify/wechat', async (req: Request, res: Response) => {
       return res.status(200).send('SUCCESS');
     } else {
       console.error('❌ 微信支付回调处理失败:', result.message);
-      
-      // 如果需要重试，返回500状态码
-      if (result.shouldRetry) {
-        return res.status(500).send('FAIL');
-      } else {
-        return res.status(400).send('FAIL');
-      }
+      return res.status(400).send('FAIL');
     }
 
   } catch (error: any) {
@@ -352,37 +339,6 @@ router.post('/notify/wechat', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * 微信退款回调通知
- * POST /api/payment/notify/wechat/refund
- */
-router.post('/notify/wechat/refund', async (req: Request, res: Response) => {
-  try {
-    const headers = req.headers as Record<string, string>;
-    const body = JSON.stringify(req.body);
-    const clientIp = req.ip || req.connection.remoteAddress || '';
 
-    console.log('💰 接收微信退款回调通知:', { clientIp });
-
-    const result = await notifyService.handleWechatRefundNotify(headers, body, clientIp);
-
-    if (result.success) {
-      console.log('✅ 微信退款回调处理成功');
-      return res.status(200).send('SUCCESS');
-    } else {
-      console.error('❌ 微信退款回调处理失败:', result.message);
-      
-      if (result.shouldRetry) {
-        return res.status(500).send('FAIL');
-      } else {
-        return res.status(400).send('FAIL');
-      }
-    }
-
-  } catch (error: any) {
-    console.error('❌ 微信退款回调处理异常:', error);
-    return res.status(500).send('FAIL');
-  }
-});
 
 export default router; 

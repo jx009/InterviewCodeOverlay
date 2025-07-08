@@ -228,9 +228,8 @@ async function startServer() {
           });
         }
         
-        // 使用会话管理器验证会话
-        const { initAuthEnhanced } = require('./routes/auth-enhanced');
-        const { SessionManager } = require('./config/redis-working');
+        // 使用正确的导入路径
+        const { SessionManager } = require('./config/redis-simple');
         const sessionManager = new SessionManager();
         const sessionValidation = await sessionManager.validateSession(sessionId);
         
@@ -262,11 +261,25 @@ async function startServer() {
           });
         }
 
-        console.log('✅ 会话有效', { userId: user.id, username: user.username });
+        // 生成JWT token
+        const jwt = require('jsonwebtoken');
+        const config = require('./config/database').getConfig();
+        const token = jwt.sign(
+          { 
+            userId: user.id, 
+            username: user.username,
+            email: user.email
+          },
+          config.security.jwtSecret,
+          { expiresIn: '7d' }
+        );
+
+        console.log('✅ 会话有效，已生成token', { userId: user.id, username: user.username });
         return res.json({
           success: true,
           user,
-          sessionId
+          sessionId,
+          token
         });
       } catch (error) {
         console.error('❌ 会话状态检查失败:', error);

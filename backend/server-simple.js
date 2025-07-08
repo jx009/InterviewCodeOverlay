@@ -771,24 +771,33 @@ app.post('/api/logout', async (req, res) => {
 // 额外API: 检查会话状态
 app.get('/api/session_status', async (req, res) => {
   try {
+    console.log('🔍 检查会话状态，请求头:', req.headers['x-session-id'] ? 'x-session-id存在' : 'x-session-id不存在');
+    console.log('🔍 检查会话状态，Cookie:', req.cookies?.session_id ? 'session_id存在' : 'session_id不存在');
+    
     // 🆕 支持从Cookie或请求头获取sessionId
     const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
     
     if (!sessionId) {
+      console.log('❌ 未找到sessionId');
       return res.status(401).json({
         success: false,
         message: '未登录'
       });
     }
     
+    console.log('📋 使用sessionId:', sessionId.substring(0, 10) + '...');
+    
     const sessionData = await SessionStore.get(`session:${sessionId}`);
     
     if (!sessionData) {
+      console.log('❌ 会话数据不存在或已过期');
       return res.status(401).json({
         success: false,
         message: '会话已过期'
       });
     }
+    
+    console.log('✅ 找到会话数据:', sessionData.username);
     
     // 如果session中没有role信息，从数据库获取
     if (!sessionData.role) {
@@ -803,6 +812,26 @@ app.get('/api/session_status', async (req, res) => {
       }
     }
     
+    // 🆕 生成JWT token用于支付API认证
+    const jwtToken = generateToken();
+    
+    // 🆕 将token和用户信息存储到会话存储中，供verifyToken中间件使用
+    const tokenSessionData = {
+      user: {
+        id: sessionData.userId,
+        username: sessionData.username,
+        email: sessionData.email,
+        role: sessionData.role
+      },
+      sessionId: sessionId,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24小时
+    };
+    
+    await SessionStore.set(jwtToken, tokenSessionData, 86400); // 24小时TTL
+    
+    console.log(`🔐 为用户 ${sessionData.username} 生成JWT token: ${jwtToken.substring(0, 10)}...`);
+    
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
     await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
@@ -816,6 +845,7 @@ app.get('/api/session_status', async (req, res) => {
         email: sessionData.email,
         role: sessionData.role
       },
+      token: jwtToken, // 🆕 返回JWT token给前端
       loginTime: sessionData.loginTime,
       lastActivity: sessionData.lastActivity
     });

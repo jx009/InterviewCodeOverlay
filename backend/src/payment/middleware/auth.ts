@@ -2,6 +2,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest } from '../../types';
+import { validateSession } from '../../config/session';
+import { getConfig } from '../../config/database';
 
 // 定义API响应接口
 interface ApiResponse {
@@ -12,7 +14,7 @@ interface ApiResponse {
 }
 
 /**
- * JWT身份验证中间件
+ * JWT身份验证中间件 - 支持sessionId和JWT token双重认证
  */
 export const authenticateToken = async (
   req: AuthenticatedRequest,
@@ -21,84 +23,71 @@ export const authenticateToken = async (
 ) => {
   console.log('🔒 支付模块认证检查...');
   
-  // 检查Session ID
-  const sessionId = req.headers['x-session-id'] as string;
-  if (sessionId) {
-    console.log('📝 存在会话ID，尝试获取会话状态');
-    // 从SessionManager获取userId，使用内存会话中心验证
-    try {
-      // 导入SessionManager
-      const { getRedisClient } = require('../../config/redis-working');
-      const { SessionManager } = require('../../config/redis-working');
-      
-      // 尝试初始化Redis连接
+  try {
+    // 首先检查req.user是否已经设置（通过上级中间件）
+    if (req.user?.userId) {
+      console.log('✅ 用户已通过上级中间件认证:', req.user.userId);
+      next();
+      return;
+    }
+
+    // 尝试JWT token认证
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
-        const { initRedis } = require('../../config/redis-working');
-        await initRedis();
-        console.log('✅ Redis连接已初始化');
-      } catch (redisError) {
-        console.error('⚠️ Redis连接初始化失败，尝试使用现有连接:', redisError);
-      }
-      
-      const sessionManager = new SessionManager();
-      
-      // 验证会话有效性
-      const sessionValidation = await sessionManager.validateSession(sessionId);
-      if (sessionValidation.valid) {
-        // 设置用户信息
-        req.user = { userId: sessionValidation.userId };
-        console.log('✅ 会话验证成功:', { userId: sessionValidation.userId, sessionId });
+        const token = authHeader.substring(7);
+        const config = getConfig();
+        const decoded = jwt.verify(token, config.security.jwtSecret) as { userId: number };
+        
+        req.user = { userId: decoded.userId };
+        console.log(`✅ 支付模块JWT认证成功: userId=${decoded.userId}`);
         next();
         return;
-      } else {
-        console.log('❌ 会话无效，尝试其他认证方式');
+      } catch (jwtError: any) {
+        console.log('⚠️ JWT token验证失败，尝试sessionId认证:', jwtError.message);
       }
-    } catch (error) {
-      console.error('❌ 会话验证异常:', error);
     }
-  }
-  
-  // 检查Authorization头
-  const authHeader = req.headers.authorization;
-  const token = extractBearerToken(authHeader);
 
-  console.log('🔑 认证头信息:', { 
-    hasAuthHeader: !!authHeader, 
-    hasToken: !!token 
-  });
-
-  if (!token) {
-    console.log('❌ 未提供访问令牌');
-    res.status(401).json({
-      success: false,
-      error: '未提供访问令牌'
-    });
-    return;
-  }
-
-  try {
-    // 从token中提取用户ID
-    const decoded = verifyAccessToken(token);
+    // 如果JWT认证失败，尝试sessionId认证
+    const sessionId = req.headers['x-session-id'] as string || req.cookies?.session_id;
     
-    if (!decoded || !decoded.userId) {
-      console.log('❌ 无效的访问令牌');
+    if (!sessionId) {
+      console.log('❌ 未找到sessionId和有效的JWT token');
       res.status(401).json({
         success: false,
-        error: '访问令牌无效或已过期'
+        error: '未提供访问令牌'
+      });
+      return;
+    }
+
+    // 使用统一的会话验证服务
+    console.log('🔄 验证会话...');
+    const sessionData = await validateSession(sessionId);
+    
+    if (!sessionData) {
+      console.log('❌ 会话验证失败或已过期');
+      res.status(401).json({
+        success: false,
+        error: '会话已过期或无效'
       });
       return;
     }
     
-    console.log('✅ 用户认证成功:', { userId: decoded.userId });
     // 设置用户信息
-    req.user = { userId: decoded.userId };
-    return next();
+    req.user = {
+      userId: sessionData.userId
+    };
+    
+    console.log(`✅ 支付模块会话认证成功: userId=${sessionData.userId}, username=${sessionData.username}`);
+    next();
+    
   } catch (error) {
-    console.error('❌ 令牌验证失败:', error);
-    return res.status(401).json({
+    console.error('❌ 支付模块认证失败:', error);
+    res.status(500).json({
       success: false,
-      error: '访问令牌无效或已过期'
+      error: '认证服务异常'
     });
+    return;
   }
 };
 

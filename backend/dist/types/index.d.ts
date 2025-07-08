@@ -189,4 +189,15 @@ export declare const PROGRAMMING_LANGUAGES: readonly [{
     readonly value: "scala";
     readonly label: "Scala";
 }];
+declare module 'express' {
+    interface Request {
+        userId?: number;
+        user?: {
+            userId: number;
+            username?: string;
+            email?: string;
+            role?: string;
+        };
+    }
+}
 //# sourceMappingURL=index.d.ts.map

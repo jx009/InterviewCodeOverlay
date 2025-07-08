@@ -43,12 +43,60 @@ const api = axios.create({
   withCredentials: true, // 🆕 确保Cookie被发送
 });
 
+// 全局变量控制token获取状态，避免并发获取
+let isTokenFetching = false;
+let tokenFetchPromise: Promise<string | null> | null = null;
+
+// Token获取函数
+const fetchTokenFromSession = async (sessionId: string, baseURL: string): Promise<string | null> => {
+  if (isTokenFetching && tokenFetchPromise) {
+    console.log('🔄 token获取中，等待完成...');
+    return await tokenFetchPromise;
+  }
+
+  isTokenFetching = true;
+  tokenFetchPromise = (async () => {
+    try {
+      console.log('🔄 检测到sessionId但无token，尝试获取token...');
+      const sessionResponse = await fetch(`${baseURL}/session_status`, {
+        headers: {
+          'X-Session-Id': sessionId
+        },
+        credentials: 'include'
+      });
+      
+      if (sessionResponse.ok) {
+        const sessionData = await sessionResponse.json();
+        if (sessionData.success && sessionData.token) {
+          localStorage.setItem('token', sessionData.token);
+          console.log('✅ 从会话状态获取到token:', sessionData.token.substring(0, 10) + '...');
+          return sessionData.token;
+        }
+      }
+      return null;
+    } catch (error: any) {
+      console.log('⚠️ 获取token失败，继续使用sessionId:', error?.message || '未知错误');
+      return null;
+    } finally {
+      isTokenFetching = false;
+      tokenFetchPromise = null;
+    }
+  })();
+
+  return await tokenFetchPromise;
+};
+
 // 请求拦截器 - 添加认证信息
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     // 使用SessionProtection获取sessionId，包含自动恢复功能
     const sessionId = SessionProtection.getSessionId();
-    const token = localStorage.getItem('token');
+    let token = localStorage.getItem('token');
+    
+    // 如果有sessionId但没有token，尝试通过会话状态获取token（避免并发获取）
+    if (sessionId && !token && !isTokenFetching) {
+      token = await fetchTokenFromSession(sessionId, config.baseURL || BASE_URL);
+    }
     
     // 添加调试信息
     console.log(`🔍 请求拦截器检查: ${config.method?.toUpperCase()} ${config.url}`, {

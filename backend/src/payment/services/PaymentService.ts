@@ -1,7 +1,7 @@
 // 支付统一服务层
 import { PrismaClient } from '@prisma/client';
 import { PointService } from '../../services/PointService';
-import { getWechatPayService } from './WechatPayService';
+import { getWechatPayV2Service } from '../../services/WechatPayV2Service';
 import {
   generateOrderNo,
   generateOutTradeNo,
@@ -27,7 +27,8 @@ const prisma = new PrismaClient();
 
 export class PaymentService {
   private pointService = new PointService();
-  private wechatPayService = getWechatPayService();
+  private wechatPayService = getWechatPayV2Service();
+  private config = this.wechatPayService.getServiceInfo();
 
   /**
    * 获取支付套餐列表
@@ -153,19 +154,16 @@ export class PaymentService {
 
       // 根据支付方式调用相应的支付服务
       if (paymentMethod === PaymentMethod.WECHAT_PAY) {
-        const createOrderRequest: CreateOrderRequest = {
-          userId,
-          packageId,
-          amount: Number(packageData.amount),
-          points: packageData.points,
-          bonusPoints: packageData.bonusPoints,
-          paymentMethod,
-          description: `${packageData.name} - ${packageData.points}积分`,
-          metadata: {
+        const createOrderRequest = {
+          outTradeNo,
+          totalFee: Number(packageData.amount),
+          body: `${packageData.name} - ${packageData.points}积分`,
+          attach: JSON.stringify({
             orderNo,
-            outTradeNo,
+            userId,
+            packageId,
             packageName: packageData.name
-          }
+          })
         };
 
         const paymentResult = await this.wechatPayService.createNativeOrder(createOrderRequest);
@@ -175,7 +173,12 @@ export class PaymentService {
           return {
             success: true,
             orderNo,
-            paymentData: paymentResult.paymentData,
+            paymentData: {
+              codeUrl: paymentResult.data?.codeUrl,
+              prepayId: paymentResult.data?.prepayId,
+              appId: this.config.appId,
+              tradeType: 'NATIVE'
+            },
             expireTime,
             message: '订单创建成功'
           };
@@ -235,8 +238,7 @@ export class PaymentService {
       // 如果订单已完成或失败，直接返回本地状态
       if (order.paymentStatus === PaymentStatus.PAID || 
           order.paymentStatus === PaymentStatus.FAILED ||
-          order.paymentStatus === PaymentStatus.CANCELLED ||
-          order.paymentStatus === PaymentStatus.REFUNDED) {
+          order.paymentStatus === PaymentStatus.CANCELLED) {
         return {
           success: true,
           order: order as PaymentOrder,
@@ -263,9 +265,9 @@ export class PaymentService {
       if (order.paymentMethod === PaymentMethod.WECHAT_PAY) {
         const wechatQuery = await this.wechatPayService.queryOrder(order.outTradeNo);
         
-        if (wechatQuery.success && wechatQuery.tradeState) {
+        if (wechatQuery.success && wechatQuery.data) {
           // 根据微信支付状态更新本地订单
-          await this.syncOrderStatusFromWechat(order, wechatQuery.tradeState);
+          await this.syncOrderStatusFromWechat(order, wechatQuery.data.tradeState);
           
           // 重新查询更新后的订单
           const updatedOrder = await prisma.paymentOrder.findUnique({
@@ -279,8 +281,8 @@ export class PaymentService {
           return {
             success: true,
             order: updatedOrder as PaymentOrder,
-            tradeState: wechatQuery.tradeState,
-            tradeStateDesc: wechatQuery.tradeStateDesc,
+            tradeState: wechatQuery.data.tradeState,
+            tradeStateDesc: wechatQuery.data.tradeStateDesc,
             message: '查询订单成功'
           };
         }
@@ -424,7 +426,8 @@ export class PaymentService {
           localStatus = PaymentStatus.PAID;
           break;
         case 'REFUND':
-          localStatus = PaymentStatus.REFUNDED;
+          localStatus = PaymentStatus.FAILED;
+          reason = '订单已退款';
           break;
         case 'NOTPAY':
           localStatus = PaymentStatus.PENDING;
@@ -598,7 +601,6 @@ export class PaymentService {
       [PaymentStatus.PAID]: '已支付',
       [PaymentStatus.FAILED]: '支付失败',
       [PaymentStatus.CANCELLED]: '已取消',
-      [PaymentStatus.REFUNDED]: '已退款',
       [PaymentStatus.EXPIRED]: '已过期'
     };
 

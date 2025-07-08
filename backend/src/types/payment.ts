@@ -13,8 +13,7 @@ export type NotifyStatus = PrismaNotifyStatus;
 
 // 枚举值常量，方便使用
 export const PaymentMethod = {
-  WECHAT_PAY: 'WECHAT_PAY' as PrismaPaymentMethod,
-  ALIPAY: 'ALIPAY' as PrismaPaymentMethod
+  WECHAT_PAY: 'WECHAT_PAY' as PrismaPaymentMethod
 } as const;
 
 export const PaymentStatus = {
@@ -22,7 +21,6 @@ export const PaymentStatus = {
   PAID: 'PAID' as PrismaPaymentStatus,
   FAILED: 'FAILED' as PrismaPaymentStatus,
   CANCELLED: 'CANCELLED' as PrismaPaymentStatus,
-  REFUNDED: 'REFUNDED' as PrismaPaymentStatus,
   EXPIRED: 'EXPIRED' as PrismaPaymentStatus
 } as const;
 
@@ -103,29 +101,21 @@ export interface CreateOrderRequest {
 export interface CreateOrderResponse {
   success: boolean;
   orderNo?: string;
-  paymentData?: WechatPayData | AlipayData;
+  paymentData?: WechatPayV2Data;
   expireTime?: Date;
   message: string;
 }
 
-// 微信支付数据
-export interface WechatPayData {
+// 微信支付V2数据
+export interface WechatPayV2Data {
   codeUrl?: string;      // Native支付二维码链接
   prepayId?: string;     // 预支付交易会话标识
-  paySign?: string;      // 支付签名
-  timeStamp?: string;    // 时间戳
-  nonceStr?: string;     // 随机字符串
-  package?: string;      // 订单详情扩展字符串
-  signType?: string;     // 签名方式
+  tradeType?: string;    // 交易类型
   appId?: string;        // 应用ID
-  mwebUrl?: string;      // H5支付跳转链接
-}
-
-// 支付宝支付数据
-export interface AlipayData {
-  qrCode?: string;       // 支付二维码
-  orderString?: string;  // 订单字符串
-  form?: string;         // 支付表单
+  mchId?: string;        // 商户号
+  nonceStr?: string;     // 随机字符串
+  sign?: string;         // 签名
+  timestamp?: string;    // 时间戳
 }
 
 // 订单查询响应
@@ -156,42 +146,81 @@ export interface NotifyResult {
   shouldRetry?: boolean;
 }
 
-// 退款请求
-export interface RefundRequest {
-  orderNo: string;
-  refundAmount: number;
-  refundReason?: string;
-  refundNo?: string;
-}
-
-// 退款响应
-export interface RefundResponse {
-  success: boolean;
-  refundId?: string;
-  refundAmount?: number;
-  message: string;
-}
-
-// 微信支付配置
-export interface WechatPayConfig {
+// 微信支付V2配置
+export interface WechatPayV2Config {
   appId: string;          // 应用ID
   mchId: string;          // 商户号
   apiKey: string;         // API密钥
-  apiV3Key: string;       // APIv3密钥
-  certPath: string;       // 证书路径
-  keyPath: string;        // 私钥路径
-  serialNo: string;       // 证书序列号
+  signType: 'MD5' | 'HMAC-SHA256'; // 签名类型
   notifyUrl: string;      // 回调地址
+  certPath?: string;      // 证书路径（可选）
+  keyPath?: string;       // 私钥路径（可选）
   environment: 'sandbox' | 'production'; // 环境
 }
 
-// 支付宝配置
-export interface AlipayConfig {
-  appId: string;          // 应用ID
-  privateKey: string;     // 应用私钥
-  publicKey: string;      // 支付宝公钥
-  notifyUrl: string;      // 回调地址
-  environment: 'sandbox' | 'production'; // 环境
+// 微信支付V2统一下单请求
+export interface WechatPayV2UnifiedOrderRequest {
+  body: string;           // 商品描述
+  outTradeNo: string;     // 商户订单号
+  totalFee: number;       // 总金额（分）
+  spbillCreateIp: string; // 用户IP
+  notifyUrl?: string;     // 通知URL
+  tradeType: string;      // 交易类型
+  attach?: string;        // 附加数据
+  timeExpire?: Date;      // 过期时间
+}
+
+// 微信支付V2统一下单响应
+export interface WechatPayV2UnifiedOrderResponse {
+  success: boolean;
+  prepayId?: string;      // 预支付ID
+  codeUrl?: string;       // 二维码链接
+  mwebUrl?: string;       // H5支付链接
+  message: string;
+  errorCode?: string;
+}
+
+// 微信支付V2订单查询请求
+export interface WechatPayV2OrderQueryRequest {
+  outTradeNo?: string;    // 商户订单号
+  transactionId?: string; // 微信订单号
+}
+
+// 微信支付V2订单查询响应
+export interface WechatPayV2OrderQueryResponse {
+  success: boolean;
+  tradeState?: string;    // 交易状态
+  tradeStateDesc?: string; // 交易状态描述
+  totalFee?: number;      // 总金额
+  transactionId?: string; // 微信订单号
+  outTradeNo?: string;    // 商户订单号
+  timeEnd?: string;       // 支付完成时间
+  attach?: string;        // 附加数据
+  message: string;
+  errorCode?: string;
+}
+
+// 微信支付V2回调通知数据
+export interface WechatPayV2NotifyData {
+  returnCode: string;     // 返回状态码
+  returnMsg: string;      // 返回信息
+  appId?: string;         // 应用ID
+  mchId?: string;         // 商户号
+  nonceStr?: string;      // 随机字符串
+  sign?: string;          // 签名
+  resultCode?: string;    // 业务结果
+  errCode?: string;       // 错误代码
+  errCodeDes?: string;    // 错误代码描述
+  openId?: string;        // 用户标识
+  isSubscribe?: string;   // 是否关注公众账号
+  tradeType?: string;     // 交易类型
+  bankType?: string;      // 付款银行
+  totalFee?: number;      // 总金额
+  cashFee?: number;       // 现金支付金额
+  transactionId?: string; // 微信支付订单号
+  outTradeNo?: string;    // 商户订单号
+  attach?: string;        // 商家数据包
+  timeEnd?: string;       // 支付完成时间
 }
 
 // 支付统计数据
@@ -242,4 +271,61 @@ export interface PaginatedResponse<T> {
     total: number;
     pages: number;
   };
+}
+
+// 支付服务结果类型
+export interface PaymentServiceResult<T = any> {
+  success: boolean;
+  data?: T;
+  message: string;
+  errorCode?: string;
+}
+
+// 创建订单结果
+export interface CreateOrderResult extends PaymentServiceResult<WechatPayV2Data> {
+  orderNo?: string;
+  expireTime?: Date;
+}
+
+// 查询订单结果
+export interface QueryOrderResult extends PaymentServiceResult {
+  order?: PaymentOrder;
+  tradeState?: string;
+  tradeStateDesc?: string;
+}
+
+// 关闭订单结果
+export interface CloseOrderResult extends PaymentServiceResult {
+  // 关闭订单不需要额外数据
+}
+
+// 支付配置验证结果
+export interface ConfigValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+// 支付环境枚举
+export enum PaymentEnvironment {
+  SANDBOX = 'sandbox',
+  PRODUCTION = 'production'
+}
+
+// 微信支付交易状态枚举
+export enum WechatPayTradeState {
+  SUCCESS = 'SUCCESS',      // 支付成功
+  REFUND = 'REFUND',       // 转入退款
+  NOTPAY = 'NOTPAY',       // 未支付
+  CLOSED = 'CLOSED',       // 已关闭
+  REVOKED = 'REVOKED',     // 已撤销
+  USERPAYING = 'USERPAYING', // 用户支付中
+  PAYERROR = 'PAYERROR'    // 支付失败
+}
+
+// 微信支付交易类型枚举
+export enum WechatPayTradeType {
+  JSAPI = 'JSAPI',         // 公众号支付
+  NATIVE = 'NATIVE',       // 原生扫码支付
+  APP = 'APP',             // APP支付
+  MWEB = 'MWEB'            // H5支付
 } 

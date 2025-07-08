@@ -1,7 +1,7 @@
 // 支付回调通知服务
 import { PrismaClient } from '@prisma/client';
 import { getPaymentService } from './PaymentService';
-import { getWechatPayService } from './WechatPayService';
+import { getWechatPayV2Service } from '../../services/WechatPayV2Service';
 import {
   PaymentNotifyData,
   NotifyResult,
@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 
 export class PaymentNotifyService {
   private paymentService = getPaymentService();
-  private wechatPayService = getWechatPayService();
+  private wechatPayService = getWechatPayV2Service();
 
   /**
    * 处理微信支付回调通知
@@ -36,59 +36,44 @@ export class PaymentNotifyService {
       console.log('📨 处理微信支付回调通知:', { notifyLogId, clientIp });
 
       // 使用微信支付服务处理回调
-      const result = await this.wechatPayService.handleNotify(headers, body);
+      const result = await this.wechatPayService.handleNotify(body);
 
-      if (result.success) {
-        // 解析回调数据
-        const notifyData = this.parseWechatNotifyData(body);
-        
-        if (notifyData) {
-          // 处理支付成功
-          const paymentResult = await this.paymentService.handlePaymentSuccess(
-            notifyData.orderNo,
-            notifyData.transactionId,
-            notifyData.paymentTime,
-            notifyData.metadata
-          );
+      if (result.success && result.data) {
+        // 处理支付成功
+        const paymentResult = await this.paymentService.handlePaymentSuccess(
+          result.data.outTradeNo,
+          result.data.transactionId,
+          new Date(result.data.timeEnd),
+          result.data.attach
+        );
 
-          if (paymentResult.success) {
-            await this.updateNotifyLog(notifyLogId, {
-              processStatus: NotifyStatus.SUCCESS,
-              errorMessage: null,
-              processTime: new Date()
-            });
+        if (paymentResult.success) {
+          await this.updateNotifyLog(notifyLogId, {
+            processStatus: NotifyStatus.SUCCESS,
+            errorMessage: null,
+            processTime: new Date(),
+            orderNo: result.data.outTradeNo
+          });
 
-            console.log('✅ 微信支付回调处理成功:', notifyData.orderNo);
-            
-            return {
-              success: true,
-              message: '支付回调处理成功'
-            };
-          } else {
-            await this.updateNotifyLog(notifyLogId, {
-              processStatus: NotifyStatus.FAILED,
-              errorMessage: paymentResult.message,
-              processTime: new Date()
-            });
-
-            console.error('❌ 支付成功处理失败:', paymentResult.message);
-            
-            return {
-              success: false,
-              message: paymentResult.message,
-              shouldRetry: true
-            };
-          }
+          console.log('✅ 微信支付回调处理成功:', result.data.outTradeNo);
+          
+          return {
+            success: true,
+            message: '支付回调处理成功'
+          };
         } else {
           await this.updateNotifyLog(notifyLogId, {
             processStatus: NotifyStatus.FAILED,
-            errorMessage: '解析回调数据失败',
-            processTime: new Date()
+            errorMessage: paymentResult.message,
+            processTime: new Date(),
+            orderNo: result.data.outTradeNo
           });
 
+          console.error('❌ 支付成功处理失败:', paymentResult.message);
+          
           return {
             success: false,
-            message: '解析回调数据失败'
+            message: paymentResult.message
           };
         }
       } else {
@@ -102,8 +87,7 @@ export class PaymentNotifyService {
         
         return {
           success: false,
-          message: result.message,
-          shouldRetry: result.shouldRetry
+          message: result.message
         };
       }
 
@@ -124,74 +108,7 @@ export class PaymentNotifyService {
     }
   }
 
-  /**
-   * 处理微信退款回调通知
-   */
-  async handleWechatRefundNotify(
-    headers: Record<string, string>,
-    body: string,
-    clientIp: string
-  ): Promise<NotifyResult> {
-    const notifyLogId = await this.createNotifyLog({
-      paymentMethod: PaymentMethod.WECHAT_PAY,
-      notifyType: 'refund',
-      headers: JSON.stringify(headers),
-      body,
-      clientIp,
-      status: NotifyStatus.PENDING
-    });
 
-    try {
-      console.log('💰 处理微信退款回调通知:', { notifyLogId, clientIp });
-
-      // 使用微信支付服务处理退款回调
-      const result = await this.wechatPayService.handleNotify(headers, body);
-
-              if (result.success) {
-          await this.updateNotifyLog(notifyLogId, {
-            processStatus: NotifyStatus.SUCCESS,
-            errorMessage: null,
-            processTime: new Date()
-          });
-
-          console.log('✅ 微信退款回调处理成功');
-          
-          return {
-            success: true,
-            message: '退款回调处理成功'
-          };
-        } else {
-          await this.updateNotifyLog(notifyLogId, {
-            processStatus: NotifyStatus.FAILED,
-            errorMessage: result.message,
-            processTime: new Date()
-          });
-
-          console.error('❌ 微信退款回调处理失败:', result.message);
-          
-          return {
-            success: false,
-            message: result.message,
-            shouldRetry: result.shouldRetry
-          };
-        }
-
-    } catch (error: any) {
-      console.error('❌ 处理微信退款回调异常:', error);
-
-      await this.updateNotifyLog(notifyLogId, {
-        processStatus: NotifyStatus.FAILED,
-        errorMessage: error.message,
-        processTime: new Date()
-      });
-
-      return {
-        success: false,
-        message: `退款回调处理异常: ${error.message}`,
-        shouldRetry: true
-      };
-    }
-  }
 
   /**
    * 重试失败的通知处理
@@ -229,8 +146,6 @@ export class PaymentNotifyService {
       
       if (notifyLog.notifyType === 'payment') {
         return await this.handleWechatNotify(headers, notifyLog.requestBody, '');
-      } else if (notifyLog.notifyType === 'refund') {
-        return await this.handleWechatRefundNotify(headers, notifyLog.requestBody, '');
       }
 
       return {
@@ -435,54 +350,7 @@ export class PaymentNotifyService {
     }
   }
 
-  /**
-   * 解析微信支付回调数据
-   */
-  private parseWechatNotifyData(body: string): PaymentNotifyData | null {
-    try {
-      const notifyData = JSON.parse(body);
-      const resource = notifyData.resource;
 
-      // 这里简化处理，实际应该根据是否加密来解密数据
-      let paymentData;
-      if (resource.ciphertext) {
-        // 如果数据被加密，需要解密（这里简化处理）
-        paymentData = resource;
-      } else {
-        paymentData = resource;
-      }
-
-      // 提取订单号（从attach或其他字段）
-      let orderNo = '';
-      if (paymentData.attach) {
-        try {
-          const attachData = JSON.parse(paymentData.attach);
-          orderNo = attachData.orderNo || paymentData.out_trade_no;
-        } catch {
-          orderNo = paymentData.out_trade_no;
-        }
-      } else {
-        orderNo = paymentData.out_trade_no;
-      }
-
-      return {
-        orderNo,
-        outTradeNo: paymentData.out_trade_no,
-        transactionId: paymentData.transaction_id || '',
-        totalAmount: paymentData.amount?.total ? paymentData.amount.total / 100 : 0,
-        tradeStatus: paymentData.trade_state || '',
-        paymentTime: paymentData.success_time ? new Date(paymentData.success_time) : new Date(),
-        metadata: {
-          attach: paymentData.attach ? JSON.parse(paymentData.attach) : {},
-          payerInfo: paymentData.payer
-        }
-      };
-
-    } catch (error) {
-      console.error('❌ 解析微信支付回调数据失败:', error);
-      return null;
-    }
-  }
 }
 
 // 单例模式
