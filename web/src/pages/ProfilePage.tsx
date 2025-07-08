@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { configApi, pointsApi, clientCreditsApi, inviteApi } from '../services/api';
 import { UrlUtils } from '../utils/urlUtils';
+import { Pagination } from '../components/shared/Pagination';
 
 interface UserConfig {
   aiModel: string;
@@ -80,7 +81,7 @@ export default function ProfilePage() {
   const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const recordsPerPage = 10
+  const [pageSize, setPageSize] = useState(10)
   const maxPages = 100
 
   // 邀请功能状态
@@ -98,6 +99,10 @@ export default function ProfilePage() {
   const [rechargesPage, setRechargesPage] = useState(1)
   const [registrationsTotalPages, setRegistrationsTotalPages] = useState(1)
   const [rechargesTotalPages, setRechargesTotalPages] = useState(1)
+  const [registrationsPageSize, setRegistrationsPageSize] = useState(10)
+  const [rechargesPageSize, setRechargesPageSize] = useState(10)
+  const [registrationsTotal, setRegistrationsTotal] = useState(0)
+  const [rechargesTotal, setRechargesTotal] = useState(0)
   
   // 筛选状态
   const [inviteFilters, setInviteFilters] = useState(() => {
@@ -192,7 +197,7 @@ export default function ProfilePage() {
       setRegistrationsLoading(true);
       const params = { 
         page, 
-        limit: recordsPerPage, 
+        limit: registrationsPageSize, 
         userId: user.id,
         ...(filters || inviteFilters)
       };
@@ -204,6 +209,7 @@ export default function ProfilePage() {
         setRegistrations(result.data.registrations);
         setRegistrationsPage(result.data.page);
         setRegistrationsTotalPages(result.data.totalPages);
+        setRegistrationsTotal(result.data.total || 0);
       }
     } catch (error) {
       console.error('❌ 加载邀请注册记录失败:', error);
@@ -220,7 +226,7 @@ export default function ProfilePage() {
       setRechargesLoading(true);
       const params = { 
         page, 
-        limit: recordsPerPage, 
+        limit: rechargesPageSize, 
         userId: user.id,
         ...(filters || inviteFilters)
       };
@@ -232,6 +238,7 @@ export default function ProfilePage() {
         setRecharges(result.data.recharges);
         setRechargesPage(result.data.page);
         setRechargesTotalPages(result.data.totalPages);
+        setRechargesTotal(result.data.total || 0);
       }
     } catch (error) {
       console.error('❌ 加载邀请充值记录失败:', error);
@@ -295,6 +302,20 @@ export default function ProfilePage() {
     } else if (inviteDetailTab === 'recharges') {
       loadInviteRecharges(1, inviteFilters);
     }
+  };
+
+  // 处理注册明细页面大小变化
+  const handleRegistrationsPageSizeChange = (newSize: number) => {
+    setRegistrationsPageSize(newSize);
+    setRegistrationsPage(1);
+    loadInviteRegistrations(1, inviteFilters);
+  };
+
+  // 处理充值明细页面大小变化
+  const handleRechargesPageSizeChange = (newSize: number) => {
+    setRechargesPageSize(newSize);
+    setRechargesPage(1);
+    loadInviteRecharges(1, inviteFilters);
   };
 
   // 重置筛选
@@ -362,9 +383,9 @@ export default function ProfilePage() {
     try {
       setTransactionsLoading(true);
       // 🆕 使用新的客户端API，支持分页
-      const offset = (page - 1) * recordsPerPage;
+      const offset = (page - 1) * pageSize;
       const result = await clientCreditsApi.getTransactions({ 
-        limit: recordsPerPage,
+        limit: pageSize,
         offset 
       });
       
@@ -390,7 +411,7 @@ export default function ProfilePage() {
         setCurrentPage(pagination.currentPage || page);
       } else {
         // 兜底逻辑：如果没有分页信息，使用原来的估算方式
-        if (formattedTransactions.length === recordsPerPage) {
+        if (formattedTransactions.length === pageSize) {
           setTotalPages(Math.min(page + 1, maxPages));
         } else {
           setTotalPages(page);
@@ -816,7 +837,7 @@ export default function ProfilePage() {
             {transactions.length > 0 && (
               <div className="flex justify-between items-center mt-6">
                 <div className="text-sm text-gray-400">
-                  第 {currentPage} 页，每页 {recordsPerPage} 条记录
+                  第 {currentPage} 页，每页 {pageSize} 条记录
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -1019,76 +1040,48 @@ export default function ProfilePage() {
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                     </div>
-                  ) : registrations.length > 0 ? (
+                  ) : (
                     <div className="space-y-4">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-gray-700">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户ID</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">注册时间</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-700">
-                            {registrations.map((registration) => (
-                              <tr key={registration.id} className="hover:bg-gray-700">
-                                <td className="px-4 py-3 text-sm">{registration.id}</td>
-                                <td className="px-4 py-3 text-sm">{registration.email}</td>
-                                <td className="px-4 py-3 text-sm">{registration.username}</td>
-                                <td className="px-4 py-3 text-sm">{formatDateTime(registration.createdAt)}</td>
+                      {registrations.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-700">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户ID</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">注册时间</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* 注册记录分页 */}
-                      {registrationsTotalPages > 1 && (
-                        <div className="flex justify-between items-center">
-                          <div className="text-sm text-gray-400">
-                            第 {registrationsPage} 页，共 {registrationsTotalPages} 页
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => loadInviteRegistrations(1, inviteFilters)}
-                              disabled={registrationsPage === 1 || registrationsLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              首页
-                            </button>
-                            <button
-                              onClick={() => loadInviteRegistrations(registrationsPage - 1, inviteFilters)}
-                              disabled={registrationsPage === 1 || registrationsLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              上一页
-                            </button>
-                            <span className="px-3 py-1 text-sm bg-blue-600 rounded">
-                              {registrationsPage}
-                            </span>
-                            <button
-                              onClick={() => loadInviteRegistrations(registrationsPage + 1, inviteFilters)}
-                              disabled={registrationsPage >= registrationsTotalPages || registrationsLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              下一页
-                            </button>
-                            <button
-                              onClick={() => loadInviteRegistrations(registrationsTotalPages, inviteFilters)}
-                              disabled={registrationsPage >= registrationsTotalPages || registrationsLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              末页
-                            </button>
-                          </div>
+                            </thead>
+                            <tbody className="divide-y divide-gray-700">
+                              {registrations.map((registration) => (
+                                <tr key={registration.id} className="hover:bg-gray-700">
+                                  <td className="px-4 py-3 text-sm">{registration.id}</td>
+                                  <td className="px-4 py-3 text-sm">{registration.email}</td>
+                                  <td className="px-4 py-3 text-sm">{registration.username}</td>
+                                  <td className="px-4 py-3 text-sm">{formatDateTime(registration.createdAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">
+                          <p>暂无注册记录</p>
                         </div>
                       )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      <p>暂无注册记录</p>
+
+                      {/* 注册记录分页 - 始终显示 */}
+                      <Pagination
+                        currentPage={registrationsPage}
+                        totalPages={registrationsTotalPages}
+                        pageSize={registrationsPageSize}
+                        totalItems={registrationsTotal}
+                        onPageChange={(page) => loadInviteRegistrations(page, inviteFilters)}
+                        onPageSizeChange={handleRegistrationsPageSizeChange}
+                        loading={registrationsLoading}
+                        className="mt-4"
+                      />
                     </div>
                   )}
                 </div>
@@ -1101,80 +1094,52 @@ export default function ProfilePage() {
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                     </div>
-                  ) : recharges.length > 0 ? (
+                  ) : (
                     <div className="space-y-4">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-gray-700">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户ID</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值金额</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值时间</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-700">
-                            {recharges.map((recharge) => (
-                              <tr key={recharge.id} className="hover:bg-gray-700">
-                                <td className="px-4 py-3 text-sm">{recharge.userId}</td>
-                                <td className="px-4 py-3 text-sm">{recharge.user?.email || '-'}</td>
-                                <td className="px-4 py-3 text-sm">{recharge.user?.username || '-'}</td>
-                                <td className="px-4 py-3 text-sm">
-                                  <span className="text-green-400 font-medium">¥{(typeof recharge.amount === 'string' ? parseFloat(recharge.amount) : recharge.amount).toFixed(2)}</span>
-                                </td>
-                                <td className="px-4 py-3 text-sm">{formatDateTime(recharge.createdAt)}</td>
+                      {recharges.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-700">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户ID</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">邮箱</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">用户名</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值金额</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值时间</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* 充值记录分页 */}
-                      {rechargesTotalPages > 1 && (
-                        <div className="flex justify-between items-center">
-                          <div className="text-sm text-gray-400">
-                            第 {rechargesPage} 页，共 {rechargesTotalPages} 页
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => loadInviteRecharges(1, inviteFilters)}
-                              disabled={rechargesPage === 1 || rechargesLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              首页
-                            </button>
-                            <button
-                              onClick={() => loadInviteRecharges(rechargesPage - 1, inviteFilters)}
-                              disabled={rechargesPage === 1 || rechargesLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              上一页
-                            </button>
-                            <span className="px-3 py-1 text-sm bg-blue-600 rounded">
-                              {rechargesPage}
-                            </span>
-                            <button
-                              onClick={() => loadInviteRecharges(rechargesPage + 1, inviteFilters)}
-                              disabled={rechargesPage >= rechargesTotalPages || rechargesLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              下一页
-                            </button>
-                            <button
-                              onClick={() => loadInviteRecharges(rechargesTotalPages, inviteFilters)}
-                              disabled={rechargesPage >= rechargesTotalPages || rechargesLoading}
-                              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
-                            >
-                              末页
-                            </button>
-                          </div>
+                            </thead>
+                            <tbody className="divide-y divide-gray-700">
+                              {recharges.map((recharge) => (
+                                <tr key={recharge.id} className="hover:bg-gray-700">
+                                  <td className="px-4 py-3 text-sm">{recharge.userId}</td>
+                                  <td className="px-4 py-3 text-sm">{recharge.user?.email || '-'}</td>
+                                  <td className="px-4 py-3 text-sm">{recharge.user?.username || '-'}</td>
+                                  <td className="px-4 py-3 text-sm">
+                                    <span className="text-green-400 font-medium">¥{(typeof recharge.amount === 'string' ? parseFloat(recharge.amount) : recharge.amount).toFixed(2)}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm">{formatDateTime(recharge.createdAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">
+                          <p>暂无充值记录</p>
                         </div>
                       )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      <p>暂无充值记录</p>
+
+                      {/* 充值记录分页 - 始终显示 */}
+                      <Pagination
+                        currentPage={rechargesPage}
+                        totalPages={rechargesTotalPages}
+                        pageSize={rechargesPageSize}
+                        totalItems={rechargesTotal}
+                        onPageChange={(page) => loadInviteRecharges(page, inviteFilters)}
+                        onPageSizeChange={handleRechargesPageSizeChange}
+                        loading={rechargesLoading}
+                        className="mt-4"
+                      />
                     </div>
                   )}
                 </div>
