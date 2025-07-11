@@ -59,14 +59,16 @@ export interface CreateOrderResponse {
   success: boolean;
   data?: {
     orderNo: string;
-    paymentData: {
-      codeUrl?: string; // 微信支付二维码链接
-      prepayId?: string;
-      paySign?: string;
-    };
+    qrCodeUrl: string; // 微信支付二维码链接
+    amount: number;
+    points: number;
     expireTime: string;
+    packageInfo: {
+      name: string;
+      description: string;
+    };
   };
-  message: string;
+  message?: string;
 }
 
 export interface OrderStatusResponse {

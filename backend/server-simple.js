@@ -1,3 +1,6 @@
+// 加载环境变量
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -3161,6 +3164,18 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
     });
   }
 });
+
+// =====================================
+// 充值相关API路由
+// =====================================
+
+// 引入充值路由和微信支付回调路由
+const rechargeRoutes = require('./src/routes/recharge');
+const wechatCallbackRoutes = require('./src/routes/wechat-callback');
+
+// 使用充值路由
+app.use('/api/recharge', rechargeRoutes);
+app.use('/api/payment/wechat', wechatCallbackRoutes);
 
 // 启动服务器
 app.listen(PORT, () => {

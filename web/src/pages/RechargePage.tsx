@@ -35,7 +35,12 @@ const RechargePage: React.FC = () => {
   // Hooks
   const { packages, loading: packagesLoading, error: packagesError } = usePaymentPackages();
   const { createOrder, loading: createOrderLoading, error: createOrderError } = useCreateOrder();
-  const { orders, pagination, loading: ordersLoading, refetch: refetchOrders } = useUserOrders({ page: 1, limit: 10 });
+  
+  // 只有在orders步骤时才获取订单数据
+  const shouldFetchOrders = currentStep === 'orders';
+  const { orders, pagination, loading: ordersLoading, refetch: refetchOrders } = useUserOrders(
+    shouldFetchOrders ? { page: 1, limit: 10 } : undefined
+  );
   const { startPolling, stopPolling } = usePaymentPolling(currentOrder?.orderNo);
 
   // 从URL参数获取初始状态
@@ -136,7 +141,7 @@ const RechargePage: React.FC = () => {
           updatedAt: new Date().toISOString()
         });
         
-        setPaymentCodeUrl(response.data.paymentData.codeUrl || '');
+        setPaymentCodeUrl(response.data.qrCodeUrl || '');
         setCurrentStep('payment');
         updateSearchParams('payment', response.data.orderNo);
         

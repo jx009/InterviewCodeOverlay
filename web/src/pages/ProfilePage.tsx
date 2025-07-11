@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
-import { configApi, pointsApi, clientCreditsApi, inviteApi } from '../services/api';
+import { configApi, clientCreditsApi, inviteApi } from '../services/api';
 import { UrlUtils } from '../utils/urlUtils';
 import { Pagination } from '../components/shared/Pagination';
 
@@ -81,7 +81,7 @@ export default function ProfilePage() {
   const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize] = useState(10)
   const maxPages = 100
 
   // 邀请功能状态

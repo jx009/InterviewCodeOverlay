@@ -311,7 +311,7 @@ export const systemApi = {
 export const paymentApi = {
   // 获取支付套餐列表
   getPackages: async () => {
-    const response = await api.get('/payment/packages');
+    const response = await api.get('/recharge/packages');
     return response.data;
   },
 
@@ -322,14 +322,16 @@ export const paymentApi = {
   },
 
   // 创建充值订单
-  createOrder: async (data: { packageId: number; paymentMethod: string }) => {
-    const response = await api.post('/payment/orders', data);
+  createOrder: async (data: { packageId: number; paymentMethod?: string }) => {
+    const response = await api.post('/recharge/create-order', {
+      packageId: data.packageId
+    });
     return response.data;
   },
 
   // 查询订单状态
   getOrderStatus: async (orderNo: string) => {
-    const response = await api.get(`/payment/orders/${orderNo}`);
+    const response = await api.get(`/recharge/order-status/${orderNo}`);
     return response.data;
   },
 
@@ -348,7 +350,7 @@ export const paymentApi = {
     startDate?: string;
     endDate?: string;
   }) => {
-    const response = await api.get('/payment/orders', { params });
+    const response = await api.get('/recharge/history', { params });
     return response.data;
   },
 };

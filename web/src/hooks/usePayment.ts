@@ -211,7 +211,9 @@ export const useUserOrders = (initialParams?: {
   }, []);
 
   useEffect(() => {
-    fetchOrders(initialParams);
+    if (initialParams) {
+      fetchOrders(initialParams);
+    }
   }, [fetchOrders, initialParams]);
 
   const loadMore = useCallback((params?: any) => {
