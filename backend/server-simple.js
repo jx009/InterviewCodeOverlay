@@ -2769,7 +2769,7 @@ app.put('/api/admin/users/credits', adminAuthMiddleware, async (req, res) => {
       await tx.pointTransaction.create({
         data: {
           userId: targetUserId,
-          transactionType: operation === 'add' ? 'RECHARGE' : 'RECHARGE', // 都记录为充值类型
+          transactionType: 'REWARD', // 管理员修改积分记录为奖励类型，在前端显示为"积分补偿"
           amount: operation === 'add' ? creditAmount : (newPoints - (targetUser.points || 0)),
           balanceAfter: newPoints,
           description: transactionDescription,

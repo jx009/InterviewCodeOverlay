@@ -31,7 +31,7 @@ interface UserConfig {
 // 积分交易记录类型
 interface PointTransaction {
   id: number;
-  transactionType: 'RECHARGE' | 'DEDUCT' | 'CONSUME' | 'REFUND';
+  transactionType: 'RECHARGE' | 'DEDUCT' | 'CONSUME' | 'REFUND' | 'REWARD';
   amount: number;
   balanceAfter: number;
   modelName?: string;
@@ -544,6 +544,8 @@ export default function ProfilePage() {
         return '消费';
       case 'REFUND':
         return '退款';
+      case 'REWARD':
+        return '积分补偿';
       default:
         return transaction.transactionType;
     }
@@ -851,7 +853,7 @@ export default function ProfilePage() {
                       <tr key={transaction.id} className="hover:bg-gray-700">
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            ['RECHARGE', 'REFUND'].includes(transaction.transactionType)
+                            ['RECHARGE', 'REFUND', 'REWARD'].includes(transaction.transactionType)
                               ? 'bg-green-600 text-green-100' 
                               : 'bg-red-600 text-red-100'
                           }`}>
@@ -859,7 +861,7 @@ export default function ProfilePage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
-                          <span className={['RECHARGE', 'REFUND'].includes(transaction.transactionType) ? 'text-green-400' : 'text-red-400'}>
+                          <span className={['RECHARGE', 'REFUND', 'REWARD'].includes(transaction.transactionType) ? 'text-green-400' : 'text-red-400'}>
                             {transaction.amount > 0 ? '+' : ''}{transaction.amount}
                           </span>
                         </td>
