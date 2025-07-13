@@ -715,11 +715,11 @@ export default function ProfilePage() {
         </div>
 
         {currentTab === 'config' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="space-y-6">
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">🤖 AI模型配置</h2>
               
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div>
                   <label className="block text-sm font-medium mb-2">编程题模型</label>
                   <select
@@ -767,51 +767,91 @@ export default function ProfilePage() {
                   </select>
                 </div>
               </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={saving}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-6 py-2 rounded-lg transition-colors"
+                >
+                  {saving ? '保存中...' : '保存配置'}
+                </button>
+              </div>
             </div>
 
             <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">⚙️ 系统设置</h2>
+              <h2 className="text-xl font-semibold mb-4">🤖 AI模型介绍</h2>
+              <p className="text-gray-300 mb-6">正确答案与模型价格呈正比，按需选择</p>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">主题</label>
-                  <select
-                    value={config?.theme || 'dark'}
-                    onChange={(e) => handleConfigChange('theme', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
-                  >
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
-                    <option value="system">跟随系统</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">界面透明度</label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="1"
-                    step="0.1"
-                    value={config?.display?.opacity || 1}
-                    onChange={(e) => handleNestedConfigChange('display', 'opacity', parseFloat(e.target.value))}
-                    className="w-full"
-                  />
-                  <div className="text-sm text-gray-400 mt-1">
-                    当前值: {((config?.display?.opacity || 1) * 100).toFixed(0)}%
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* o4-mini */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">o4-mini</h3>
+                  <p className="text-sm text-gray-300 mb-3">青春版逻辑推理和编程模型，价格简单，威力强大</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-400">⭐ 强力</span>
+                    <span className="text-green-400 font-semibold">50 点 / 次</span>
                   </div>
                 </div>
 
-                <div>
-                  <label className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      checked={config?.processing?.autoProcess || false}
-                      onChange={(e) => handleNestedConfigChange('processing', 'autoProcess', e.target.checked)}
-                      className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm">自动处理截图</span>
-                  </label>
+                {/* o4-mini-high */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">o4-mini-high</h3>
+                  <p className="text-sm text-gray-300 mb-3">最新最强大的逻辑推理和编程模型，价格有点贵，威力强大</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-400">⭐ 强力</span>
+                    <span className="text-green-400 font-semibold">250 点 / 次</span>
+                  </div>
+                </div>
+
+                {/* gemini-pro-2.5 */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">gemini-pro-2.5</h3>
+                  <p className="text-sm text-gray-300 mb-3">智商超群，适合编程、速图、逻辑分析</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-400">⭐ 强力</span>
+                    <span className="text-green-400 font-semibold">50 点 / 次</span>
+                  </div>
+                </div>
+
+                {/* gemini-flash-2.5 */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">gemini-flash-2.5</h3>
+                  <p className="text-sm text-gray-300 mb-3">便宜且快，性能不俗</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-orange-400">⚡ 快速</span>
+                    <span className="text-orange-400 font-semibold">10 点 / 次</span>
+                  </div>
+                </div>
+
+                {/* claude-4-sonnet */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">claude-4-sonnet</h3>
+                  <p className="text-sm text-gray-300 mb-3">智商优秀，适合编程、行测题目</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-400">⭐ 强力</span>
+                    <span className="text-green-400 font-semibold">15 点 / 次</span>
+                  </div>
+                </div>
+
+                {/* gpt-4o */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">gpt-4o</h3>
+                  <p className="text-sm text-gray-300 mb-3">智商优秀，适合语言分析、通识类题目</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-400">⭐ 强力</span>
+                    <span className="text-green-400 font-semibold">12 点 / 次</span>
+                  </div>
+                </div>
+
+                {/* gpt-4o-mini */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">gpt-4o-mini</h3>
+                  <p className="text-sm text-gray-300 mb-3">很快很便宜，有点蠢</p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-orange-400">⚡ 快速</span>
+                    <span className="text-orange-400 font-semibold">5 点 / 次</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1200,17 +1240,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {currentTab === 'config' && (
-          <div className="flex justify-end mt-8">
-            <button
-              onClick={handleSaveConfig}
-              disabled={saving}
-              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-6 py-2 rounded-lg transition-colors"
-            >
-              {saving ? '保存中...' : '保存配置'}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )
