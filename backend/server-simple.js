@@ -2685,6 +2685,122 @@ app.put('/api/admin/users/role', adminAuthMiddleware, async (req, res) => {
 });
 
 /**
+ * 管理员更新用户积分
+ * PUT /api/admin/users/credits
+ * Body: { userId: number, operation: 'add' | 'set', amount: number, description?: string }
+ */
+app.put('/api/admin/users/credits', adminAuthMiddleware, async (req, res) => {
+  try {
+    console.log('🔄 管理员积分更新请求:', {
+      body: req.body,
+      adminUserId: req.user?.userId,
+      sessionId: req.headers['x-session-id']
+    });
+
+    const { userId, operation, amount, description } = req.body;
+    const adminUserId = req.user?.userId;
+
+    // 参数验证
+    if (!userId || isNaN(parseInt(userId))) {
+      console.log('❌ 用户ID无效:', userId);
+      return res.status(400).json({
+        success: false,
+        message: '用户ID无效'
+      });
+    }
+
+    if (!operation || !['add', 'set'].includes(operation)) {
+      return res.status(400).json({
+        success: false,
+        message: '操作类型必须是 add 或 set'
+      });
+    }
+
+    if (amount === undefined || isNaN(parseInt(amount)) || amount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: '积分数量必须是非负数'
+      });
+    }
+
+    const targetUserId = parseInt(userId);
+    const creditAmount = parseInt(amount);
+
+    // 检查目标用户是否存在
+    const targetUser = await db.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, username: true, email: true, points: true }
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: '目标用户不存在'
+      });
+    }
+
+    // 获取管理员信息
+    const adminUser = await db.prisma.user.findUnique({
+      where: { id: adminUserId },
+      select: { username: true, email: true }
+    });
+
+    let newPoints;
+    let transactionDescription;
+
+    if (operation === 'add') {
+      newPoints = (targetUser.points || 0) + creditAmount;
+      transactionDescription = description || `管理员 ${adminUser?.username || adminUserId} 增加积分`;
+    } else { // operation === 'set'
+      newPoints = creditAmount;
+      transactionDescription = description || `管理员 ${adminUser?.username || adminUserId} 设置积分`;
+    }
+
+    // 使用事务确保数据一致性
+    const result = await db.prisma.$transaction(async (tx) => {
+      // 更新用户积分
+      const updatedUser = await tx.user.update({
+        where: { id: targetUserId },
+        data: { points: newPoints },
+        select: { id: true, username: true, email: true, points: true }
+      });
+
+      // 记录积分交易
+      await tx.pointTransaction.create({
+        data: {
+          userId: targetUserId,
+          transactionType: operation === 'add' ? 'RECHARGE' : 'RECHARGE', // 都记录为充值类型
+          amount: operation === 'add' ? creditAmount : (newPoints - (targetUser.points || 0)),
+          balanceAfter: newPoints,
+          description: transactionDescription,
+        }
+      });
+
+      return updatedUser;
+    });
+
+    console.log(`✅ 管理员积分操作成功: ${adminUser?.username} ${operation} ${creditAmount} 积分给用户 ${targetUser.username}`);
+
+    res.json({
+      success: true,
+      data: {
+        user: result,
+        operation,
+        amount: creditAmount,
+        newBalance: newPoints
+      },
+      message: `成功${operation === 'add' ? '增加' : '设置'}用户积分`
+    });
+  } catch (error) {
+    console.error('❌ 更新用户积分失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新用户积分失败'
+    });
+  }
+});
+
+/**
  * 管理员 - 获取所有用户的邀请注册记录
  * GET /api/admin/invites/registrations?startDate=2023-01-01&endDate=2023-12-31&inviterEmail=test@example.com&inviteeEmail=user@example.com
  */

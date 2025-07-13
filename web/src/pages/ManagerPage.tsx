@@ -63,7 +63,7 @@ export default function ManagerPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchEmail, setSearchEmail] = useState<string>('');
-  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'invites'>('configs');
+  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites'>('configs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -104,6 +104,16 @@ export default function ManagerPage() {
   const [registrationsTotal, setRegistrationsTotal] = useState(0);
   const [rechargesTotal, setRechargesTotal] = useState(0);
 
+  // 积分管理相关状态
+  const [creditUsers, setCreditUsers] = useState<User[]>([]);
+  const [filteredCreditUsers, setFilteredCreditUsers] = useState<User[]>([]);
+  const [creditSearchEmail, setCreditSearchEmail] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [creditAmount, setCreditAmount] = useState<number>(0);
+  const [creditOperation, setCreditOperation] = useState<'add' | 'set'>('add');
+  const [creditDescription, setCreditDescription] = useState<string>('');
+  const [showCreditForm, setShowCreditForm] = useState(false);
+
   // 检查管理员权限
   const isAdmin = user?.role === 'ADMIN';
 
@@ -117,6 +127,8 @@ export default function ManagerPage() {
         loadConfigs();
       } else if (currentTab === 'users') {
         loadUsers();
+      } else if (currentTab === 'credits') {
+        loadCreditUsers();
       } else if (currentTab === 'invites') {
         loadInviteData();
       }
@@ -142,6 +154,18 @@ export default function ManagerPage() {
     }
   }, [users, searchEmail]);
 
+  // 筛选积分用户的Effect
+  useEffect(() => {
+    if (creditSearchEmail.trim() === '') {
+      setFilteredCreditUsers(creditUsers);
+    } else {
+      const filtered = creditUsers.filter(u => 
+        u.email.toLowerCase().includes(creditSearchEmail.toLowerCase())
+      );
+      setFilteredCreditUsers(filtered);
+    }
+  }, [creditUsers, creditSearchEmail]);
+
   // 处理搜索输入变化
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchEmail(e.target.value);
@@ -150,6 +174,16 @@ export default function ManagerPage() {
   // 清除搜索
   const handleClearSearch = () => {
     setSearchEmail('');
+  };
+
+  // 处理积分搜索输入变化
+  const handleCreditSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCreditSearchEmail(e.target.value);
+  };
+
+  // 清除积分搜索
+  const handleClearCreditSearch = () => {
+    setCreditSearchEmail('');
   };
 
   const loadConfigs = async () => {
@@ -215,6 +249,39 @@ export default function ManagerPage() {
     } catch (error) {
       console.error('加载用户列表失败:', error);
       setMessage(`加载用户列表失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCreditUsers = async () => {
+    try {
+      setLoading(true);
+      const sessionId = localStorage.getItem('sessionId');
+      
+      const response = await fetch('/api/admin/users', {
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('loadCreditUsers - Error response:', errorText);
+        throw new Error(`Failed to load credit users: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('loadCreditUsers - Response data:', data);
+      const usersData = data.data.users || [];
+      setCreditUsers(usersData);
+      setFilteredCreditUsers(usersData);
+      setMessage('积分用户列表加载成功');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('加载积分用户列表失败:', error);
+      setMessage(`加载积分用户列表失败: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
@@ -387,6 +454,70 @@ export default function ManagerPage() {
       console.error('更新用户角色失败:', error);
       setMessage(`更新失败: ${error instanceof Error ? error.message : String(error)}`);
     }
+  };
+
+  const handleUpdateUserCredits = async () => {
+    if (!selectedUser) return;
+
+    try {
+      setSaving(true);
+      const sessionId = localStorage.getItem('sessionId');
+      
+      const response = await fetch('/api/admin/users/credits', {
+        method: 'PUT',
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          operation: creditOperation,
+          amount: creditAmount,
+          description: creditDescription || `管理员${creditOperation === 'add' ? '增加' : '设置'}积分`
+        })
+      });
+
+      console.log('📤 发送积分更新请求:', {
+        userId: selectedUser.id,
+        operation: creditOperation,
+        amount: creditAmount,
+        description: creditDescription || `管理员${creditOperation === 'add' ? '增加' : '设置'}积分`
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ 响应状态不正常:', response.status, errorText);
+        throw new Error(`更新用户积分失败: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('📥 积分更新响应:', data);
+      
+      if (data.success) {
+        setMessage(`用户积分更新成功`);
+        setShowCreditForm(false);
+        setSelectedUser(null);
+        setCreditAmount(0);
+        setCreditDescription('');
+        await loadCreditUsers(); // 重新加载用户列表
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        throw new Error(data.message || '更新失败');
+      }
+    } catch (error) {
+      console.error('更新用户积分失败:', error);
+      setMessage(`更新失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditUserCredits = (userItem: User) => {
+    setSelectedUser(userItem);
+    setCreditAmount(0);
+    setCreditOperation('add');
+    setCreditDescription('');
+    setShowCreditForm(true);
   };
 
   const handleSaveConfig = async () => {
@@ -611,6 +742,16 @@ export default function ManagerPage() {
                 }`}
               >
                 用户角色管理
+              </button>
+              <button
+                onClick={() => setCurrentTab('credits')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  currentTab === 'credits'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                }`}
+              >
+                用户积分管理
               </button>
               <button
                 onClick={() => setCurrentTab('invites')}
@@ -991,6 +1132,229 @@ export default function ManagerPage() {
                 <div>• <span className="text-red-400 font-medium">管理员</span>：可以访问管理控制台，管理积分配置和用户角色</div>
                 <div>• <span className="text-green-400 font-medium">普通用户</span>：只能使用基本功能，无法访问管理功能</div>
                 <div>• <span className="text-yellow-400">注意</span>：系统至少需要保留一个管理员账号</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 用户积分管理标签页 */}
+        {currentTab === 'credits' && (
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <div className="p-6 border-b border-gray-700">
+              <h3 className="text-lg font-semibold">用户积分管理 ({filteredCreditUsers.length})</h3>
+              <p className="text-gray-400 text-sm mt-1">查看和修改用户的积分余额</p>
+              
+              {/* 搜索框 */}
+              <div className="mt-4 flex">
+                <div className="relative flex-1 max-w-md">
+                  <input
+                    type="text"
+                    placeholder="搜索用户邮箱..."
+                    value={creditSearchEmail}
+                    onChange={handleCreditSearchChange}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                  />
+                  {creditSearchEmail && (
+                    <button 
+                      onClick={handleClearCreditSearch}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <div className="ml-2 text-sm text-gray-400 flex items-center">
+                  {creditSearchEmail && `找到 ${filteredCreditUsers.length} 个结果`}
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      用户ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      用户名
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      邮箱
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      当前积分
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      用户角色
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      注册时间
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                  {filteredCreditUsers.map((userItem) => (
+                    <tr key={userItem.id} className="hover:bg-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        {userItem.id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        {userItem.username}
+                        {userItem.id === user?.id && (
+                          <span className="ml-2 text-xs bg-blue-600 text-blue-100 px-2 py-1 rounded">
+                            当前用户
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {userItem.email || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className="bg-green-600 text-green-100 px-3 py-1 rounded-full font-medium">
+                          {userItem.points || 0} 积分
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          userItem.role === 'ADMIN' 
+                            ? 'bg-red-600 text-red-100' 
+                            : 'bg-blue-600 text-blue-100'
+                        }`}>
+                          {userItem.role === 'ADMIN' ? '管理员' : '普通用户'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {new Date(userItem.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <button
+                          onClick={() => handleEditUserCredits(userItem)}
+                          className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs transition-colors"
+                        >
+                          修改积分
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {creditUsers.length === 0 && (
+                <div className="text-center py-12 text-gray-400">
+                  <p>暂无用户数据</p>
+                  <p className="text-sm mt-2">用户数据加载中...</p>
+                </div>
+              )}
+              
+              {creditUsers.length > 0 && filteredCreditUsers.length === 0 && (
+                <div className="text-center py-12 text-gray-400">
+                  <p>没有找到匹配的用户</p>
+                  <p className="text-sm mt-2">尝试其他搜索条件或<button onClick={handleClearCreditSearch} className="text-blue-400 hover:underline">清除搜索</button></p>
+                </div>
+              )}
+            </div>
+
+            {/* 积分修改说明 */}
+            <div className="p-6 border-t border-gray-700 bg-gray-900">
+              <h4 className="font-medium mb-2">积分操作说明：</h4>
+              <div className="text-sm text-gray-400 space-y-1">
+                <div>• <span className="text-green-400 font-medium">增加积分</span>：在用户当前积分基础上增加指定数量</div>
+                <div>• <span className="text-blue-400 font-medium">设置积分</span>：直接将用户积分设置为指定数值</div>
+                <div>• <span className="text-yellow-400">注意</span>：所有操作都会记录在系统日志中</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 积分修改弹窗 */}
+        {showCreditForm && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-4">修改用户积分</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">用户信息</label>
+                  <div className="bg-gray-700 rounded-lg p-3">
+                    <div className="text-sm">
+                      <div>用户名: {selectedUser.username}</div>
+                      <div>邮箱: {selectedUser.email}</div>
+                      <div>当前积分: <span className="font-medium text-green-400">{selectedUser.points || 0}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">操作类型</label>
+                  <select
+                    value={creditOperation}
+                    onChange={(e) => setCreditOperation(e.target.value as 'add' | 'set')}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  >
+                    <option value="add">增加积分</option>
+                    <option value="set">设置积分</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {creditOperation === 'add' ? '增加数量' : '设置数值'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(parseInt(e.target.value) || 0)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                    placeholder="请输入积分数量"
+                  />
+                  {creditOperation === 'add' && creditAmount > 0 && (
+                    <p className="text-sm text-gray-400 mt-1">
+                      操作后积分: {(selectedUser.points || 0) + creditAmount}
+                    </p>
+                  )}
+                  {creditOperation === 'set' && (
+                    <p className="text-sm text-gray-400 mt-1">
+                      操作后积分: {creditAmount}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">操作说明 (可选)</label>
+                  <textarea
+                    value={creditDescription}
+                    onChange={(e) => setCreditDescription(e.target.value)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                    rows={3}
+                    placeholder="请输入操作说明..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleUpdateUserCredits}
+                  disabled={saving || creditAmount < 0}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
+                >
+                  {saving ? '处理中...' : '确认修改'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreditForm(false);
+                    setSelectedUser(null);
+                    setCreditAmount(0);
+                    setCreditDescription('');
+                  }}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  取消
+                </button>
               </div>
             </div>
           </div>
