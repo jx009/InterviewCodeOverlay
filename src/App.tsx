@@ -407,7 +407,7 @@ function App() {
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
                   <p className="text-white/60 text-sm">
-                    Initializing...
+                    初始化中...
                   </p>
                 </div>
               </div>

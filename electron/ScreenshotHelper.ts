@@ -161,7 +161,7 @@ export class ScreenshotHelper {
       return buffer;
     } catch (error) {
       console.error("Error capturing screenshot:", error);
-      throw new Error(`Failed to capture screenshot: ${error.message}`);
+      throw new Error(`截图失败: ${error.message}`);
     }
   }
 
@@ -253,7 +253,7 @@ export class ScreenshotHelper {
         console.log("Created placeholder image as fallback");
         
         // Show the error but return a valid buffer so the app doesn't crash
-        throw new Error("Could not capture screenshot with any method. Please check your Windows security settings and try again.");
+        throw new Error("无法使用任何方法捕获屏幕截图。请检查您的Windows安全设置并重试。");
       }
     }
   }
@@ -275,7 +275,7 @@ export class ScreenshotHelper {
       const screenshotBuffer = await this.captureScreenshot();
       
       if (!screenshotBuffer || screenshotBuffer.length === 0) {
-        throw new Error("Screenshot capture returned empty buffer");
+        throw new Error("截图捕获返回了空缓冲区");
       }
 
       // Save and manage the screenshot based on current view

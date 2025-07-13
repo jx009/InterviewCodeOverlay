@@ -28,7 +28,7 @@ export const ContentSection = ({
     {isLoading ? (
       <div className="mt-4 flex">
         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-          Extracting problem statement...
+          提取问题描述中...
         </p>
       </div>
     ) : (
@@ -82,7 +82,7 @@ const SolutionSection = ({
         <div className="space-y-1.5">
           <div className="mt-4 flex">
             <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-              Loading solutions...
+              加载解决方案中...
             </p>
           </div>
         </div>
@@ -93,7 +93,7 @@ const SolutionSection = ({
               onClick={copyToClipboard}
               className="absolute top-2 right-2 text-xs text-white bg-white/10 hover:bg-white/20 rounded px-2 py-1 transition pointer-events-auto z-10"
             >
-              {copied ? "Copied!" : "Copy"}
+              {copied ? "已复制!" : "复制"}
             </button>
           )}
           <div>
@@ -135,7 +135,7 @@ export const ComplexitySection = ({
   const formatComplexity = (complexity: string | null): string => {
     // Default if no complexity returned by LLM
     if (!complexity || complexity.trim() === "") {
-      return "Complexity not available";
+      return "复杂度不可用";
     }
 
     const bigORegex = /O\([^)]+\)/i;
@@ -154,11 +154,11 @@ export const ComplexitySection = ({
   return (
     <div className="space-y-2">
       <h2 className="text-[13px] font-medium text-white tracking-wide">
-        Complexity
+        复杂度
       </h2>
       {isLoading ? (
         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-          Calculating complexity...
+          计算复杂度中...
         </p>
       ) : (
         <div className="space-y-3">
@@ -199,11 +199,11 @@ export const MultipleChoiceSection = ({
   return (
     <div className="space-y-2">
       <h2 className="text-[13px] font-medium text-white tracking-wide">
-        Answers
+        答案
       </h2>
       {isLoading ? (
         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-          Analyzing multiple choice questions...
+          分析选择题中...
         </p>
       ) : (
         <div className="space-y-3">
@@ -374,7 +374,7 @@ const Solutions: React.FC<SolutionsProps> = ({
       }),
       //if there was an error processing the initial solution
       window.electronAPI.onSolutionError((error: string) => {
-        showToast("Processing Failed", error, "error")
+        showToast("处理失败", error, "error")
         // Reset solutions in the cache (even though this shouldn't ever happen) and complexities to previous states
         const solution = queryClient.getQueryData(["solution"]) as {
           code: string
@@ -456,16 +456,16 @@ const Solutions: React.FC<SolutionsProps> = ({
       //when there was an error in the initial debugging, we'll show a toast and stop the little generating pulsing thing.
       window.electronAPI.onDebugError(() => {
         showToast(
-          "Processing Failed",
-          "There was an error debugging your code.",
+          "处理失败",
+          "调试代码时发生错误",
           "error"
         )
         setDebugProcessing(false)
       }),
       window.electronAPI.onProcessingNoScreenshots(() => {
         showToast(
-          "No Screenshots",
-          "There are no extra screenshots to process.",
+          "无截图",
+          "没有额外的截图需要处理",
           "neutral"
         )
       }),
@@ -541,7 +541,7 @@ const Solutions: React.FC<SolutionsProps> = ({
         setExtraScreenshots(screenshots)
       } else {
         console.error("Failed to delete extra screenshot:", response.error)
-        showToast("Error", "Failed to delete the screenshot", "error")
+        showToast("错误", "删除截图失败", "error")
       }
     } catch (error) {
       console.error("Error deleting extra screenshot:", error)
@@ -595,14 +595,14 @@ const Solutions: React.FC<SolutionsProps> = ({
                 {!solutionData && !multipleChoiceAnswers && (
                   <>
                     <ContentSection
-                      title="Problem Statement"
+                      title="问题描述"
                       content={problemStatementData?.problem_statement}
                       isLoading={!problemStatementData}
                     />
                     {problemStatementData && (
                       <div className="mt-4 flex">
                         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-                          Generating solutions...
+                          生成解决方案中...
                         </p>
                       </div>
                     )}
@@ -612,7 +612,7 @@ const Solutions: React.FC<SolutionsProps> = ({
                 {(solutionData || multipleChoiceAnswers) && (
                   <>
                     <ContentSection
-                      title={`My Thoughts (${COMMAND_KEY} + Arrow keys to scroll)`}
+                      title={`我的思路 (${COMMAND_KEY} + 方向键滚动)`}
                       content={
                         thoughtsData && (
                           <div className="space-y-3">
@@ -637,7 +637,7 @@ const Solutions: React.FC<SolutionsProps> = ({
                     {solutionData && (
                       <>
                         <SolutionSection
-                          title="Solution"
+                          title="解决方案"
                           content={solutionData}
                           isLoading={!solutionData}
                           currentLanguage={currentLanguage}

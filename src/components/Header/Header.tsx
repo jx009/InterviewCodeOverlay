@@ -108,7 +108,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
       {isHovered ? (
         <div className="bg-black p-2 border-b border-white/10 flex items-center justify-between transition-all duration-200">
           <div className="flex items-center space-x-1">
-            <span className="text-white text-sm mr-2">Language:</span>
+            <span className="text-white text-sm mr-2">语言:</span>
             <div className="relative">
               <button
                 onClick={toggleDropdown}
@@ -149,7 +149,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
             {authenticated && user && (
               <div className="flex items-center space-x-2 px-2 py-1 rounded-md bg-white/5">
                 <User className="h-4 w-4 text-green-400" />
-                <span className="text-xs text-white/90">{user.username}</span>
+                <span className="text-xs text-white/90">欢迎，{user.username}</span>
               </div>
             )}
             

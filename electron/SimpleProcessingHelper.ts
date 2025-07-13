@@ -185,7 +185,7 @@ export class SimpleProcessingHelper {
       await new Promise((resolve) => setTimeout(resolve, 100))
       attempts++
     }
-    throw new Error("App failed to initialize after 5 seconds")
+    throw new Error("应用程序5秒后初始化失败")
   }
 
   /**

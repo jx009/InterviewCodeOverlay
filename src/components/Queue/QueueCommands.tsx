@@ -26,7 +26,14 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   const { showToast } = useToast()
 
   // 🆕 使用增强认证
-  const { login: webLogin, logout: webLogout, loading: authLoading } = useWebAuth()
+  const { 
+    authenticated, 
+    user, 
+    login: webLogin, 
+    logout: webLogout, 
+    loading: authLoading,
+    connectionStatus 
+  } = useWebAuth()
 
   // Extract the repeated language selection logic into a separate function
   const extractLanguagesAndUpdate = (direction?: 'next' | 'prev') => {
@@ -152,26 +159,26 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                     const result = await window.electronAPI.triggerScreenshot()
                     if (!result.success) {
                       // 减少控制台输出
-                      showToast("Error", "Failed to take screenshot", "error")
+                      showToast("错误", "截屏失败", "error")
                     }
                   } catch (error) {
                     // 减少控制台输出
-                    showToast("Error", "Failed to take screenshot", "error")
+                    showToast("错误", "截屏失败", "error")
                   }
                 }}
             >
             <span className="text-[11px] leading-none truncate">
               {screenshotCount === 0
-                  ? "Take first screenshot"
+                  ? "截取第一张截图"
                   : screenshotCount === 1
-                      ? "Take second screenshot"
+                      ? "截取第二张截图"
                       : screenshotCount === 2
-                          ? "Take third screenshot"
+                          ? "截取第三张截图"
                           : screenshotCount === 3
-                              ? "Take fourth screenshot"
+                              ? "截取第四张截图"
                               : screenshotCount === 4
-                                  ? "Take fifth screenshot"
-                                  : "Next will replace first screenshot"}
+                                  ? "截取第五张截图"
+                                  : "下一张将替换第一张截图"}
             </span>
               <div className="flex gap-1">
                 <button className="bg-white/10 rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
@@ -196,16 +203,16 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             await window.electronAPI.triggerProcessScreenshots()
                         if (!result.success) {
                           // 减少控制台输出
-                          showToast("Error", "Failed to process screenshots", "error")
+                          showToast("错误", "处理截图失败", "error")
                         }
                       } catch (error) {
                         // 减少控制台输出
-                        showToast("Error", "Failed to process screenshots", "error")
+                        showToast("错误", "处理截图失败", "error")
                       }
                     }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] leading-none">Solve </span>
+                    <span className="text-[11px] leading-none">解决 </span>
                     <div className="flex gap-1 ml-2">
                       <button className="bg-white/10 rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
                         {COMMAND_KEY}
@@ -255,7 +262,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                     <div className="absolute -top-2 right-0 w-full h-2" />
                     <div className="p-3 text-xs bg-black/80 backdrop-blur-md rounded-lg border border-white/10 text-white/90 shadow-lg">
                       <div className="space-y-4">
-                        <h3 className="font-medium truncate">Keyboard Shortcuts</h3>
+                        <h3 className="font-medium truncate">键盘快捷键</h3>
                         <div className="space-y-3">
                           {/* Toggle Command */}
                           <div
@@ -267,23 +274,23 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                                   if (!result.success) {
                                     // 减少控制台输出
                                     showToast(
-                                        "Error",
-                                        "Failed to toggle window",
+                                        "错误",
+                                        "切换窗口失败",
                                         "error"
                                     )
                                   }
                                 } catch (error) {
                                   // 减少控制台输出
                                   showToast(
-                                      "Error",
-                                      "Failed to toggle window",
+                                      "错误",
+                                      "切换窗口失败",
                                       "error"
                                   )
                                 }
                               }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="truncate">Toggle Window</span>
+                              <span className="truncate">切换窗口</span>
                               <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -294,7 +301,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               </div>
                             </div>
                             <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
-                              Show or hide this window.
+                              显示或隐藏此窗口。
                             </p>
                           </div>
 
@@ -308,23 +315,23 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                                   if (!result.success) {
                                     // 减少控制台输出
                                     showToast(
-                                        "Error",
-                                        "Failed to take screenshot",
+                                        "错误",
+                                        "截屏失败",
                                         "error"
                                     )
                                   }
                                 } catch (error) {
                                   // 减少控制台输出
                                   showToast(
-                                      "Error",
-                                      "Failed to take screenshot",
+                                      "错误",
+                                      "截屏失败",
                                       "error"
                                   )
                                 }
                               }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="truncate">Take Screenshot</span>
+                              <span className="truncate">截屏</span>
                               <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -335,7 +342,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               </div>
                             </div>
                             <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
-                              Take a screenshot of the problem description.
+                              截取问题描述的截图。
                             </p>
                           </div>
 
@@ -355,23 +362,23 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                                   if (!result.success) {
                                     // 减少控制台输出
                                     showToast(
-                                        "Error",
-                                        "Failed to process screenshots",
+                                        "错误",
+                                        "处理截图失败",
                                         "error"
                                     )
                                   }
                                 } catch (error) {
                                   // 减少控制台输出
                                   showToast(
-                                      "Error",
-                                      "Failed to process screenshots",
+                                      "错误",
+                                      "处理截图失败",
                                       "error"
                                   )
                                 }
                               }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="truncate">Solve</span>
+                              <span className="truncate">解决</span>
                               <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -383,8 +390,8 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             </div>
                             <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
                               {screenshotCount > 0
-                                  ? "Generate a solution based on the current problem."
-                                  : "Take a screenshot first to generate a solution."}
+                                  ? "根据当前问题生成解决方案。"
+                                  : "请先截屏然后生成解决方案。"}
                             </p>
                           </div>
 
@@ -403,23 +410,23 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                                   if (!result.success) {
                                     // 减少控制台输出
                                     showToast(
-                                        "Error",
-                                        result.error || "Failed to delete screenshot",
+                                        "错误",
+                                        result.error || "删除截图失败",
                                         "error"
                                     )
                                   }
                                 } catch (error) {
                                   // 减少控制台输出
                                   showToast(
-                                      "Error",
-                                      "Failed to delete screenshot",
+                                      "错误",
+                                      "删除截图失败",
                                       "error"
                                   )
                                 }
                               }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="truncate">Delete Last Screenshot</span>
+                              <span className="truncate">删除最后一张截图</span>
                               <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -431,8 +438,8 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             </div>
                             <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
                               {screenshotCount > 0
-                                  ? "Remove the most recently taken screenshot."
-                                  : "No screenshots to delete."}
+                                  ? "删除最近截取的截图。"
+                                  : "没有截图可删除。"}
                             </p>
                           </div>
                         </div>
@@ -442,7 +449,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                           {/* 语言选择器 - 可点击切换 */}
                           <div className="mb-3 px-2">
                             <div className="flex items-center justify-between cursor-pointer hover:bg-white/10 rounded px-2 py-1 transition-colors">
-                              <span className="text-[11px] text-white/70">Language</span>
+                              <span className="text-[11px] text-white/70">语言</span>
                               <div className="flex items-center gap-2">
                                 <select
                                     className="bg-transparent border-none text-[11px] text-white/90 cursor-pointer focus:outline-none"
@@ -478,23 +485,14 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                             </div>
                           </div>
 
-                          {/* 登录按钮 - 修改为与登出按钮相同样式 */}
-                          <div className="mb-3 px-2">
-                            <button
-                                onClick={handleLogin}
-                                disabled={authLoading} // 添加加载状态禁用
-                                className={`flex items-center gap-2 w-full text-[11px] font-medium transition-colors px-3 py-2 rounded ${
-                                    authLoading
-                                        ? 'bg-green-600/20 text-green-400/50 cursor-not-allowed'
-                                        : 'bg-green-600/20 hover:bg-green-600/30 text-green-400'
-                                }`}
-                            >
-                              <div className="w-4 h-4 flex items-center justify-center">
-                                {authLoading ? (
-                                    // 加载中的旋转动画
-                                    <div className="w-3 h-3 border border-green-400/50 border-t-green-400 rounded-full animate-spin"></div>
-                                ) : (
-                                    // 登录图标
+                          {/* 用户欢迎信息和认证按钮 */}
+                          {authenticated && user ? (
+                            /* 已登录状态 - 显示欢迎信息和登出按钮 */
+                            <>
+                              {/* 用户欢迎信息 */}
+                              <div className="mb-3 px-2">
+                                <div className="flex items-center gap-2 w-full text-[11px] px-3 py-2 rounded bg-green-600/10 border border-green-600/20">
+                                  <div className="w-4 h-4 flex items-center justify-center">
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
                                         viewBox="0 0 24 24"
@@ -503,54 +501,89 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                                         strokeWidth="2"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
-                                        className="w-3 h-3"
+                                        className="w-3 h-3 text-green-400"
                                     >
-                                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                                      <polyline points="10 17 15 12 10 7" />
-                                      <line x1="15" y1="12" x2="3" y2="12" />
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                      <circle cx="12" cy="7" r="4" />
                                     </svg>
-                                )}
+                                  </div>
+                                  <span className="text-green-400 font-medium">欢迎，{user.username}</span>
+                                </div>
                               </div>
-                              {authLoading ? '登录中...' : 'Login'} {/* 添加加载状态文本 */}
-                            </button>
-                          </div>
-
-
-
-
-
-
-                          <button
-                              onClick={handleSignOut}
-                              disabled={authLoading}
-                              className={`flex items-center gap-2 text-[11px] transition-colors w-full ${
-                                  authLoading
-                                      ? 'text-red-400/50 cursor-not-allowed'
-                                      : 'text-red-400 hover:text-red-300'
-                              }`}
-                          >
-                            <div className="w-4 h-4 flex items-center justify-center">
-                              {authLoading ? (
-                                  <div className="w-3 h-3 border border-red-400/50 border-t-red-400 rounded-full animate-spin"></div>
-                              ) : (
-                                  <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      className="w-3 h-3"
-                                  >
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                                    <polyline points="16 17 21 12 16 7" />
-                                    <line x1="21" y1="12" x2="9" y2="12" />
-                                  </svg>
-                              )}
+                              
+                              {/* 登出按钮 */}
+                              <div className="mb-3 px-2">
+                                <button
+                                    onClick={handleSignOut}
+                                    disabled={authLoading}
+                                    className={`flex items-center gap-2 w-full text-[11px] font-medium transition-colors px-3 py-2 rounded ${
+                                        authLoading
+                                            ? 'bg-red-600/20 text-red-400/50 cursor-not-allowed'
+                                            : 'bg-red-600/20 hover:bg-red-600/30 text-red-400'
+                                    }`}
+                                >
+                                  <div className="w-4 h-4 flex items-center justify-center">
+                                    {authLoading ? (
+                                        <div className="w-3 h-3 border border-red-400/50 border-t-red-400 rounded-full animate-spin"></div>
+                                    ) : (
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            className="w-3 h-3"
+                                        >
+                                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                          <polyline points="16 17 21 12 16 7" />
+                                          <line x1="21" y1="12" x2="9" y2="12" />
+                                        </svg>
+                                    )}
+                                  </div>
+                                  {authLoading ? '登出中...' : '登出'}
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            /* 未登录状态 - 显示登录按钮 */
+                            <div className="mb-3 px-2">
+                              <button
+                                  onClick={handleLogin}
+                                  disabled={authLoading || !connectionStatus?.connected}
+                                  className={`flex items-center gap-2 w-full text-[11px] font-medium transition-colors px-3 py-2 rounded ${
+                                      authLoading || !connectionStatus?.connected
+                                          ? 'bg-green-600/20 text-green-400/50 cursor-not-allowed'
+                                          : 'bg-green-600/20 hover:bg-green-600/30 text-green-400'
+                                  }`}
+                              >
+                                <div className="w-4 h-4 flex items-center justify-center">
+                                  {authLoading ? (
+                                      <div className="w-3 h-3 border border-green-400/50 border-t-green-400 rounded-full animate-spin"></div>
+                                  ) : (
+                                      <svg
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          className="w-3 h-3"
+                                      >
+                                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                                        <polyline points="10 17 15 12 10 7" />
+                                        <line x1="15" y1="12" x2="3" y2="12" />
+                                      </svg>
+                                  )}
+                                </div>
+                                {authLoading ? '登录中...' : (
+                                  !connectionStatus?.connected ? '离线' : '登录'
+                                )}
+                              </button>
                             </div>
-                            {authLoading ? '登出中...' : 'Log Out'}
-                          </button>
+                          )}
                         </div>
                       </div>
                     </div>
