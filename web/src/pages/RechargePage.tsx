@@ -240,42 +240,6 @@ const RechargePage: React.FC = () => {
     }
   };
 
-  // 渲染步骤指示器
-  const renderStepIndicator = () => {
-    const steps = [
-      { key: 'packages', label: '选择套餐', icon: '📦' },
-      { key: 'payment', label: '支付订单', icon: '💳' },
-      { key: 'orders', label: '订单记录', icon: '📋' }
-    ];
-
-    return (
-      <div className="flex justify-center mb-8">
-        <div className="flex items-center space-x-4">
-          {steps.map((step, index) => (
-            <React.Fragment key={step.key}>
-              <button
-                onClick={() => handleStepChange(step.key as PageStep)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-200 ${
-                  currentStep === step.key
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                }`}
-              >
-                <span>{step.icon}</span>
-                <span className="font-medium">{step.label}</span>
-              </button>
-              
-              {index < steps.length - 1 && (
-                <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   // 渲染套餐选择页面
   const renderPackagesStep = () => (
@@ -399,8 +363,6 @@ const RechargePage: React.FC = () => {
           <p className="text-lg text-gray-400">充值积分，享受更多AI服务</p>
         </div>
 
-        {/* 步骤指示器 */}
-        {renderStepIndicator()}
 
         {/* 页面内容 */}
         <div className="bg-gray-900 rounded-lg shadow-sm border border-gray-700 p-6">
