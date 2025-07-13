@@ -15,10 +15,8 @@ const Hero: React.FC = () => {
           {/* 主标题 */}
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold text-white mb-6">
             <span className="bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
-              Interview Code
+              QuizCoze
             </span>
-            <br />
-            <span className="text-white">Overlay</span>
           </h1>
 
           {/* 副标题 */}
@@ -31,7 +29,7 @@ const Hero: React.FC = () => {
               🤖 AI智能分析
             </span>
             <span className="px-4 py-2 bg-green-500/20 text-green-400 rounded-full text-sm font-medium border border-green-500/30">
-              ⚡ 实时响应
+              📱 单设备使用
             </span>
             <span className="px-4 py-2 bg-purple-500/20 text-purple-400 rounded-full text-sm font-medium border border-purple-500/30">
               🎯 精准匹配

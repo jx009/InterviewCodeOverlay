@@ -9,7 +9,7 @@ const Features: React.FC = () => {
         </svg>
       ),
       title: 'AI智能分析',
-      description: '基于先进的AI算法，实时分析面试题目，提供精准的解题思路和代码建议',
+      description: '基于先进的AI算法，实时分析笔试题目，提供精准的解题思路和代码建议',
       color: 'blue'
     },
     {
@@ -18,8 +18,8 @@ const Features: React.FC = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       ),
-      title: '实时响应',
-      description: '毫秒级响应速度，无需等待，让你在面试中保持流畅的思考节奏',
+      title: '单设备使用',
+      description: '操作简单，无需纠结移动设备位置的摆放',
       color: 'green'
     },
     {
@@ -29,7 +29,7 @@ const Features: React.FC = () => {
         </svg>
       ),
       title: '多语言支持',
-      description: '支持Python、Java、JavaScript、C++等主流编程语言，覆盖各类技术面试场景',
+      description: '支持Python、Java、JavaScript、C++等主流编程语言，覆盖各类技术笔试场景',
       color: 'purple'
     },
     {
@@ -39,7 +39,7 @@ const Features: React.FC = () => {
         </svg>
       ),
       title: '隐私保护',
-      description: '本地处理，数据安全，不会泄露你的面试内容和个人信息',
+      description: '本地处理，数据安全，不会泄露你的笔试内容和个人信息',
       color: 'red'
     }
   ];
@@ -60,10 +60,10 @@ const Features: React.FC = () => {
         {/* 标题 */}
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-            为什么选择 Interview Code Overlay？
+            为什么选择 QuizCoze？
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            专为技术面试设计的智能助手，让你在关键时刻发挥出最佳水平
+            专为技术笔试设计的智能助手，让你在关键时刻发挥出最佳水平
           </p>
         </div>
 
@@ -89,15 +89,6 @@ const Features: React.FC = () => {
           ))}
         </div>
 
-        {/* 底部CTA */}
-        <div className="text-center mt-16">
-          <div className="inline-flex items-center space-x-2 text-gray-400 mb-4">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span>免费试用，无需信用卡</span>
-          </div>
-        </div>
       </div>
     </section>
   );

@@ -5,176 +5,106 @@ const DownloadPage: React.FC = () => {
   const releaseDate = '2024-01-15';
 
   return (
-    <div className="min-h-screen py-20">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 页面标题 */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
-            下载 Interview Code Overlay
-          </h1>
-          <p className="text-xl text-gray-400 mb-2">
-            最新版本 {version} • 发布于 {releaseDate}
-          </p>
-          <p className="text-gray-500">
-            免费下载，立即开始你的面试准备之旅
-          </p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black relative overflow-hidden">
+      {/* 背景装饰 */}
+      <div className="absolute inset-0">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-green-500/5 rounded-full blur-3xl"></div>
+      </div>
 
-        {/* 下载按钮 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-          {/* Windows 下载 */}
-          <div className="bg-gray-800/50 rounded-2xl p-8 border border-gray-700 hover:border-gray-600 transition-all duration-300">
-            <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.949-1.31L24 0v11.4H10.949V2.139zM0 12.6h9.75v9.451L0 20.699V12.6zm10.949 0H24V24l-13.051-1.339V12.6z"/>
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">Windows</h3>
-                <p className="text-gray-400">支持 Windows 10/11</p>
-              </div>
+      <div className="relative z-10 py-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* 页面标题 */}
+          <div className="text-center mb-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full mb-6 animate-bounce">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
             
-            <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 mb-4">
-              下载 Windows 版本
-            </button>
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6">
+              <span className="bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
+                下载 QuizCoze
+              </span>
+            </h1>
             
-            <div className="text-sm text-gray-500 space-y-1">
-              <p>• 文件大小: ~85 MB</p>
-              <p>• 支持 x64 架构</p>
-              <p>• 自动更新功能</p>
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+              免费下载，立即开始你的笔试准备之旅
+            </p>
+
+            {/* 特性亮点 */}
+            <div className="flex flex-wrap justify-center gap-4 mt-8">
+              <span className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-full text-sm font-medium border border-blue-500/30">
+                🚀 轻量安装
+              </span>
+              <span className="px-4 py-2 bg-green-500/20 text-green-400 rounded-full text-sm font-medium border border-green-500/30">
+                🔒 安全可靠
+              </span>
+              <span className="px-4 py-2 bg-purple-500/20 text-purple-400 rounded-full text-sm font-medium border border-purple-500/30">
+                ⚡ 即开即用
+              </span>
             </div>
           </div>
 
-          {/* macOS 下载 */}
-          <div className="bg-gray-800/50 rounded-2xl p-8 border border-gray-700 hover:border-gray-600 transition-all duration-300">
-            <div className="flex items-center mb-6">
-              <div className="w-12 h-12 bg-gray-600 rounded-xl flex items-center justify-center mr-4">
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                </svg>
+          {/* 下载按钮 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Windows 下载 */}
+            <div className="group bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/50 hover:border-blue-500/50 transition-all duration-500 hover:transform hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/20">
+              <div className="flex items-center mb-8">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center mr-6 group-hover:from-blue-500 group-hover:to-blue-600 transition-all duration-300 shadow-lg">
+                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.949-1.31L24 0v11.4H10.949V2.139zM0 12.6h9.75v9.451L0 20.699V12.6zm10.949 0H24V24l-13.051-1.339V12.6z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-300 transition-colors">Windows</h3>
+                  <p className="text-gray-300">支持 Windows 10/11</p>
+                  <div className="flex items-center mt-2 text-sm text-gray-400">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white">macOS</h3>
-                <p className="text-gray-400">支持 macOS 10.15+</p>
-              </div>
+              
+              <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-8 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl group-hover:shadow-blue-500/25">
+                <div className="flex items-center justify-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  立即下载 Windows 版
+                </div>
+              </button>
             </div>
-            
-            <button className="w-full bg-gray-700 text-white font-semibold py-4 px-6 rounded-lg hover:bg-gray-600 transition-all duration-200 mb-4">
-              下载 macOS 版本
-            </button>
-            
-            <div className="text-sm text-gray-500 space-y-1">
-              <p>• 文件大小: ~90 MB</p>
-              <p>• 支持 Intel & Apple Silicon</p>
-              <p>• 已签名和公证</p>
-            </div>
-          </div>
-        </div>
 
-        {/* 系统要求 */}
-        <div className="bg-gray-800/30 rounded-2xl p-8 border border-gray-700 mb-16">
-          <h2 className="text-2xl font-bold text-white mb-6">系统要求</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.949-1.31L24 0v11.4H10.949V2.139zM0 12.6h9.75v9.451L0 20.699V12.6zm10.949 0H24V24l-13.051-1.339V12.6z"/>
-                </svg>
-                Windows
-              </h3>
-              <ul className="text-gray-400 space-y-2">
-                <li>• Windows 10 (版本 1903) 或更高版本</li>
-                <li>• 4GB RAM (推荐 8GB)</li>
-                <li>• 500MB 可用磁盘空间</li>
-                <li>• 网络连接</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                </svg>
-                macOS
-              </h3>
-              <ul className="text-gray-400 space-y-2">
-                <li>• macOS 10.15 (Catalina) 或更高版本</li>
-                <li>• 4GB RAM (推荐 8GB)</li>
-                <li>• 500MB 可用磁盘空间</li>
-                <li>• 网络连接</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* 安装指南 */}
-        <div className="bg-gray-800/30 rounded-2xl p-8 border border-gray-700 mb-16">
-          <h2 className="text-2xl font-bold text-white mb-6">安装指南</h2>
-          
-          <div className="space-y-6">
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4 mt-1">
-                1
+            {/* macOS 下载 */}
+            <div className="group bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm rounded-3xl p-8 border border-gray-700/50 hover:border-gray-500/50 transition-all duration-500 hover:transform hover:scale-105 hover:shadow-2xl hover:shadow-gray-500/20">
+              <div className="flex items-center mb-8">
+                <div className="w-16 h-16 bg-gradient-to-r from-gray-600 to-gray-700 rounded-2xl flex items-center justify-center mr-6 group-hover:from-gray-500 group-hover:to-gray-600 transition-all duration-300 shadow-lg">
+                  <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-gray-300 transition-colors">macOS</h3>
+                  <p className="text-gray-300">支持 macOS</p>
+                  <div className="flex items-center mt-2 text-sm text-gray-400">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">下载安装包</h3>
-                <p className="text-gray-400">选择适合你操作系统的版本并下载</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4 mt-1">
-                2
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">运行安装程序</h3>
-                <p className="text-gray-400">双击下载的文件，按照提示完成安装</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4 mt-1">
-                3
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">首次启动</h3>
-                <p className="text-gray-400">启动应用程序，完成初始设置和登录</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4 mt-1">
-                4
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">开始使用</h3>
-                <p className="text-gray-400">配置你的偏好设置，开始你的面试准备</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 更新日志 */}
-        <div className="bg-gray-800/30 rounded-2xl p-8 border border-gray-700">
-          <h2 className="text-2xl font-bold text-white mb-6">更新日志</h2>
-          
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center mb-3">
-                <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-medium mr-3">
-                  {version}
-                </span>
-                <span className="text-gray-400">{releaseDate}</span>
-              </div>
-              <ul className="text-gray-300 space-y-2 ml-4">
-                <li>• 新增多种AI模型支持，提升回答准确性</li>
-                <li>• 优化用户界面，提升使用体验</li>
-                <li>• 修复已知问题，提升稳定性</li>
-                <li>• 增加快捷键自定义功能</li>
-              </ul>
+              
+              <button className="w-full bg-gradient-to-r from-gray-700 to-gray-800 text-white font-bold py-4 px-8 rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl group-hover:shadow-gray-500/25">
+                <div className="flex items-center justify-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  立即下载 macOS 版
+                </div>
+              </button>
             </div>
           </div>
         </div>

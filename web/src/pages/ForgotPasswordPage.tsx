@@ -172,7 +172,7 @@ export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPage
             重置密码
           </h1>
           <p className="text-gray-400 text-sm">
-            Interview Code Overlay
+            QuizCoze
           </p>
         </div>
 

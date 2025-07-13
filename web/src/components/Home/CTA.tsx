@@ -6,11 +6,11 @@ const CTA: React.FC = () => {
     <section className="py-20 bg-gradient-to-r from-blue-900/20 to-purple-900/20">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-          准备好提升你的面试表现了吗？
+          准备好提升你的笔试表现了吗？
         </h2>
         
         <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-          加入数万名开发者的行列，使用AI助手在技术面试中脱颖而出
+          加入数万名开发者的行列，使用AI助手在技术笔试中脱颖而出
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
@@ -50,8 +50,8 @@ const CTA: React.FC = () => {
             <div className="w-12 h-12 bg-green-600 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
               3
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">开始面试</h3>
-            <p className="text-gray-400">在面试中获得实时AI帮助</p>
+            <h3 className="text-lg font-semibold text-white mb-2">开始笔试</h3>
+            <p className="text-gray-400">在笔试中获得实时AI帮助</p>
           </div>
         </div>
       </div>
