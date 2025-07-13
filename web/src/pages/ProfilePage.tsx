@@ -76,6 +76,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [currentTab, setCurrentTab] = useState('config')
+  // 添加积分余额状态
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+  const [creditLoading, setCreditLoading] = useState(false)
   // 添加积分交易记录状态
   const [transactions, setTransactions] = useState<PointTransaction[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
@@ -132,6 +135,7 @@ export default function ProfilePage() {
     if (!authLoading && hasValidSession) {
       console.log('🔄 ProfilePage: 开始加载初始数据');
       loadInitialData()
+      loadCreditBalance()
     } else {
       console.log('⏳ ProfilePage: 等待认证状态确认', { authLoading, hasValidSession });
     }
@@ -418,12 +422,35 @@ export default function ProfilePage() {
         }
         setCurrentPage(page);
       }
+      
+      // 加载交易记录后刷新积分余额
+      loadCreditBalance();
     } catch (error) {
       console.error('加载交易记录失败:', error);
     } finally {
       setTransactionsLoading(false);
     }
   };
+
+  const loadCreditBalance = async () => {
+    try {
+      setCreditLoading(true)
+      console.log('🔄 开始加载积分余额...')
+      const result = await clientCreditsApi.getBalance()
+      console.log('📊 积分余额API响应:', result)
+      if (result.success && result.data) {
+        setCreditBalance(result.data.credits)
+        console.log('✅ 积分余额加载成功:', result.data.credits)
+      } else {
+        console.warn('⚠️ 积分余额API返回格式异常:', result)
+      }
+    } catch (error) {
+      console.error('❌ 加载积分余额失败:', error)
+      setMessage('加载积分余额失败')
+    } finally {
+      setCreditLoading(false)
+    }
+  }
 
   const loadInitialData = async () => {
     try {
@@ -563,7 +590,30 @@ export default function ProfilePage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold mb-2">欢迎，{user?.username || '用户'}！</h1>
-            <p className="text-gray-400">{user?.email || ''}</p>
+            <p className="text-gray-400 mb-2">{user?.email || ''}</p>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-300 text-sm">积分余额:</span>
+              {creditLoading ? (
+                <div className="flex items-center gap-1">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                  <span className="text-gray-400 text-sm">加载中...</span>
+                </div>
+              ) : (
+                <span className="text-blue-400 font-semibold text-lg">
+                  {creditBalance !== null ? creditBalance : '未知'}
+                </span>
+              )}
+              <button
+                onClick={loadCreditBalance}
+                disabled={creditLoading}
+                className="ml-2 p-1 text-gray-400 hover:text-blue-400 transition-colors disabled:opacity-50"
+                title="刷新积分余额"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div className="flex gap-4">
             {isAdmin && (

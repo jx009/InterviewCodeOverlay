@@ -1563,16 +1563,26 @@ app.post('/api/admin/model-configs/batch', adminAuthMiddleware, async (req, res)
 app.get('/api/client/credits', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId
+    console.log('🔍 获取积分余额 - 用户ID:', userId)
+    
     const user = await db.getUserById(userId)
+    console.log('👤 用户数据:', user ? { id: user.id, username: user.username, points: user.points } : 'null')
     
     if (!user) {
+      console.log('❌ 用户不存在')
       return res.status(404).json({ error: '用户不存在' })
     }
     
-    res.json({ 
-      credits: user.points || 0,
-      userId: userId 
-    })
+    const response = { 
+      success: true,
+      data: {
+        credits: user.points || 0
+      },
+      message: '获取积分余额成功'
+    }
+    
+    console.log('📤 API响应:', response)
+    res.json(response)
   } catch (error) {
     console.error('获取积分余额失败:', error)
     res.status(500).json({ error: '服务器错误' })

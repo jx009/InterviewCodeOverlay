@@ -215,6 +215,10 @@ async function startServer() {
     const pointsRoutes = require('./routes/points').default;
     app.use('/api/points', pointsRoutes);
     
+    // 客户端积分路由
+    const clientCreditsRoutes = require('./routes/client-credits').default;
+    app.use('/api/client/credits', clientCreditsRoutes);
+    
     // 搜题路由
     const searchRoutes = require('./routes/search').default;
     app.use('/api/search', searchRoutes);

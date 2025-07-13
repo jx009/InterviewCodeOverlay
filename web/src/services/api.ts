@@ -375,6 +375,12 @@ export const pointsApi = {
 
 // 🆕 客户端积分API (server-simple.js)
 export const clientCreditsApi = {
+  // 获取用户积分余额
+  getBalance: async () => {
+    const response = await api.get('/client/credits');
+    return response.data;
+  },
+
   // 获取用户积分交易记录
   getTransactions: async (params?: {
     limit?: number;

@@ -85,6 +85,71 @@ async function startServer() {
                 redis: 'connected'
             });
         });
+        app.get('/api/session_status', async (req, res) => {
+            try {
+                console.log('📝 收到会话状态检查请求', {
+                    headers: {
+                        'x-session-id': req.headers['x-session-id'] ? '存在' : '不存在',
+                        'authorization': req.headers.authorization ? '存在' : '不存在'
+                    }
+                });
+                const sessionId = req.headers['x-session-id'];
+                if (!sessionId) {
+                    console.log('❌ 未提供会话ID');
+                    return res.json({
+                        success: false,
+                        message: '未提供会话ID'
+                    });
+                }
+                const { SessionManager } = require('./config/redis-simple');
+                const sessionManager = new SessionManager();
+                const sessionValidation = await sessionManager.validateSession(sessionId);
+                if (!sessionValidation.valid) {
+                    console.log('❌ 会话无效', sessionValidation);
+                    return res.json({
+                        success: false,
+                        message: '会话已过期或无效'
+                    });
+                }
+                const { prisma } = require('./config/database');
+                const user = await prisma.user.findUnique({
+                    where: { id: sessionValidation.userId },
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                        createdAt: true
+                    }
+                });
+                if (!user) {
+                    console.log('❌ 用户不存在', { userId: sessionValidation.userId });
+                    return res.json({
+                        success: false,
+                        message: '用户不存在'
+                    });
+                }
+                const jwt = require('jsonwebtoken');
+                const token = jwt.sign({
+                    userId: user.id,
+                    username: user.username,
+                    email: user.email
+                }, config.security.jwtSecret, { expiresIn: '7d' });
+                console.log('✅ 会话有效，已生成token', { userId: user.id, username: user.username });
+                return res.json({
+                    success: true,
+                    user,
+                    sessionId,
+                    token
+                });
+            }
+            catch (error) {
+                console.error('❌ 会话状态检查失败:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: '服务器内部错误'
+                });
+            }
+        });
         app.get('/login', (req, res) => {
             res.sendFile(path_1.default.join(__dirname, '../public/login.html'));
         });
@@ -103,6 +168,8 @@ async function startServer() {
         app.use('/api/payment', payment_1.paymentRoutes);
         const pointsRoutes = require('./routes/points').default;
         app.use('/api/points', pointsRoutes);
+        const clientCreditsRoutes = require('./routes/client-credits').default;
+        app.use('/api/client/credits', clientCreditsRoutes);
         const searchRoutes = require('./routes/search').default;
         app.use('/api/search', searchRoutes);
         const adminRoutes = require('./routes/admin').default;
