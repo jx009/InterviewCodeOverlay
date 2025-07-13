@@ -41,7 +41,7 @@ const RechargePage: React.FC = () => {
   const { orders, pagination, loading: ordersLoading, refetch: refetchOrders } = useUserOrders(
     shouldFetchOrders ? { page: 1, limit: 10 } : undefined
   );
-  const { startPolling, stopPolling } = usePaymentPolling(currentOrder?.orderNo);
+  const { startPolling, stopPolling, order: pollingOrder } = usePaymentPolling(currentOrder?.orderNo, currentOrder || undefined);
 
   // 从URL参数获取初始状态
   useEffect(() => {
@@ -79,6 +79,30 @@ const RechargePage: React.FC = () => {
       navigate('/login');
     }
   }, [isAuthenticated, authLoading, navigate]);
+
+  // 监听轮询订单状态变化
+  useEffect(() => {
+    if (pollingOrder && currentOrder) {
+      // 检查状态是否发生变化
+      if (pollingOrder.paymentStatus !== currentOrder.paymentStatus) {
+        console.log(`🔄 订单状态变化: ${currentOrder.paymentStatus} → ${pollingOrder.paymentStatus}`);
+        
+        // 更新当前订单状态
+        setCurrentOrder(pollingOrder);
+        
+        // 触发相应的回调
+        if (pollingOrder.paymentStatus === PaymentStatus.PAID) {
+          handlePaymentSuccess(pollingOrder);
+        } else if (
+          pollingOrder.paymentStatus === PaymentStatus.FAILED ||
+          pollingOrder.paymentStatus === PaymentStatus.CANCELLED ||
+          pollingOrder.paymentStatus === PaymentStatus.EXPIRED
+        ) {
+          handlePaymentFailed(pollingOrder);
+        }
+      }
+    }
+  }, [pollingOrder, currentOrder]);
 
   // 如果认证状态正在加载中，显示加载动画
   if (authLoading) {
@@ -125,21 +149,31 @@ const RechargePage: React.FC = () => {
       const response = await createOrder(orderData);
       
       if (response && response.data) {
-        setCurrentOrder({
+        const selectedPackage = packages.find(p => p.id === packageId);
+        
+        if (!selectedPackage) {
+          console.error('找不到选中的套餐');
+          alert('选中的套餐不存在，请重新选择');
+          return;
+        }
+        
+        const orderData = {
           id: 0, // 临时ID
           orderNo: response.data.orderNo,
           outTradeNo: response.data.orderNo,
           userId: 0,
           packageId,
-          amount: packages.find(p => p.id === packageId)?.amount || 0,
-          points: packages.find(p => p.id === packageId)?.points || 0,
-          bonusPoints: packages.find(p => p.id === packageId)?.bonusPoints || 0,
+          amount: response.data.amount,
+          points: selectedPackage.points,
+          bonusPoints: selectedPackage.bonusPoints || 0,
           paymentMethod,
           paymentStatus: PaymentStatus.PENDING,
           expiredAt: response.data.expireTime,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        });
+        };
+        
+        setCurrentOrder(orderData);
         
         setPaymentCodeUrl(response.data.qrCodeUrl || '');
         setCurrentStep('payment');
@@ -154,12 +188,27 @@ const RechargePage: React.FC = () => {
   };
 
   // 处理支付成功
-  const handlePaymentSuccess = (_order: PaymentOrder) => {
+  const handlePaymentSuccess = (order: PaymentOrder) => {
     stopPolling();
-    alert('支付成功！积分已充值到您的账户');
+    console.log('🎉 支付成功处理:', order);
+    
+    // 显示成功提示
+    alert(`支付成功！已为您充值 ${(order.points || 0) + (order.bonusPoints || 0)} 积分`);
+    
+    // 清空当前支付状态
+    setCurrentOrder(null);
+    setPaymentCodeUrl('');
+    
+    // 切换到订单记录页面
     setCurrentStep('orders');
     updateSearchParams('orders');
+    
+    // 刷新订单列表
     refetchOrders();
+    
+    // 可以触发用户数据更新（如果有用户context的话）
+    // TODO: 如果有用户积分状态，可以在这里更新
+    console.log('✅ 支付成功流程处理完成');
   };
 
   // 处理支付失败

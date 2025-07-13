@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 // @ts-ignore
 import * as QRCode from 'qrcode';
 import { PaymentOrder, PaymentStatus, PaymentStatusMap } from '../../types/payment';
+import { rechargeApi } from '../../services/rechargeApi';
 
 interface PaymentQRCodeProps {
   order: PaymentOrder;
@@ -22,6 +23,8 @@ const PaymentQRCode: React.FC<PaymentQRCodeProps> = ({
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string>('');
+  const [isPolling, setIsPolling] = useState(false);
+  const [currentOrderStatus, setCurrentOrderStatus] = useState(order.paymentStatus);
 
   // 生成二维码
   useEffect(() => {
@@ -50,7 +53,17 @@ const PaymentQRCode: React.FC<PaymentQRCodeProps> = ({
   // 计算剩余时间
   useEffect(() => {
     const calculateTimeLeft = () => {
+      if (!order.expiredAt) {
+        setTimeLeft(0);
+        return;
+      }
+      
       const expiredTime = new Date(order.expiredAt).getTime();
+      if (isNaN(expiredTime)) {
+        setTimeLeft(0);
+        return;
+      }
+      
       const now = Date.now();
       const remaining = Math.max(0, Math.floor((expiredTime - now) / 1000));
       setTimeLeft(remaining);
@@ -64,27 +77,83 @@ const PaymentQRCode: React.FC<PaymentQRCodeProps> = ({
 
   // 格式化时间显示
   const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds < 0) {
+      return '00:00';
+    }
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  // 轮询支付状态
+  useEffect(() => {
+    if (currentOrderStatus !== PaymentStatus.PENDING) return;
+
+    const pollPaymentStatus = async () => {
+      try {
+        const response = await rechargeApi.getOrderStatus(order.orderNo);
+        console.log('🔍 支付状态轮询响应:', response);
+        
+        if (response.success && response.data) {
+          const newStatus = response.data.status;
+          
+          if (newStatus !== currentOrderStatus) {
+            console.log(`🔄 订单状态变化: ${currentOrderStatus} → ${newStatus}`);
+            setCurrentOrderStatus(newStatus as PaymentStatus);
+            
+            // 更新订单对象
+            const updatedOrder = {
+              ...order,
+              paymentStatus: newStatus as PaymentStatus,
+              paymentTime: response.data.paymentTime,
+              points: response.data.points || order.points
+            };
+            
+            if (newStatus === 'PAID') {
+              console.log('🎉 检测到支付成功！');
+              onPaymentSuccess?.(updatedOrder);
+            } else if (newStatus === 'FAILED' || newStatus === 'EXPIRED') {
+              console.log('❌ 检测到支付失败或过期');
+              onPaymentFailed?.(updatedOrder);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('查询支付状态失败:', error);
+      }
+    };
+
+    setIsPolling(true);
+    pollPaymentStatus(); // 立即执行一次
+    
+    const interval = setInterval(pollPaymentStatus, 3000); // 每3秒查询一次
+
+    return () => {
+      clearInterval(interval);
+      setIsPolling(false);
+    };
+  }, [order.orderNo, currentOrderStatus, onPaymentSuccess, onPaymentFailed]);
+
   // 监听支付状态变化
   useEffect(() => {
-    if (order.paymentStatus === PaymentStatus.PAID && onPaymentSuccess) {
+    if (currentOrderStatus === PaymentStatus.PAID && onPaymentSuccess) {
       onPaymentSuccess(order);
     } else if (
-      (order.paymentStatus === PaymentStatus.FAILED ||
-       order.paymentStatus === PaymentStatus.CANCELLED ||
-       order.paymentStatus === PaymentStatus.EXPIRED) &&
+      (currentOrderStatus === PaymentStatus.FAILED ||
+       currentOrderStatus === PaymentStatus.CANCELLED ||
+       currentOrderStatus === PaymentStatus.EXPIRED) &&
       onPaymentFailed
     ) {
       onPaymentFailed(order);
     }
-  }, [order.paymentStatus, order, onPaymentSuccess, onPaymentFailed]);
+  }, [currentOrderStatus, order, onPaymentSuccess, onPaymentFailed]);
 
-  const isPending = order.paymentStatus === PaymentStatus.PENDING;
-  const isExpired = timeLeft === 0 || order.paymentStatus === PaymentStatus.EXPIRED;
+  const isPending = currentOrderStatus === PaymentStatus.PENDING;
+  // 只有当订单状态为EXPIRED，或者时间计算完成且真正为0时才认为过期
+  const isExpired = currentOrderStatus === PaymentStatus.EXPIRED || (timeLeft === 0 && order.expiredAt);
+  
+  
+  
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 max-w-md mx-auto">
@@ -93,8 +162,8 @@ const PaymentQRCode: React.FC<PaymentQRCodeProps> = ({
         <h3 className="text-xl font-bold text-gray-900 mb-2">微信扫码支付</h3>
         <div className="text-sm text-gray-600 space-y-1">
           <p>订单号: {order.orderNo}</p>
-          <p>支付金额: <span className="font-semibold text-red-600">¥{order.amount}</span></p>
-          <p>获得积分: <span className="font-semibold text-blue-600">{order.points + order.bonusPoints}</span></p>
+          <p>支付金额: <span className="font-semibold text-red-600">¥{order.amount ? order.amount.toFixed(2) : '0.00'}</span></p>
+          <p>获得积分: <span className="font-semibold text-blue-600">{(order.points || 0) + (order.bonusPoints || 0)}</span></p>
         </div>
       </div>
 
@@ -132,10 +201,13 @@ const PaymentQRCode: React.FC<PaymentQRCodeProps> = ({
         <div className="mt-4 text-center">
           <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
             isPending ? 'bg-yellow-100 text-yellow-800' : 
-            order.paymentStatus === PaymentStatus.PAID ? 'bg-green-100 text-green-800' :
+            currentOrderStatus === PaymentStatus.PAID ? 'bg-green-100 text-green-800' :
             'bg-red-100 text-red-800'
           }`}>
-            {PaymentStatusMap[order.paymentStatus]}
+            {PaymentStatusMap[currentOrderStatus]}
+            {isPolling && isPending && (
+              <div className="ml-2 animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+            )}
           </div>
         </div>
       </div>
@@ -181,17 +253,40 @@ const PaymentQRCode: React.FC<PaymentQRCodeProps> = ({
               取消支付
             </button>
             <button
-              onClick={() => window.location.reload()}
+              onClick={async () => {
+                try {
+                  console.log('🔄 手动刷新支付状态...');
+                  const response = await rechargeApi.syncOrderStatus(order.orderNo);
+                  console.log('✅ 手动刷新结果:', response);
+                  
+                  if (response.success && response.data) {
+                    const newStatus = response.data.status;
+                    setCurrentOrderStatus(newStatus as PaymentStatus);
+                    
+                    if (newStatus === 'PAID') {
+                      const updatedOrder = {
+                        ...order,
+                        paymentStatus: newStatus as PaymentStatus,
+                        paymentTime: response.data.paymentTime
+                      };
+                      onPaymentSuccess?.(updatedOrder);
+                    }
+                  }
+                } catch (error) {
+                  console.error('手动刷新失败:', error);
+                  alert('刷新失败，请重试');
+                }
+              }}
               className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
             >
-              刷新状态
+              强制刷新
             </button>
           </>
         )}
       </div>
 
       {/* 支付成功提示 */}
-      {order.paymentStatus === PaymentStatus.PAID && (
+      {currentOrderStatus === PaymentStatus.PAID && (
         <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center">
             <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">

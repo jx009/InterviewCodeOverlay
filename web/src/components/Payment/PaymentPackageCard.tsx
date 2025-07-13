@@ -41,6 +41,7 @@ const PaymentPackageCard: React.FC<PaymentPackageCardProps> = ({
         relative bg-white rounded-lg border-2 p-6 cursor-pointer transition-all duration-200 hover:shadow-lg
         ${selected ? 'border-blue-500 shadow-md' : 'border-gray-200 hover:border-gray-300'}
         ${pkg.isRecommended ? 'ring-2 ring-orange-200' : ''}
+        ${pkg.id === 999 ? 'border-green-300 bg-green-50' : ''}
         ${loading ? 'opacity-50 cursor-not-allowed' : ''}
       `}
       onClick={handleCardClick}
@@ -50,6 +51,15 @@ const PaymentPackageCard: React.FC<PaymentPackageCardProps> = ({
         <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
           <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
             推荐
+          </span>
+        </div>
+      )}
+
+      {/* 测试套餐标签 */}
+      {pkg.id === 999 && (
+        <div className="absolute -top-3 right-4">
+          <span className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+            🧪 测试
           </span>
         </div>
       )}
