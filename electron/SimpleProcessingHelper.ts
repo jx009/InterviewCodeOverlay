@@ -639,47 +639,61 @@ export class SimpleProcessingHelper {
       }
 
       const promptText = `
-为以下编程题目生成详细的解决方案：
+请为以下编程题目提供最优解决方案：
 
-题目描述：
+【题目描述】
 ${problemInfo.problem_statement}
 
-约束条件：
-${problemInfo.constraints || "未提供具体约束条件。"}
+【约束条件】
+${problemInfo.constraints || "未提供具体约束条件"}
 
-示例输入：
-${problemInfo.example_input || "未提供示例输入。"}
+【示例输入】
+${problemInfo.example_input || "未提供示例输入"}
 
-示例输出：
-${problemInfo.example_output || "未提供示例输出。"}
+【示例输出】  
+${problemInfo.example_output || "未提供示例输出"}
 
-编程语言：${language}
+【编程语言】${language}
 
-请按照以下格式提供回复：
-1. 代码：一个完整的ACM竞赛模式的${language}实现
-2. 解题思路：关键洞察和方法推理的要点列表
-3. 时间复杂度：O(X)格式，并提供详细解释（至少2句话）
-4. 空间复杂度：O(X)格式，并提供详细解释（至少2句话）
+**解决方案要求：**
+1. 仔细分析题目要求，确保理解正确
+2. 选择最合适的算法和数据结构
+3. 代码必须能正确处理所有边界情况
+4. 优化时间和空间复杂度
 
-**重要的代码格式要求：**
-- 必须生成完整的ACM竞赛编程模式代码
-- 对于Java语言，必须使用 "public class Main" 作为主类名
-- 必须使用标准输入读取所有数据，不要使用预定义的变量或硬编码的测试数据
-- 输入处理必须严格按照题目描述的输入格式来实现
-- 代码必须是完整的、可以直接复制粘贴到在线判题系统运行的格式
-- 包含适当的导入语句和必要的库引用
-`
+**回复格式：**
+
+**解题思路：**
+- [分析思路1]
+- [分析思路2]
+- [核心算法]
+
+**代码实现：**
+\`\`\`${language}
+[完整的ACM竞赛格式代码]
+\`\`\`
+
+**复杂度分析：**
+时间复杂度：O(X) - [详细解释]
+空间复杂度：O(X) - [详细解释]
+
+**代码要求：**
+- 完整的ACM竞赛格式（包含main函数和输入输出处理）
+- Java语言使用"public class Main"
+- 严格按照题目的输入输出格式
+- 包含必要的导入语句
+- 代码可直接运行，无需修改`
 
       let solutionResponse
       try {
         solutionResponse = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: [
-            { role: "system", content: "你是一位专业的编程面试助手。提供清晰、最优的解决方案和详细解释。" },
+            { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。" },
             { role: "user", content: promptText }
           ],
-          max_tokens: 4000,
-          temperature: 0.2
+          max_tokens: 6000,
+          temperature: 0.1
         }, { signal })
         
         console.log('✅ 编程题AI调用成功')
@@ -813,27 +827,29 @@ ${q.options.join('\n')}
 
 ${questionsText}
 
-**要求：**
-1. 对每道题进行分析并给出答案
-2. 提供解题思路和推理过程
-3. 答案格式：题号 - 答案选项（如：1 - A）
+**重要要求：**
+1. 必须严格按照指定格式回复
+2. 答案部分必须包含所有题目的答案
+3. 每个答案必须明确标注题号和选项字母
 
-请按照以下格式回复：
+**回复格式（请严格遵循）：**
 
 **答案：**
 题目1 - A
 题目2 - B
-...
+题目3 - C
+(继续列出所有题目的答案...)
 
 **解题思路：**
-1. 题目1分析：...
-2. 题目2分析：...
-...
+题目1分析：[详细分析过程]
+题目2分析：[详细分析过程]
+题目3分析：[详细分析过程]
+(继续列出所有题目的分析...)
 
 **整体思路：**
-- 关键点1
-- 关键点2
-...
+- 关键知识点1
+- 关键知识点2
+- 解题方法总结
 `
 
       console.log('🔄 发送选择题请求到AI...')
@@ -862,27 +878,85 @@ ${questionsText}
 
       const responseContent = solutionResponse.choices[0].message.content
       console.log('✅ 选择题AI响应完成')
+      console.log('📝 AI原始响应内容:')
+      console.log('='.repeat(50))
+      console.log(responseContent)
+      console.log('='.repeat(50))
       
       // 解析答案
       console.log('🔍 开始解析选择题答案...')
       const answers: Array<{ question_number: string; answer: string; reasoning: string }> = []
       
-      // 提取答案部分
+      // 提取答案部分 - 改进的解析逻辑
       const answerMatch = responseContent.match(/答案[:：]?\s*([\s\S]*?)(?=\n\s*(?:解题思路|整体思路|$))/i)
       if (answerMatch) {
         const answerLines = answerMatch[1].split('\n').filter(line => line.trim())
         
         for (const line of answerLines) {
-          const match = line.match(/题目(\d+)\s*[-－]\s*([A-D])/i)
+          // 支持多种答案格式的正则表达式
+          const patterns = [
+            /题目(\d+)\s*[-－:：]\s*([A-D])/i,
+            /(\d+)\s*[-－:：]\s*([A-D])/i,
+            /题(\d+)\s*[-－:：]\s*([A-D])/i,
+            /第?(\d+)题?\s*[-－:：]?\s*答案?\s*[:：]?\s*([A-D])/i,
+            /(\d+)\.\s*([A-D])/i
+          ]
+          
+          let match = null
+          for (const pattern of patterns) {
+            match = line.match(pattern)
+            if (match) break
+          }
+          
           if (match) {
             const questionNumber = match[1]
             const answer = match[2].toUpperCase()
+            
+            // 尝试从解题思路中提取对应的推理过程
+            let reasoning = `题目${questionNumber}的解答分析`
+            const reasoningPattern = new RegExp(`题目${questionNumber}[分析：:]*([^\\n]*(?:\\n(?!\\d+\\.|题目|第)[^\\n]*)*)`, 'i')
+            const reasoningMatch = responseContent.match(reasoningPattern)
+            if (reasoningMatch && reasoningMatch[1]) {
+              reasoning = reasoningMatch[1].trim().replace(/^[：:]\s*/, '')
+            }
+            
             answers.push({
               question_number: questionNumber,
               answer: answer,
-              reasoning: `题目${questionNumber}的解答分析`
+              reasoning: reasoning
             })
           }
+        }
+      }
+      
+      // 如果没有解析到答案，尝试备用方案：从整个响应中查找答案模式
+      if (answers.length === 0) {
+        console.log('⚠️ 主要解析未找到答案，尝试备用解析...')
+        
+        // 在整个响应中搜索答案模式
+        const fullTextPatterns = [
+          /(?:题目|第)?(\d+)(?:题)?[：:\s]*([A-D])(?:\s|$|\.)/gi,
+          /(\d+)\s*[-)]\s*([A-D])/gi,
+          /[（(](\d+)[）)]\s*([A-D])/gi
+        ]
+        
+        for (const pattern of fullTextPatterns) {
+          const matches = [...responseContent.matchAll(pattern)]
+          for (const match of matches) {
+            const questionNumber = match[1]
+            const answer = match[2].toUpperCase()
+            
+            // 避免重复添加
+            if (!answers.find(a => a.question_number === questionNumber)) {
+              answers.push({
+                question_number: questionNumber,
+                answer: answer,
+                reasoning: `从AI回复中提取的答案`
+              })
+            }
+          }
+          
+          if (answers.length > 0) break
         }
       }
       
@@ -1277,7 +1351,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
         model: model,
         messages: messages,
         max_tokens: 10,
-        temperature: 0.1
+        temperature: 0.0
       }, { signal })
 
       const result = response.choices[0].message.content.trim().toLowerCase()
@@ -1343,24 +1417,49 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const messages = [
         {
           role: "system" as const,
-          content: `你是一个编程题目解释助手。请严格按照要求分析编程题目的截图，提取所有相关信息。
+          content: `你是一个专业的编程题目分析专家。请仔细阅读截图中的每一个字，准确提取编程题目的完整信息。
 
-**重要要求：**
-1. 必须只返回纯JSON格式，不要任何额外的文字、解释或markdown标记
-2. JSON必须包含以下字段：type, problem_statement, constraints, example_input, example_output
-3. type 必须设为 "programming"
-4. 如果某个字段无法从截图中获取，请设置为空字符串
-5. 确保返回的是有效的JSON格式
+**核心要求：**
+1. 必须逐字逐句地仔细阅读截图中的所有文字内容
+2. 题目描述必须完整准确，不能遗漏任何重要信息
+3. 必须严格按照截图中的原文提取，不要自己编造或修改
+4. 如果截图模糊或文字不清楚，请在相应字段中说明"截图不清楚，无法准确识别"
 
-**示例输出格式：**
-{"type":"programming","problem_statement":"题目描述","constraints":"约束条件","example_input":"示例输入","example_output":"示例输出"}`
+**提取字段说明：**
+- problem_statement: 完整的题目描述，包括问题背景、要求解决的问题等
+- constraints: 所有约束条件，包括数据范围、时间限制、空间限制等
+- example_input: 示例输入的具体内容
+- example_output: 示例输出的具体内容
+
+**质量要求：**
+1. 题目描述必须包含足够的信息让程序员理解要解决什么问题
+2. 约束条件必须包含所有数据范围和限制
+3. 示例必须与题目描述完全对应
+4. 不要添加任何截图中没有的信息
+
+**输出格式：**
+必须只返回纯JSON格式，不要任何额外文字或markdown标记：
+{"type":"programming","problem_statement":"完整准确的题目描述","constraints":"完整的约束条件","example_input":"示例输入","example_output":"示例输出"}`
         },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const,
-              text: `从这些截图中提取编程题目详情、输入描述、输出描述以及示例，以严格的JSON格式返回。我们将使用${language}语言来解决这个问题。请确保返回的是有效的JSON格式，不要包含任何其他文本。`
+              text: `请仔细分析这些编程题目截图，准确提取以下信息：
+
+1. 完整的题目描述（不要遗漏任何细节）
+2. 所有约束条件和数据范围
+3. 完整的示例输入和输出
+
+**重要提醒：**
+- 必须逐字阅读截图内容，确保提取的题目描述完整且准确
+- 不要根据常见算法题自行补充内容
+- 严格按照截图中的原文提取，保持题目的原始表述
+- 如果截图中有多个部分，请确保都被正确识别和提取
+
+目标编程语言：${language}
+请以纯JSON格式返回结果，不要任何其他文本。`
             },
             ...imageDataList.map(data => ({
               type: "image_url" as const,
@@ -1373,8 +1472,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const response = await this.ismaqueClient.chat.completions.create({
         model: model,
         messages: messages,
-        max_tokens: 4000,
-        temperature: 0.1
+        max_tokens: 6000,
+        temperature: 0.0
       }, { signal })
 
       const responseText = response.choices[0].message.content

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useToast } from "../../contexts/toast"
 import { Screenshot } from "../../types/screenshots"
-import { supabase } from "../../lib/supabase"
 import { LanguageSelector } from "../shared/LanguageSelector"
 import { COMMAND_KEY } from "../../utils/platform"
+import { useWebAuth } from "../../hooks/useWebAuth"
 
 export interface SolutionCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
@@ -15,19 +15,6 @@ export interface SolutionCommandsProps {
   setLanguage: (language: string) => void
 }
 
-const handleSignOut = async () => {
-  try {
-    // Clear any local storage or electron-specific data first
-    localStorage.clear()
-    sessionStorage.clear()
-
-    // Then sign out from Supabase
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-  } catch (err) {
-    console.error("Error signing out:", err)
-  }
-}
 
 const SolutionCommands: React.FC<SolutionCommandsProps> = ({
   onTooltipVisibilityChange,
@@ -40,6 +27,31 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const { showToast } = useToast()
+  
+  // 🆕 使用增强认证
+  const { 
+    authenticated, 
+    user, 
+    logout: webLogout, 
+    loading: authLoading 
+  } = useWebAuth()
+
+  // 🆕 增强认证登出处理
+  const handleSignOut = async () => {
+    try {
+      showToast('正在登出...', '请稍等', 'loading');
+      const result = await webLogout();
+      
+      if (result.success) {
+        showToast('登出成功', '已成功退出登录', 'success');
+      } else {
+        showToast('登出失败', result.error || '请重试', 'error');
+      }
+    } catch (error) {
+      console.error('登出错误:', error);
+      showToast('登出失败', '网络错误，请重试', 'error');
+    }
+  }
 
   useEffect(() => {
     if (onTooltipVisibilityChange) {
@@ -71,15 +83,15 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                 const result = await window.electronAPI.toggleMainWindow()
                 if (!result.success) {
                   console.error("Failed to toggle window:", result.error)
-                  showToast("Error", "Failed to toggle window", "error")
+                  showToast("错误", "切换窗口失败", "error")
                 }
               } catch (error) {
                 console.error("Error toggling window:", error)
-                showToast("Error", "Failed to toggle window", "error")
+                showToast("错误", "切换窗口失败", "error")
               }
             }}
           >
-            <span className="text-[11px] leading-none">Show/Hide</span>
+            <span className="text-[11px] leading-none">显示/隐藏</span>
             <div className="flex gap-1">
               <button className="bg-white/10 rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
                 {COMMAND_KEY}
@@ -100,18 +112,18 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                     const result = await window.electronAPI.triggerScreenshot()
                     if (!result.success) {
                       console.error("Failed to take screenshot:", result.error)
-                      showToast("Error", "Failed to take screenshot", "error")
+                      showToast("错误", "截屏失败", "error")
                     }
                   } catch (error) {
                     console.error("Error taking screenshot:", error)
-                    showToast("Error", "Failed to take screenshot", "error")
+                    showToast("错误", "截屏失败", "error")
                   }
                 }}
               >
                 <span className="text-[11px] leading-none truncate">
                   {extraScreenshots.length === 0
-                    ? "Screenshot your code"
-                    : "Screenshot"}
+                    ? "截取你的代码"
+                    : "截屏"}
                 </span>
                 <div className="flex gap-1">
                   <button className="bg-white/10 rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
@@ -136,22 +148,22 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                           result.error
                         )
                         showToast(
-                          "Error",
-                          "Failed to process screenshots",
+                          "错误",
+                          "处理截图失败",
                           "error"
                         )
                       }
                     } catch (error) {
                       console.error("Error processing screenshots:", error)
                       showToast(
-                        "Error",
-                        "Failed to process screenshots",
+                        "错误",
+                        "处理截图失败",
                         "error"
                       )
                     }
                   }}
                 >
-                  <span className="text-[11px] leading-none">Debug</span>
+                  <span className="text-[11px] leading-none">调试</span>
                   <div className="flex gap-1">
                     <button className="bg-white/10 rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
                       {COMMAND_KEY}
@@ -173,15 +185,15 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                 const result = await window.electronAPI.triggerReset()
                 if (!result.success) {
                   console.error("Failed to reset:", result.error)
-                  showToast("Error", "Failed to reset", "error")
+                  showToast("错误", "重置失败", "error")
                 }
               } catch (error) {
                 console.error("Error resetting:", error)
-                showToast("Error", "Failed to reset", "error")
+                showToast("错误", "重置失败", "error")
               }
             }}
           >
-            <span className="text-[11px] leading-none">Start Over</span>
+            <span className="text-[11px] leading-none">重新开始</span>
             <div className="flex gap-1">
               <button className="bg-white/10 rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
                 {COMMAND_KEY}
@@ -230,7 +242,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                 <div className="p-3 text-xs bg-black/80 backdrop-blur-md rounded-lg border border-white/10 text-white/90 shadow-lg">
                   <div className="space-y-4">
                     <h3 className="font-medium whitespace-nowrap">
-                      Keyboard Shortcuts
+                      键盘快捷键
                     </h3>
                     <div className="space-y-3">
                       {/* Show/Hide - Always visible */}
@@ -246,23 +258,23 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                                 result.error
                               )
                               showToast(
-                                "Error",
-                                "Failed to toggle window",
+                                "错误",
+                                "切换窗口失败",
                                 "error"
                               )
                             }
                           } catch (error) {
                             console.error("Error toggling window:", error)
                             showToast(
-                              "Error",
-                              "Failed to toggle window",
+                              "错误",
+                              "切换窗口失败",
                               "error"
                             )
                           }
                         }}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="truncate">Toggle Window</span>
+                          <span className="truncate">切换窗口</span>
                           <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -273,7 +285,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                           </div>
                         </div>
                         <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
-                          Show or hide this window.
+                          显示或隐藏此窗口。
                         </p>
                       </div>
 
@@ -292,23 +304,23 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                                     result.error
                                   )
                                   showToast(
-                                    "Error",
-                                    "Failed to take screenshot",
+                                    "错误",
+                                    "截屏失败",
                                     "error"
                                   )
                                 }
                               } catch (error) {
                                 console.error("Error taking screenshot:", error)
                                 showToast(
-                                  "Error",
-                                  "Failed to take screenshot",
+                                  "错误",
+                                  "截屏失败",
                                   "error"
                                 )
                               }
                             }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="truncate">Take Screenshot</span>
+                              <span className="truncate">截屏</span>
                               <div className="flex gap-1 flex-shrink-0">
                                 <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                                   {COMMAND_KEY}
@@ -319,8 +331,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                               </div>
                             </div>
                             <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
-                              Capture additional parts of the question or your
-                              solution for debugging help.
+                              截取问题或解决方案的额外部分以帮助调试。
                             </p>
                           </div>
 
@@ -337,8 +348,8 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                                       result.error
                                     )
                                     showToast(
-                                      "Error",
-                                      "Failed to process screenshots",
+                                      "错误",
+                                      "处理截图失败",
                                       "error"
                                     )
                                   }
@@ -348,15 +359,15 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                                     error
                                   )
                                   showToast(
-                                    "Error",
-                                    "Failed to process screenshots",
+                                    "错误",
+                                    "处理截图失败",
                                     "error"
                                   )
                                 }
                               }}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="truncate">Debug</span>
+                                <span className="truncate">调试</span>
                                 <div className="flex gap-1 flex-shrink-0">
                                   <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                                     {COMMAND_KEY}
@@ -367,8 +378,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                                 </div>
                               </div>
                               <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
-                                Generate new solutions based on all previous and
-                                newly added screenshots.
+                                基于所有之前和新添加的截图生成新的解决方案。
                               </p>
                             </div>
                           )}
@@ -384,16 +394,16 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                               await window.electronAPI.triggerReset()
                             if (!result.success) {
                               console.error("Failed to reset:", result.error)
-                              showToast("Error", "Failed to reset", "error")
+                              showToast("错误", "重置失败", "error")
                             }
                           } catch (error) {
                             console.error("Error resetting:", error)
-                            showToast("Error", "Failed to reset", "error")
+                            showToast("错误", "重置失败", "error")
                           }
                         }}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="truncate">Start Over</span>
+                          <span className="truncate">重新开始</span>
                           <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -404,7 +414,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                           </div>
                         </div>
                         <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
-                          Start fresh with a new question.
+                          从一个新问题重新开始。
                         </p>
                       </div>
                     </div>
@@ -416,52 +426,68 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                         setLanguage={setLanguage}
                       />
 
-                      {/* 添加Web登录按钮 */}
-                      <div className="mb-3 px-2">
-                        <button
-                          className="flex items-center gap-2 w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-3 py-2 rounded text-[11px] font-medium transition-colors"
-                          onClick={() => window.electronAPI.openLink('http://localhost:3001/login')}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-3 h-3"
-                          >
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                            <polyline points="15 3 21 3 21 9" />
-                            <line x1="10" y1="14" x2="21" y2="3" />
-                          </svg>
-                          前往Web配置中心
-                        </button>
-                      </div>
-
-                      <button
-                        onClick={handleSignOut}
-                        className="flex items-center gap-2 text-[11px] text-red-400 hover:text-red-300 transition-colors w-full"
-                      >
-                        <div className="w-4 h-4 flex items-center justify-center">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-3 h-3"
-                          >
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                            <polyline points="16 17 21 12 16 7" />
-                            <line x1="21" y1="12" x2="9" y2="12" />
-                          </svg>
-                        </div>
-                        Log Out
-                      </button>
+                      {/* 用户欢迎信息和认证按钮 */}
+                      {authenticated && user ? (
+                        /* 已登录状态 - 显示欢迎信息和登出按钮 */
+                        <>
+                          {/* 用户欢迎信息 */}
+                          <div className="mb-3 px-2">
+                            <div className="flex items-center gap-2 w-full text-[11px] px-3 py-2 rounded bg-green-600/10 border border-green-600/20">
+                              <div className="w-4 h-4 flex items-center justify-center">
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="w-3 h-3 text-green-400"
+                                >
+                                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                  <circle cx="12" cy="7" r="4" />
+                                </svg>
+                              </div>
+                              <span className="text-green-400 font-medium">欢迎，{user.username}</span>
+                            </div>
+                          </div>
+                          
+                          {/* 登出按钮 */}
+                          <div className="mb-3 px-2">
+                            <button
+                                onClick={handleSignOut}
+                                disabled={authLoading}
+                                className={`flex items-center gap-2 w-full text-[11px] font-medium transition-colors px-3 py-2 rounded ${
+                                    authLoading
+                                        ? 'bg-red-600/20 text-red-400/50 cursor-not-allowed'
+                                        : 'bg-red-600/20 hover:bg-red-600/30 text-red-400'
+                                }`}
+                            >
+                              <div className="w-4 h-4 flex items-center justify-center">
+                                {authLoading ? (
+                                    <div className="w-3 h-3 border border-red-400/50 border-t-red-400 rounded-full animate-spin"></div>
+                                ) : (
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className="w-3 h-3"
+                                    >
+                                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                      <polyline points="16 17 21 12 16 7" />
+                                      <line x1="21" y1="12" x2="9" y2="12" />
+                                    </svg>
+                                )}
+                              </div>
+                              {authLoading ? '登出中...' : '登出'}
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
