@@ -146,7 +146,7 @@ export const SUPPORTED_MODELS = {
     { id: 'claude-sonnet-4-20250514', name: 'claude-4-sonnet', category: 'general' }
   ],
   gemini: [
-    { id: 'gemini-2.5-pro-deepsearch', name: 'gemini-pro-2.5', category: 'general' },
+    { id: 'gemini-2.5-pro-exp-03-25', name: 'gemini-pro-2.5', category: 'general' },
     { id: 'gemini-2.5-flash-preview-04-17', name: 'gemini-flash-2.5', category: 'general' }
   ],
   openai: [
