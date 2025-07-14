@@ -13,6 +13,7 @@ import { ResponseUtils } from './utils/response';
 import authRoutes from './routes/auth';
 import configRoutes from './routes/config';
 import inviteRoutes from './routes/invite-simple';
+import downloadRoutes from './routes/download';
 // 导入支付路由
 import { paymentRoutes } from './payment';
 
@@ -207,6 +208,7 @@ async function startServer() {
     app.use('/api/auth', authRoutes);
     app.use('/api/config', configRoutes);
     app.use('/api/invite', inviteRoutes);
+    app.use('/api/download', downloadRoutes);
     
     // 支付路由
     app.use('/api/payment', paymentRoutes);

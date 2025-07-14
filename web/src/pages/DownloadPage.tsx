@@ -1,8 +1,77 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+
+interface DownloadInfo {
+  version: string;
+  releaseDate: string;
+  platforms: {
+    windows: {
+      available: boolean;
+      filename: string;
+      size: string;
+    };
+    mac: {
+      available: boolean;
+      filename: string;
+      size: string;
+    };
+    linux: {
+      available: boolean;
+      filename: string;
+      size: string;
+    };
+  };
+}
 
 const DownloadPage: React.FC = () => {
-  const version = 'v2.1.0';
-  const releaseDate = '2024-01-15';
+  const [downloadInfo, setDownloadInfo] = useState<DownloadInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDownloadInfo();
+  }, []);
+
+  const fetchDownloadInfo = async () => {
+    try {
+      const response = await fetch('/api/download/info');
+      const data = await response.json();
+      if (data.success) {
+        setDownloadInfo(data.data);
+      }
+    } catch (error) {
+      console.error('获取下载信息失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async (platform: string) => {
+    setDownloading(platform);
+    try {
+      const response = await fetch(`/api/download/${platform}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = downloadInfo?.platforms[platform as keyof typeof downloadInfo.platforms].filename || 'interview-coder';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        alert('下载失败，请稍后重试');
+      }
+    } catch (error) {
+      console.error('下载失败:', error);
+      alert('下载失败，请稍后重试');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const version = downloadInfo?.version || 'v1.0.19';
+  const releaseDate = downloadInfo?.releaseDate || '2024-01-15';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black relative overflow-hidden">
@@ -64,16 +133,31 @@ const DownloadPage: React.FC = () => {
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
+                    {downloadInfo?.platforms.windows.available ? (
+                      <span>可用 • {downloadInfo.platforms.windows.size}</span>
+                    ) : (
+                      <span>准备中...</span>
+                    )}
                   </div>
                 </div>
               </div>
               
-              <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-8 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl group-hover:shadow-blue-500/25">
+              <button 
+                onClick={() => handleDownload('windows')}
+                disabled={!downloadInfo?.platforms.windows.available || downloading === 'windows'}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-8 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl group-hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <div className="flex items-center justify-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  立即下载 Windows 版
+                  {downloading === 'windows' ? (
+                    <svg className="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  )}
+                  {downloading === 'windows' ? '正在下载...' : '立即下载 Windows 版'}
                 </div>
               </button>
             </div>
@@ -93,16 +177,31 @@ const DownloadPage: React.FC = () => {
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
+                    {downloadInfo?.platforms.mac.available ? (
+                      <span>可用 • {downloadInfo.platforms.mac.size}</span>
+                    ) : (
+                      <span>准备中...</span>
+                    )}
                   </div>
                 </div>
               </div>
               
-              <button className="w-full bg-gradient-to-r from-gray-700 to-gray-800 text-white font-bold py-4 px-8 rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl group-hover:shadow-gray-500/25">
+              <button 
+                onClick={() => handleDownload('mac')}
+                disabled={!downloadInfo?.platforms.mac.available || downloading === 'mac'}
+                className="w-full bg-gradient-to-r from-gray-700 to-gray-800 text-white font-bold py-4 px-8 rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl group-hover:shadow-gray-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <div className="flex items-center justify-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  立即下载 macOS 版
+                  {downloading === 'mac' ? (
+                    <svg className="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  )}
+                  {downloading === 'mac' ? '正在下载...' : '立即下载 macOS 版'}
                 </div>
               </button>
             </div>

@@ -21,7 +21,7 @@ timeout /t 5 /nobreak > nul
 
 echo.
 echo 启动Web前端...
-start "Web前端" cmd /k "cd /d %~dp0web && echo 启动Web前端... && npm run dev"
+start "Web前端" cmd /k "cd /d %~dp0web && echo 启动Web前端... && npm install && npm run dev"
 
 echo.
 echo 等待服务启动...

@@ -59,7 +59,7 @@ const PORT = process.env.PORT || 3001;
 // AI模型数据
 const aiModels = [
   { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', category: 'standard' },
-  { id: 2, name: 'gemini-2.5-pro-deepsearch', displayName: 'gemini-pro-2.5', provider: 'google', category: 'standard' },
+  { id: 2, name: 'gemini-2.5-pro-exp-03-25', displayName: 'gemini-pro-2.5', provider: 'google', category: 'standard' },
   { id: 3, name: 'gemini-2.5-flash-preview-04-17', displayName: 'gemini-flash-2.5', provider: 'google', category: 'standard' },
   { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', category: 'standard' },
   { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', category: 'standard' },
