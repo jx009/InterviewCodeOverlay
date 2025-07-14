@@ -58,15 +58,13 @@ const PORT = process.env.PORT || 3001;
 
 // AI模型数据
 const aiModels = [
-  { id: 1, name: 'claude-sonnet-4-20250514-thinking', displayName: 'Claude Sonnet 4 Thinking', provider: 'anthropic', category: 'premium' },
-  { id: 2, name: 'claude-opus-4-20250514-thinking', displayName: 'Claude Opus 4 Thinking', provider: 'anthropic', category: 'premium' },
-  { id: 3, name: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', provider: 'anthropic', category: 'standard' },
-  { id: 4, name: 'gemini-2.5-flash-preview-04-17-thinking', displayName: 'Gemini 2.5 Flash Thinking', provider: 'google', category: 'premium' },
-  { id: 5, name: 'gemini-2.5-flash-preview-04-17', displayName: 'Gemini 2.5 Flash', provider: 'google', category: 'standard' },
-  { id: 6, name: 'gemini-2.5-pro-preview-06-05', displayName: 'Gemini 2.5 Pro', provider: 'google', category: 'standard' },
-  { id: 7, name: 'gemini-2.5-pro-preview-06-05-thinking', displayName: 'Gemini 2.5 Pro Thinking', provider: 'google', category: 'premium' },
-  { id: 8, name: 'chatgpt-4o-latest', displayName: 'ChatGPT 4o Latest', provider: 'openai', category: 'standard' },
-  { id: 9, name: 'o3-mini', displayName: 'GPT o3 Mini', provider: 'openai', category: 'premium' }
+  { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', category: 'standard' },
+  { id: 2, name: 'gemini-2.5-pro-deepsearch', displayName: 'gemini-pro-2.5', provider: 'google', category: 'standard' },
+  { id: 3, name: 'gemini-2.5-flash-preview-04-17', displayName: 'gemini-flash-2.5', provider: 'google', category: 'standard' },
+  { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', category: 'standard' },
+  { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', category: 'standard' },
+  { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', category: 'premium' },
+  { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', category: 'standard' }
 ];
 
 // 🆕 增强认证相关配置

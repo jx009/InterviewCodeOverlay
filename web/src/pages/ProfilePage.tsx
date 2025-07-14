@@ -455,15 +455,72 @@ export default function ProfilePage() {
   const loadInitialData = async () => {
     try {
       setLoading(true)
-      const [configData, modelsData, languagesData] = await Promise.all([
-        configApi.getConfig(),
-        configApi.getAIModels(),
-        configApi.getLanguages()
-      ])
       
-      setConfig(configData)
-      setAiModels(modelsData)
-      setLanguages(languagesData)
+      // 首先设置默认的模型数据
+      const defaultModels = [
+        { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
+        { id: 2, name: 'gemini-2.5-pro-deepsearch', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
+        { id: 3, name: 'gemini-2.5-flash-preview-04-17', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
+        { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
+        { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
+        { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
+        { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
+      ]
+      
+      const defaultLanguages = ['python', 'javascript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust', 'typescript', 'kotlin', 'swift', 'php', 'ruby', 'scala']
+      
+      // 首先设置默认数据
+      setAiModels(defaultModels)
+      setLanguages(defaultLanguages)
+      
+      // 尝试获取配置和更新的数据
+      try {
+        const [configData, modelsData, languagesData] = await Promise.all([
+          configApi.getConfig().catch(() => null),
+          configApi.getAIModels().catch(() => null),
+          configApi.getLanguages().catch(() => null)
+        ])
+        
+        if (configData) {
+          setConfig(configData)
+        } else {
+          // 如果配置获取失败，使用默认配置
+          setConfig({
+            aiModel: 'claude-sonnet-4-20250514',
+            programmingModel: 'claude-sonnet-4-20250514',
+            multipleChoiceModel: 'claude-sonnet-4-20250514',
+            language: 'python',
+            theme: 'system',
+            shortcuts: {
+              takeScreenshot: 'Ctrl+Shift+S',
+              openQueue: 'Ctrl+Shift+Q',
+              openSettings: 'Ctrl+Shift+P'
+            },
+            display: {
+              opacity: 1,
+              position: 'top-right',
+              autoHide: false,
+              hideDelay: 3000
+            },
+            processing: {
+              autoProcess: false,
+              saveScreenshots: true,
+              compressionLevel: 0.8
+            }
+          })
+        }
+        
+        if (modelsData && modelsData.length > 0) {
+          setAiModels(modelsData)
+        }
+        
+        if (languagesData && languagesData.length > 0) {
+          setLanguages(languagesData)
+        }
+      } catch (apiError) {
+        console.error('API调用失败，使用默认数据:', apiError)
+        // 已经设置了默认数据，所以不需要额外处理
+      }
     } catch (error) {
       console.error('Failed to load initial data:', error)
       setMessage('加载数据失败')

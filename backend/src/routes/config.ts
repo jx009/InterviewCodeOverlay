@@ -62,8 +62,8 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
       const defaultConfig = await prisma.userConfig.create({
         data: {
           userId: req.user!.userId,
-          programmingModel: 'claude-3-5-sonnet-20241022',
-          multipleChoiceModel: 'claude-3-5-sonnet-20241022',
+          programmingModel: 'claude-sonnet-4-20250514',
+          multipleChoiceModel: 'claude-sonnet-4-20250514',
           selectedProvider: 'claude',
           extractionModel: 'claude-sonnet-4-20250514',
           solutionModel: 'claude-sonnet-4-20250514',
@@ -153,8 +153,8 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
       update: updateData,
       create: {
         userId: req.user!.userId,
-        programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
-        multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
+        programmingModel: updateData.programmingModel || 'claude-sonnet-4-20250514',
+        multipleChoiceModel: updateData.multipleChoiceModel || 'claude-sonnet-4-20250514',
         selectedProvider: updateData.selectedProvider || 'claude',
         extractionModel: updateData.extractionModel || 'claude-sonnet-4-20250514',
         solutionModel: updateData.solutionModel || 'claude-sonnet-4-20250514',
@@ -188,53 +188,32 @@ router.put('/', authenticateToken, configValidation, async (req: AuthenticatedRe
 // 获取支持的AI模型列表
 router.get('/models', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // 从数据库获取活跃的模型列表
-    const models = await prisma.aIModel.findMany({
-      where: { isActive: true },
-      orderBy: [
-        { provider: 'asc' },
-        { priority: 'desc' },
-        { name: 'asc' }
-      ]
-    });
+    // 直接返回我们配置的模型列表，使用新的映射规则
+    const modelMapping = {
+      'claude-sonnet-4-20250514': 'claude-4-sonnet',
+      'gemini-2.5-pro-deepsearch': 'gemini-pro-2.5',
+      'gemini-2.5-flash-preview-04-17': 'gemini-flash-2.5',
+      'gpt-4o': 'gpt-4o',
+      'gpt-4o-mini': 'gpt-4o-mini',
+      'o4-mini-high-all': 'o4-mini-high',
+      'o4-mini-all': 'o4-mini'
+    };
 
-    // 如果数据库中没有模型，返回默认配置
-    if (models.length === 0) {
-      const defaultModels = Object.entries(SUPPORTED_MODELS).flatMap(([provider, modelList]) =>
-        modelList.map(model => ({
-          id: model.id,
-          modelId: model.id,
-          name: model.name,
-          provider: provider as 'claude' | 'gemini' | 'openai',
-          category: model.category,
-          isActive: true,
-          priority: 0
-        }))
-      );
+    const defaultModels = Object.entries(SUPPORTED_MODELS).flatMap(([provider, modelList]) =>
+      modelList.map(model => ({
+        id: model.id,
+        modelId: model.id,
+        name: model.id,
+        displayName: modelMapping[model.id] || model.name,
+        provider: provider as 'claude' | 'gemini' | 'openai',
+        category: model.category,
+        isActive: true,
+        priority: 0,
+        description: `${modelMapping[model.id] || model.name} - ${provider}提供的AI模型`
+      }))
+    );
 
-      return ResponseUtils.success(res, {
-        models: defaultModels,
-        providers: ['claude', 'gemini', 'openai']
-      });
-    }
-
-    // 按提供商分组
-    const groupedModels = models.reduce((acc, model) => {
-      if (!acc[model.provider]) {
-        acc[model.provider] = [];
-      }
-      acc[model.provider].push({
-        id: model.modelId,
-        name: model.name,
-        category: model.category
-      });
-      return acc;
-    }, {} as Record<string, Array<{ id: string; name: string; category: string }>>);
-
-    ResponseUtils.success(res, {
-      models: groupedModels,
-      providers: Object.keys(groupedModels)
-    });
+    ResponseUtils.success(res, defaultModels);
 
   } catch (error) {
     console.error('获取模型列表错误:', error);
@@ -256,8 +235,8 @@ router.get('/languages', authenticateToken, async (req: AuthenticatedRequest, re
 router.post('/reset', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const defaultConfig = {
-      programmingModel: 'claude-3-5-sonnet-20241022',
-      multipleChoiceModel: 'claude-3-5-sonnet-20241022',
+      programmingModel: 'claude-sonnet-4-20250514',
+      multipleChoiceModel: 'claude-sonnet-4-20250514',
       selectedProvider: 'claude',
       extractionModel: 'claude-sonnet-4-20250514',
       solutionModel: 'claude-sonnet-4-20250514',
@@ -319,9 +298,9 @@ router.get('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
       const defaultConfig = await prisma.userConfig.create({
         data: {
           userId: parseInt(userId),
-          programmingModel: 'claude-3-5-sonnet-20241022',
-          multipleChoiceModel: 'claude-3-5-sonnet-20241022',
-          aiModel: 'claude-3-5-sonnet-20241022',
+          programmingModel: 'claude-sonnet-4-20250514',
+          multipleChoiceModel: 'claude-sonnet-4-20250514',
+          aiModel: 'claude-sonnet-4-20250514',
           selectedProvider: 'claude',
           extractionModel: 'claude-sonnet-4-20250514',
           solutionModel: 'claude-sonnet-4-20250514',
@@ -453,9 +432,9 @@ router.put('/user/:userId', authMiddleware, async (req: AuthenticatedRequest, re
       update: updateData,
       create: {
         userId: parseInt(userId),
-        programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
-        multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
-        aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',
+        programmingModel: updateData.programmingModel || 'claude-sonnet-4-20250514',
+        multipleChoiceModel: updateData.multipleChoiceModel || 'claude-sonnet-4-20250514',
+        aiModel: updateData.aiModel || 'claude-sonnet-4-20250514',
         language: updateData.language || 'python',
         theme: updateData.theme || 'system',
         shortcuts: updateData.shortcuts || JSON.stringify({}),

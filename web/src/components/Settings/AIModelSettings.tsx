@@ -26,13 +26,29 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
     const fetchModels = async () => {
       try {
         setLoading(true);
-        const modelsData = await configApi.getAIModels();
-        setModels(modelsData);
         
-        // 获取当前配置
-        const config = await configApi.getConfig();
-        setProgrammingModel(config.programmingModel || config.aiModel || (modelsData.length > 0 ? modelsData[0].name : ''));
-        setMultipleChoiceModel(config.multipleChoiceModel || config.aiModel || (modelsData.length > 0 ? modelsData[0].name : ''));
+        // 直接使用我们的新模型数据，不依赖API
+        const newModels = [
+          { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
+          { id: 2, name: 'gemini-2.5-pro-deepsearch', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
+          { id: 3, name: 'gemini-2.5-flash-preview-04-17', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
+          { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
+          { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
+          { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
+          { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
+        ];
+        setModels(newModels);
+        
+        // 尝试获取当前配置，如果失败则使用默认值
+        try {
+          const config = await configApi.getConfig();
+          setProgrammingModel(config.programmingModel || config.aiModel || 'claude-sonnet-4-20250514');
+          setMultipleChoiceModel(config.multipleChoiceModel || config.aiModel || 'claude-sonnet-4-20250514');
+        } catch (configError) {
+          // 如果获取配置失败，使用默认值
+          setProgrammingModel('claude-sonnet-4-20250514');
+          setMultipleChoiceModel('claude-sonnet-4-20250514');
+        }
         
         setLoading(false);
       } catch (err) {
@@ -42,11 +58,13 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
         
         // 使用本地模拟数据
         const mockModels = [
-          { id: 1, name: 'chatgpt-4o-latest', displayName: 'ChatGPT 4o Latest', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
-          { id: 2, name: 'claude-opus-4-20250514-thinking', displayName: 'Claude Opus 4 Thinking', provider: 'anthropic', description: 'Anthropic的高级思维模型，逻辑推理能力强' },
-          { id: 3, name: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
-          { id: 4, name: 'gemini-2.5-flash-preview-04-17', displayName: 'Gemini 2.5 Flash', provider: 'google', description: 'Google的高速AI模型' },
-          { id: 5, name: 'gemini-2.5-pro-preview-06-05', displayName: 'Gemini 2.5 Pro', provider: 'google', description: 'Google的专业AI模型' },
+          { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
+          { id: 2, name: 'gemini-2.5-pro-deepsearch', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
+          { id: 3, name: 'gemini-2.5-flash-preview-04-17', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
+          { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
+          { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
+          { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
+          { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
         ];
         setModels(mockModels);
         setProgrammingModel('claude-sonnet-4-20250514');
@@ -114,7 +132,7 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
             <div className="flex items-center">
               {getProviderLogo(model.provider)}
               <div className="flex-1">
-                <div className="font-medium">{model.displayName}</div>
+                <div className="font-medium">{model.displayName || model.name}</div>
                 <div className="text-xs text-gray-500">{model.provider}</div>
               </div>
               <div className="flex items-center">
@@ -227,13 +245,13 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
           <div>
             <span className="text-gray-600">编程题：</span>
             <span className="font-medium ml-1">
-              {models.find(m => m.name === programmingModel)?.displayName || programmingModel}
+              {models.find(m => m.name === programmingModel)?.displayName || models.find(m => m.name === programmingModel)?.name || programmingModel}
             </span>
           </div>
           <div>
             <span className="text-gray-600">选择题：</span>
             <span className="font-medium ml-1">
-              {models.find(m => m.name === multipleChoiceModel)?.displayName || multipleChoiceModel}
+              {models.find(m => m.name === multipleChoiceModel)?.displayName || models.find(m => m.name === multipleChoiceModel)?.name || multipleChoiceModel}
             </span>
           </div>
         </div>

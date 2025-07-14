@@ -54,8 +54,8 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
             const defaultConfig = await database_1.prisma.userConfig.create({
                 data: {
                     userId: req.user.userId,
-                    programmingModel: 'claude-3-5-sonnet-20241022',
-                    multipleChoiceModel: 'claude-3-5-sonnet-20241022',
+                    programmingModel: 'claude-sonnet-4-20250514',
+                    multipleChoiceModel: 'claude-sonnet-4-20250514',
                     selectedProvider: 'claude',
                     extractionModel: 'claude-sonnet-4-20250514',
                     solutionModel: 'claude-sonnet-4-20250514',
@@ -131,8 +131,8 @@ router.put('/', auth_1.authenticateToken, configValidation, async (req, res) => 
             update: updateData,
             create: {
                 userId: req.user.userId,
-                programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
-                multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
+                programmingModel: updateData.programmingModel || 'claude-sonnet-4-20250514',
+                multipleChoiceModel: updateData.multipleChoiceModel || 'claude-sonnet-4-20250514',
                 selectedProvider: updateData.selectedProvider || 'claude',
                 extractionModel: updateData.extractionModel || 'claude-sonnet-4-20250514',
                 solutionModel: updateData.solutionModel || 'claude-sonnet-4-20250514',
@@ -161,44 +161,27 @@ router.put('/', auth_1.authenticateToken, configValidation, async (req, res) => 
 });
 router.get('/models', auth_1.authenticateToken, async (req, res) => {
     try {
-        const models = await database_1.prisma.aIModel.findMany({
-            where: { isActive: true },
-            orderBy: [
-                { provider: 'asc' },
-                { priority: 'desc' },
-                { name: 'asc' }
-            ]
-        });
-        if (models.length === 0) {
-            const defaultModels = Object.entries(types_1.SUPPORTED_MODELS).flatMap(([provider, modelList]) => modelList.map(model => ({
-                id: model.id,
-                modelId: model.id,
-                name: model.name,
-                provider: provider,
-                category: model.category,
-                isActive: true,
-                priority: 0
-            })));
-            return response_1.ResponseUtils.success(res, {
-                models: defaultModels,
-                providers: ['claude', 'gemini', 'openai']
-            });
-        }
-        const groupedModels = models.reduce((acc, model) => {
-            if (!acc[model.provider]) {
-                acc[model.provider] = [];
-            }
-            acc[model.provider].push({
-                id: model.modelId,
-                name: model.name,
-                category: model.category
-            });
-            return acc;
-        }, {});
-        response_1.ResponseUtils.success(res, {
-            models: groupedModels,
-            providers: Object.keys(groupedModels)
-        });
+        const modelMapping = {
+            'claude-sonnet-4-20250514': 'claude-4-sonnet',
+            'gemini-2.5-pro-deepsearch': 'gemini-pro-2.5',
+            'gemini-2.5-flash-preview-04-17': 'gemini-flash-2.5',
+            'gpt-4o': 'gpt-4o',
+            'gpt-4o-mini': 'gpt-4o-mini',
+            'o4-mini-high-all': 'o4-mini-high',
+            'o4-mini-all': 'o4-mini'
+        };
+        const defaultModels = Object.entries(types_1.SUPPORTED_MODELS).flatMap(([provider, modelList]) => modelList.map(model => ({
+            id: model.id,
+            modelId: model.id,
+            name: model.id,
+            displayName: modelMapping[model.id] || model.name,
+            provider: provider,
+            category: model.category,
+            isActive: true,
+            priority: 0,
+            description: `${modelMapping[model.id] || model.name} - ${provider}提供的AI模型`
+        })));
+        response_1.ResponseUtils.success(res, defaultModels);
     }
     catch (error) {
         console.error('获取模型列表错误:', error);
@@ -217,8 +200,8 @@ router.get('/languages', auth_1.authenticateToken, async (req, res) => {
 router.post('/reset', auth_1.authenticateToken, async (req, res) => {
     try {
         const defaultConfig = {
-            programmingModel: 'claude-3-5-sonnet-20241022',
-            multipleChoiceModel: 'claude-3-5-sonnet-20241022',
+            programmingModel: 'claude-sonnet-4-20250514',
+            multipleChoiceModel: 'claude-sonnet-4-20250514',
             selectedProvider: 'claude',
             extractionModel: 'claude-sonnet-4-20250514',
             solutionModel: 'claude-sonnet-4-20250514',
@@ -270,9 +253,9 @@ router.get('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             const defaultConfig = await database_1.prisma.userConfig.create({
                 data: {
                     userId: parseInt(userId),
-                    programmingModel: 'claude-3-5-sonnet-20241022',
-                    multipleChoiceModel: 'claude-3-5-sonnet-20241022',
-                    aiModel: 'claude-3-5-sonnet-20241022',
+                    programmingModel: 'claude-sonnet-4-20250514',
+                    multipleChoiceModel: 'claude-sonnet-4-20250514',
+                    aiModel: 'claude-sonnet-4-20250514',
                     selectedProvider: 'claude',
                     extractionModel: 'claude-sonnet-4-20250514',
                     solutionModel: 'claude-sonnet-4-20250514',
@@ -386,9 +369,9 @@ router.put('/user/:userId', auth_1.authMiddleware, async (req, res) => {
             update: updateData,
             create: {
                 userId: parseInt(userId),
-                programmingModel: updateData.programmingModel || 'claude-3-5-sonnet-20241022',
-                multipleChoiceModel: updateData.multipleChoiceModel || 'claude-3-5-sonnet-20241022',
-                aiModel: updateData.aiModel || 'claude-3-5-sonnet-20241022',
+                programmingModel: updateData.programmingModel || 'claude-sonnet-4-20250514',
+                multipleChoiceModel: updateData.multipleChoiceModel || 'claude-sonnet-4-20250514',
+                aiModel: updateData.aiModel || 'claude-sonnet-4-20250514',
                 language: updateData.language || 'python',
                 theme: updateData.theme || 'system',
                 shortcuts: updateData.shortcuts || JSON.stringify({}),

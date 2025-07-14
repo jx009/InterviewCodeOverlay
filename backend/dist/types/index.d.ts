@@ -107,42 +107,34 @@ export interface UsageStats {
 }
 export declare const SUPPORTED_MODELS: {
     readonly claude: readonly [{
-        readonly id: "claude-sonnet-4-20250514-thinking";
-        readonly name: "Claude Sonnet 4 (Thinking)";
-        readonly category: "general";
-    }, {
-        readonly id: "claude-opus-4-20250514-thinking";
-        readonly name: "Claude Opus 4 (Thinking)";
-        readonly category: "general";
-    }, {
         readonly id: "claude-sonnet-4-20250514";
-        readonly name: "Claude Sonnet 4";
+        readonly name: "claude-4-sonnet";
         readonly category: "general";
     }];
     readonly gemini: readonly [{
-        readonly id: "gemini-2.5-flash-preview-04-17-thinking";
-        readonly name: "Gemini 2.5 Flash (Thinking)";
+        readonly id: "gemini-2.5-pro-deepsearch";
+        readonly name: "gemini-pro-2.5";
         readonly category: "general";
     }, {
         readonly id: "gemini-2.5-flash-preview-04-17";
-        readonly name: "Gemini 2.5 Flash";
-        readonly category: "general";
-    }, {
-        readonly id: "gemini-2.5-pro-preview-06-05";
-        readonly name: "Gemini 2.5 Pro";
-        readonly category: "general";
-    }, {
-        readonly id: "gemini-2.5-pro-preview-06-05-thinking";
-        readonly name: "Gemini 2.5 Pro (Thinking)";
+        readonly name: "gemini-flash-2.5";
         readonly category: "general";
     }];
     readonly openai: readonly [{
-        readonly id: "chatgpt-4o-latest";
-        readonly name: "ChatGPT 4o Latest";
+        readonly id: "gpt-4o";
+        readonly name: "gpt-4o";
         readonly category: "general";
     }, {
-        readonly id: "o3-mini";
-        readonly name: "O3 Mini";
+        readonly id: "gpt-4o-mini";
+        readonly name: "gpt-4o-mini";
+        readonly category: "general";
+    }, {
+        readonly id: "o4-mini-high-all";
+        readonly name: "o4-mini-high";
+        readonly category: "general";
+    }, {
+        readonly id: "o4-mini-all";
+        readonly name: "o4-mini";
         readonly category: "general";
     }];
 };

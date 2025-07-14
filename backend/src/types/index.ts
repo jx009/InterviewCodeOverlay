@@ -143,19 +143,17 @@ export interface UsageStats {
 // 支持的AI模型配置
 export const SUPPORTED_MODELS = {
   claude: [
-    { id: 'claude-sonnet-4-20250514-thinking', name: 'Claude Sonnet 4 (Thinking)', category: 'general' },
-    { id: 'claude-opus-4-20250514-thinking', name: 'Claude Opus 4 (Thinking)', category: 'general' },
-    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', category: 'general' }
+    { id: 'claude-sonnet-4-20250514', name: 'claude-4-sonnet', category: 'general' }
   ],
   gemini: [
-    { id: 'gemini-2.5-flash-preview-04-17-thinking', name: 'Gemini 2.5 Flash (Thinking)', category: 'general' },
-    { id: 'gemini-2.5-flash-preview-04-17', name: 'Gemini 2.5 Flash', category: 'general' },
-    { id: 'gemini-2.5-pro-preview-06-05', name: 'Gemini 2.5 Pro', category: 'general' },
-    { id: 'gemini-2.5-pro-preview-06-05-thinking', name: 'Gemini 2.5 Pro (Thinking)', category: 'general' }
+    { id: 'gemini-2.5-pro-deepsearch', name: 'gemini-pro-2.5', category: 'general' },
+    { id: 'gemini-2.5-flash-preview-04-17', name: 'gemini-flash-2.5', category: 'general' }
   ],
   openai: [
-    { id: 'chatgpt-4o-latest', name: 'ChatGPT 4o Latest', category: 'general' },
-    { id: 'o3-mini', name: 'O3 Mini', category: 'general' }
+    { id: 'gpt-4o', name: 'gpt-4o', category: 'general' },
+    { id: 'gpt-4o-mini', name: 'gpt-4o-mini', category: 'general' },
+    { id: 'o4-mini-high-all', name: 'o4-mini-high', category: 'general' },
+    { id: 'o4-mini-all', name: 'o4-mini', category: 'general' }
   ]
 } as const;
 
