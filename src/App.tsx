@@ -107,7 +107,7 @@ function App() {
   // Helper function to safely update language
   const updateLanguage = useCallback((newLanguage: string) => {
     setCurrentLanguage(newLanguage)
-    window.__LANGUAGE__ = newLanguage
+    // Language configuration now handled by web-side API
   }, [])
 
   // Helper function to mark initialization complete

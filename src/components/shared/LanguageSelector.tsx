@@ -15,16 +15,24 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     const newLanguage = e.target.value
     
     try {
-      // Save language preference to electron store
-      await window.electronAPI.updateConfig({ language: newLanguage })
+      // Update web-side configuration instead of client-side
+      const response = await fetch('http://localhost:3001/api/config', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': localStorage.getItem('authToken') || ''
+        },
+        body: JSON.stringify({ language: newLanguage })
+      })
       
-      // Update global language variable
-      window.__LANGUAGE__ = newLanguage
+      if (!response.ok) {
+        throw new Error('Failed to update language configuration')
+      }
       
       // Update state in React
       setLanguage(newLanguage)
       
-      console.log(`Language changed to ${newLanguage}`);
+      console.log(`Language changed to ${newLanguage} (saved to web configuration)`);
     } catch (error) {
       console.error("Error updating language:", error)
     }

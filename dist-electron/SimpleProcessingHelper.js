@@ -8,7 +8,6 @@ exports.SimpleProcessingHelper = void 0;
 const node_fs_1 = __importDefault(require("node:fs"));
 const openai_1 = require("openai");
 const SimpleAuthManager_1 = require("./SimpleAuthManager");
-const ConfigHelper_1 = require("./ConfigHelper");
 const crypto_1 = require("crypto");
 const node_fetch_1 = __importDefault(require("node-fetch"));
 // 统一的API密钥 - 用户无需配置
@@ -98,14 +97,9 @@ class SimpleProcessingHelper {
         }
         console.log(`✅ 用户认证成功: ${user.username}`);
         console.log(`📋 使用配置: AI模型=${userConfig.aiModel}, 语言=${userConfig.language}`);
-        // Step 3: 获取客户端语言设置（优先级最高）
-        const clientLanguage = await this.getClientLanguage();
-        const finalLanguage = clientLanguage || userConfig.language || 'python';
-        // 保存客户端语言设置
-        if (clientLanguage) {
-            this.saveClientLanguage(clientLanguage);
-        }
-        console.log(`🎯 最终使用语言: ${finalLanguage}`);
+        // Step 3: 使用Web端语言设置（优先级最高）
+        const finalLanguage = userConfig.language || 'python';
+        console.log(`🎯 最终使用语言 (来自Web配置): ${finalLanguage}`);
         // Step 4: 执行AI处理
         const view = this.deps.getView();
         if (view === "queue") {
@@ -113,27 +107,6 @@ class SimpleProcessingHelper {
         }
         else {
             await this.processExtraQueue(userConfig, finalLanguage);
-        }
-    }
-    /**
-     * 获取客户端语言设置
-     */
-    async getClientLanguage() {
-        try {
-            const mainWindow = this.deps.getMainWindow();
-            if (!mainWindow)
-                return '';
-            await this.waitForInitialization(mainWindow);
-            const language = await mainWindow.webContents.executeJavaScript("window.__LANGUAGE__");
-            if (typeof language === "string" && language) {
-                console.log('📱 客户端语言设置:', language);
-                return language;
-            }
-            return '';
-        }
-        catch (error) {
-            console.error("获取客户端语言失败:", error);
-            return '';
         }
     }
     /**
@@ -150,18 +123,6 @@ class SimpleProcessingHelper {
             attempts++;
         }
         throw new Error("应用程序5秒后初始化失败");
-    }
-    /**
-     * 保存客户端语言设置（简化版）
-     */
-    saveClientLanguage(language) {
-        try {
-            ConfigHelper_1.configHelper.updateClientSettings({ lastLanguage: language });
-            console.log(`📝 客户端语言设置已保存: ${language}`);
-        }
-        catch (error) {
-            console.warn('保存客户端语言设置失败:', error);
-        }
     }
     /**
      * 处理主队列截图

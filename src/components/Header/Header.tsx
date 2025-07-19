@@ -77,16 +77,29 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
   };
 
   // Handle language selection
-  const handleLanguageSelect = (lang: string) => {
+  const handleLanguageSelect = async (lang: string) => {
     setLanguage(lang);
     setDropdownOpen(false);
     
-    // Also save the language preference to config
-    window.electronAPI.updateConfig({
-      language: lang
-    }).catch((error: any) => {
+    // Save language preference to web-side configuration
+    try {
+      const response = await fetch('http://localhost:3001/api/config', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': localStorage.getItem('authToken') || ''
+        },
+        body: JSON.stringify({ language: lang })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update language configuration');
+      }
+      
+      console.log(`Language preference saved to web configuration: ${lang}`);
+    } catch (error) {
       console.error('Failed to save language preference:', error);
-    });
+    }
   };
 
   const toggleDropdown = () => {

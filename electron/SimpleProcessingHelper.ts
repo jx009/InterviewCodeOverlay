@@ -125,16 +125,10 @@ export class SimpleProcessingHelper {
     console.log(`✅ 用户认证成功: ${user.username}`)
     console.log(`📋 使用配置: AI模型=${userConfig.aiModel}, 语言=${userConfig.language}`)
 
-    // Step 3: 获取客户端语言设置（优先级最高）
-    const clientLanguage = await this.getClientLanguage()
-    const finalLanguage = clientLanguage || userConfig.language || 'python'
+    // Step 3: 使用Web端语言设置（优先级最高）
+    const finalLanguage = userConfig.language || 'python'
 
-    // 保存客户端语言设置
-    if (clientLanguage) {
-      this.saveClientLanguage(clientLanguage)
-    }
-
-    console.log(`🎯 最终使用语言: ${finalLanguage}`)
+    console.log(`🎯 最终使用语言 (来自Web配置): ${finalLanguage}`)
 
     // Step 4: 执行AI处理
     const view = this.deps.getView()
@@ -145,30 +139,6 @@ export class SimpleProcessingHelper {
     }
   }
 
-  /**
-   * 获取客户端语言设置
-   */
-  private async getClientLanguage(): Promise<string> {
-    try {
-      const mainWindow = this.deps.getMainWindow()
-      if (!mainWindow) return ''
-
-      await this.waitForInitialization(mainWindow)
-      const language = await mainWindow.webContents.executeJavaScript(
-        "window.__LANGUAGE__"
-      )
-
-      if (typeof language === "string" && language) {
-        console.log('📱 客户端语言设置:', language)
-        return language
-      }
-      
-      return ''
-    } catch (error) {
-      console.error("获取客户端语言失败:", error)
-      return ''
-    }
-  }
 
   /**
    * 等待客户端初始化
@@ -188,17 +158,6 @@ export class SimpleProcessingHelper {
     throw new Error("应用程序5秒后初始化失败")
   }
 
-  /**
-   * 保存客户端语言设置（简化版）
-   */
-  private saveClientLanguage(language: string): void {
-    try {
-      configHelper.updateClientSettings({ lastLanguage: language })
-      console.log(`📝 客户端语言设置已保存: ${language}`)
-    } catch (error) {
-      console.warn('保存客户端语言设置失败:', error)
-    }
-  }
 
   /**
    * 处理主队列截图
