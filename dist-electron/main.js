@@ -70,6 +70,10 @@ const autoUpdater_1 = require("./autoUpdater");
 const ConfigHelper_1 = require("./ConfigHelper");
 const SimpleAuthManager_1 = require("./SimpleAuthManager");
 const dotenv = __importStar(require("dotenv"));
+const encoding_fix_1 = require("./encoding-fix");
+// Setup UTF-8 encoding at the very beginning
+(0, encoding_fix_1.setupUTF8Encoding)();
+(0, encoding_fix_1.patchConsoleForUTF8)();
 // Constants
 const isDev = process.env.NODE_ENV === "development";
 // Application State

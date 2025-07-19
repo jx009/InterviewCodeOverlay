@@ -11,6 +11,7 @@ import SolutionCommands from "../components/Solutions/SolutionCommands"
 import Debug from "./Debug"
 import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
+import { useLanguageConfig } from "../hooks/useLanguageConfig"
 
 export const ContentSection = ({
   title,
@@ -99,7 +100,24 @@ const SolutionSection = ({
           <div>
             <SyntaxHighlighter
               showLineNumbers
-              language={currentLanguage == "golang" ? "go" : currentLanguage}
+              language={
+                currentLanguage === "Go" || currentLanguage === "Golang" ? "go" : 
+                currentLanguage === "JavaScript" ? "javascript" :
+                currentLanguage === "TypeScript" ? "typescript" :
+                currentLanguage === "Cpp" || currentLanguage === "C++" ? "cpp" :
+                currentLanguage === "Csharp" || currentLanguage === "C#" ? "csharp" :
+                currentLanguage === "Java" ? "java" :
+                currentLanguage === "Python" ? "python" :
+                currentLanguage === "Swift" ? "swift" :
+                currentLanguage === "Kotlin" ? "kotlin" :
+                currentLanguage === "Ruby" ? "ruby" :
+                currentLanguage === "Php" || currentLanguage === "PHP" ? "php" :
+                currentLanguage === "Scala" ? "scala" :
+                currentLanguage === "Rust" ? "rust" :
+                currentLanguage === "Sql" || currentLanguage === "SQL" ? "sql" :
+                currentLanguage === "R" ? "r" :
+                currentLanguage.toLowerCase()
+              }
               style={dracula}
               customStyle={{
                 maxWidth: "100%",
@@ -236,17 +254,14 @@ export const MultipleChoiceSection = ({
 export interface SolutionsProps {
   setView: (view: "queue" | "solutions" | "debug") => void
   credits: number
-  currentLanguage: string
-  setLanguage: (language: string) => void
 }
 const Solutions: React.FC<SolutionsProps> = ({
   setView,
-  credits,
-  currentLanguage,
-  setLanguage
+  credits
 }) => {
   const queryClient = useQueryClient()
   const contentRef = useRef<HTMLDivElement>(null)
+  const { language: currentLanguage } = useLanguageConfig()
 
   const [debugProcessing, setDebugProcessing] = useState(false)
   const [problemStatementData, setProblemStatementData] =
@@ -397,23 +412,23 @@ const Solutions: React.FC<SolutionsProps> = ({
           console.warn("Received empty or invalid solution data")
           return
         }
-        console.log("📨 接收到解决方案数据:", { data })
+        console.log("📨 Received solution data:", { data })
 
-        // 保存原始数据到查询缓存，包含类型信息
+        // Save original data to query cache, including type information
         queryClient.setQueryData(["solution"], data)
 
-        // 根据数据类型设置状态
+        // Set state based on data type
         if (data.type === 'multiple_choice') {
-          // 选择题数据处理
-          console.log("🎯 处理选择题数据")
-          setSolutionData(null) // 选择题不显示代码
+          // Multiple choice data processing
+          console.log("🎯 Processing multiple choice data")
+          setSolutionData(null) // Multiple choice doesn't show code
           setThoughtsData(data.thoughts || null)
-          setTimeComplexityData(null) // 选择题不显示复杂度
+          setTimeComplexityData(null) // Multiple choice doesn't show complexity
           setSpaceComplexityData(null)
           setMultipleChoiceAnswers(data.answers || null)
         } else {
-          // 编程题数据处理
-          console.log("💻 处理编程题数据")
+          // Programming problem data processing
+          console.log("💻 Processing programming problem data")
           setSolutionData(data.code || null)
           setThoughtsData(data.thoughts || null)
           setTimeComplexityData(data.time_complexity || null)
@@ -555,8 +570,6 @@ const Solutions: React.FC<SolutionsProps> = ({
         <Debug
           isProcessing={debugProcessing}
           setIsProcessing={setDebugProcessing}
-          currentLanguage={currentLanguage}
-          setLanguage={setLanguage}
         />
       ) : (
         <div ref={contentRef} className="relative">
@@ -583,8 +596,6 @@ const Solutions: React.FC<SolutionsProps> = ({
               isProcessing={!problemStatementData || (!solutionData && !multipleChoiceAnswers)}
               extraScreenshots={extraScreenshots}
               credits={credits}
-              currentLanguage={currentLanguage}
-              setLanguage={setLanguage}
             />
           </div>
 

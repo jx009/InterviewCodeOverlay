@@ -6,6 +6,14 @@ import { configHelper } from './ConfigHelper'
 import {Simulate} from "react-dom/test-utils";
 import waiting = Simulate.waiting;
 
+// Set UTF-8 encoding for console output in this module
+if (process.stdout.setEncoding) {
+  process.stdout.setEncoding('utf8')
+}
+if (process.stderr.setEncoding) {
+  process.stderr.setEncoding('utf8')
+}
+
 interface User {
   id: string
   username: string

@@ -10,6 +10,14 @@ import { ipcMain } from "electron"
 import { randomUUID } from "crypto"
 import fetch from 'node-fetch'
 
+// Set UTF-8 encoding for console output in this module
+if (process.stdout.setEncoding) {
+  process.stdout.setEncoding('utf8')
+}
+if (process.stderr.setEncoding) {
+  process.stderr.setEncoding('utf8')
+}
+
 // 统一的API密钥 - 用户无需配置
 const ISMAQUE_API_KEY = "sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP"
 

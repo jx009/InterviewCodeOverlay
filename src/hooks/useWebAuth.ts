@@ -132,7 +132,7 @@ export function useWebAuth() {
 
   // 登出
   const logout = useCallback(async () => {
-    console.log('🔐 useWebAuth logout 函数被调用');
+    console.log('🔐 useWebAuth logout 函数called');
     try {
       console.log('📝 设置加载状态为 true');
       setAuthStatus(prev => ({ ...prev, loading: true }))

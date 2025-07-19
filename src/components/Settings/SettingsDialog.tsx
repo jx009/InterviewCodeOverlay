@@ -50,7 +50,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
     try {
       await webLogin();
     } catch (error) {
-      console.error('登录失败:', error);
+      console.error('Login failed:', error);
     }
   };
 
@@ -61,7 +61,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       // 然后打开web退出页面
       window.electronAPI?.openLink('http://localhost:3001/logout');
     } catch (error) {
-      console.error('登出失败:', error);
+      console.error('Logout failed:', error);
     }
   };
 

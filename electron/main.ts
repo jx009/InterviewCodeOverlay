@@ -9,6 +9,11 @@ import { initAutoUpdater } from "./autoUpdater"
 import { configHelper } from "./ConfigHelper"
 import { simpleAuthManager } from "./SimpleAuthManager"
 import * as dotenv from "dotenv"
+import { setupUTF8Encoding, patchConsoleForUTF8 } from "./encoding-fix"
+
+// Setup UTF-8 encoding at the very beginning
+setupUTF8Encoding()
+patchConsoleForUTF8()
 
 // Constants
 const isDev = process.env.NODE_ENV === "development"

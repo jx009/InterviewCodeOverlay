@@ -42,15 +42,15 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
     console.log('🚪 开始登出流程...');
     try {
       showToast('正在登出...', '请稍等', 'loading');
-      console.log('📤 调用 webLogout 函数...');
+      console.log('📤 Calling webLogout 函数...');
       const result = await webLogout();
       console.log('📥 webLogout 响应:', result);
       
       if (result.success) {
-        console.log('✅ 登出成功');
+        console.log('✅ Logout successful');
         showToast('登出成功', '已成功退出登录', 'success');
       } else {
-        console.log('❌ 登出失败:', result.error);
+        console.log('❌ Logout failed:', result.error);
         showToast('登出失败', result.error || '请重试', 'error');
       }
     } catch (error) {

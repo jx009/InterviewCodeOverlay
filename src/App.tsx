@@ -46,7 +46,6 @@ function App() {
     onActionClick: undefined as (() => void) | undefined
   })
   const [credits, setCredits] = useState<number>(0) // Real credits from server
-  const [currentLanguage, setCurrentLanguage] = useState<string>("python")
   const [isInitialized, setIsInitialized] = useState(false)
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -76,13 +75,13 @@ function App() {
       const result = await window.electronAPI.creditsGet()
       if (result.success) {
         updateCredits(result.credits)
-        console.log('✅ (IPC) 积分余额获取成功:', result.credits)
+        console.log('✅ (IPC) Credits balance fetched successfully:', result.credits)
       } else {
-        console.error('❌ (IPC) 获取积分余额失败:', result.error)
+        console.error('❌ (IPC) Failed to fetch credits balance:', result.error)
         updateCredits(0)
       }
     } catch (error) {
-      console.error('❌ (IPC) 获取积分余额错误:', error)
+      console.error('❌ (IPC) Credits balance fetch error:', error)
       updateCredits(0)
     }
   }, [updateCredits])
@@ -104,11 +103,6 @@ function App() {
     }
   }, [isInitialized, authenticated, authLoading, updateCredits, fetchUserCredits])
 
-  // Helper function to safely update language
-  const updateLanguage = useCallback((newLanguage: string) => {
-    setCurrentLanguage(newLanguage)
-    // Language configuration now handled by web-side API
-  }, [])
 
   // Helper function to mark initialization complete
   const markInitialized = useCallback(() => {
@@ -143,7 +137,7 @@ function App() {
     
     if (window.electronAPI?.onNotification) {
       const unsubscribeNotification = window.electronAPI.onNotification((notification: any) => {
-        console.log('收到通知:', notification)
+        console.log('Received notification:', notification)
         
         // 映射通知类型到Toast变体
         const getToastVariant = (type: string): ToastVariant => {
@@ -164,11 +158,11 @@ function App() {
           notification.actions && notification.actions.length > 0 ? notification.actions[0].text : undefined,
           notification.actions && notification.actions.length > 0 ? () => {
             if (notification.actions[0].action === 'open-web-login') {
-              // 实际触发登录操作
+              // Actually trigger login operation
               setTimeout(async () => {
-                console.log('准备触发登录操作')
+                console.log('Preparing to trigger login operation')
                 try {
-                  // 调用后端的登录功能
+                  // Call backend login function
                   const result = await window.electronAPI.webAuthLogin()
                   if (result.success) {
                     showToast('登录成功', '欢迎回来！', 'success')
@@ -176,7 +170,7 @@ function App() {
                     showToast('登录失败', result.error || '请重试', 'error')
                   }
                 } catch (error) {
-                  console.error('登录操作失败:', error)
+                  console.error('Login operation failed:', error)
                   showToast('登录失败', '网络错误，请重试', 'error')
                 }
               }, 1000)
@@ -250,16 +244,9 @@ function App() {
         // Initialize with 0 credits, will be loaded from server when authenticated
         updateCredits(0)
         
-        // Load config including language and model settings
+        // Load config including model settings
         const loadedConfig = await window.electronAPI.getConfig()
         setConfig(loadedConfig || {})
-        
-        // Load language preference
-        if (loadedConfig && loadedConfig.language) {
-          updateLanguage(loadedConfig.language)
-        } else {
-          updateLanguage("python")
-        }
         
         // Model settings are now managed through the settings dialog
         // and stored in config as extractionModel, solutionModel, and debuggingModel
@@ -268,7 +255,6 @@ function App() {
       } catch (error) {
         // 减少终端输出
         // Fallback to defaults
-        updateLanguage("python")
         markInitialized()
       }
     }
@@ -303,7 +289,7 @@ function App() {
       window.__IS_INITIALIZED__ = false
       setIsInitialized(false)
     }
-  }, [updateCredits, updateLanguage, markInitialized, showToast])
+  }, [updateCredits, markInitialized, showToast])
 
   // API Key dialog management
   const handleOpenSettings = useCallback(() => {
@@ -321,16 +307,11 @@ function App() {
       await window.electronAPI.updateConfig(newConfig)
       setConfig(newConfig)
       showToast("成功", "设置已保存", "success")
-      
-      // Update language if changed
-      if (newConfig.language) {
-        updateLanguage(newConfig.language)
-      }
     } catch (error) {
       // 减少终端输出
       showToast("错误", "保存设置失败", "error")
     }
-  }, [showToast, updateLanguage])
+  }, [showToast])
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -369,8 +350,6 @@ function App() {
                 >
                   <SubscribedApp
                     credits={credits}
-                    currentLanguage={currentLanguage}
-                    setLanguage={updateLanguage}
                   />
                 </ClickThroughManager>
               ) : (

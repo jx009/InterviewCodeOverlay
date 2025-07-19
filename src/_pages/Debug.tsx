@@ -8,6 +8,7 @@ import SolutionCommands from "../components/Solutions/SolutionCommands"
 import { Screenshot } from "../types/screenshots"
 import { ComplexitySection, ContentSection } from "./Solutions"
 import { useToast } from "../contexts/toast"
+import { useLanguageConfig } from "../hooks/useLanguageConfig"
 
 const CodeSection = ({
   title,
@@ -69,7 +70,24 @@ const CodeSection = ({
           <div>
             <SyntaxHighlighter
               showLineNumbers
-              language={currentLanguage == "golang" ? "go" : currentLanguage}
+              language={
+                currentLanguage === "Go" || currentLanguage === "Golang" ? "go" : 
+                currentLanguage === "JavaScript" ? "javascript" :
+                currentLanguage === "TypeScript" ? "typescript" :
+                currentLanguage === "Cpp" || currentLanguage === "C++" ? "cpp" :
+                currentLanguage === "Csharp" || currentLanguage === "C#" ? "csharp" :
+                currentLanguage === "Java" ? "java" :
+                currentLanguage === "Python" ? "python" :
+                currentLanguage === "Swift" ? "swift" :
+                currentLanguage === "Kotlin" ? "kotlin" :
+                currentLanguage === "Ruby" ? "ruby" :
+                currentLanguage === "Php" || currentLanguage === "PHP" ? "php" :
+                currentLanguage === "Scala" ? "scala" :
+                currentLanguage === "Rust" ? "rust" :
+                currentLanguage === "Sql" || currentLanguage === "SQL" ? "sql" :
+                currentLanguage === "R" ? "r" :
+                currentLanguage.toLowerCase()
+              }
               style={dracula}
               customStyle={{
                 maxWidth: "100%",
@@ -111,19 +129,16 @@ async function fetchScreenshots(): Promise<Screenshot[]> {
 interface DebugProps {
   isProcessing: boolean
   setIsProcessing: (isProcessing: boolean) => void
-  currentLanguage: string
-  setLanguage: (language: string) => void
 }
 
 const Debug: React.FC<DebugProps> = ({
   isProcessing,
-  setIsProcessing,
-  currentLanguage,
-  setLanguage
+  setIsProcessing
 }) => {
   const [tooltipVisible, setTooltipVisible] = useState(false)
   const [tooltipHeight, setTooltipHeight] = useState(0)
   const { showToast } = useToast()
+  const { language: currentLanguage } = useLanguageConfig()
 
   const { data: screenshots = [], refetch } = useQuery<Screenshot[]>({
     queryKey: ["screenshots"],
@@ -321,8 +336,6 @@ const Debug: React.FC<DebugProps> = ({
           isProcessing={isProcessing}
           extraScreenshots={screenshots}
           credits={window.__CREDITS__}
-          currentLanguage={currentLanguage}
-          setLanguage={setLanguage}
         />
       </div>
 

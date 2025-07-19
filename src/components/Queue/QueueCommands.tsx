@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react"
 import { createRoot } from "react-dom/client"
 
 import { useToast } from "../../contexts/toast"
-import { LanguageSelector } from "../shared/LanguageSelector"
 import { COMMAND_KEY } from "../../utils/platform"
 import { useWebAuth } from "../../hooks/useWebAuth"
 
@@ -10,16 +9,12 @@ interface QueueCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
   screenshotCount?: number
   credits: number
-  currentLanguage: string
-  setLanguage: (language: string) => void
 }
 
 const QueueCommands: React.FC<QueueCommandsProps> = ({
                                                        onTooltipVisibilityChange,
                                                        screenshotCount = 0,
-                                                       credits,
-                                                       currentLanguage,
-                                                       setLanguage
+                                                       credits
                                                      }) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -35,55 +30,6 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     connectionStatus 
   } = useWebAuth()
 
-  // Extract the repeated language selection logic into a separate function
-  const extractLanguagesAndUpdate = (direction?: 'next' | 'prev') => {
-    // Create a hidden instance of LanguageSelector to extract languages
-    const hiddenRenderContainer = document.createElement('div');
-    hiddenRenderContainer.style.position = 'absolute';
-    hiddenRenderContainer.style.left = '-9999px';
-    document.body.appendChild(hiddenRenderContainer);
-
-    // Create a root and render the LanguageSelector temporarily
-    const root = createRoot(hiddenRenderContainer);
-    root.render(
-        <LanguageSelector
-            currentLanguage={currentLanguage}
-            setLanguage={() => {}}
-        />
-    );
-
-    // Use a small delay to ensure the component has rendered
-    // 50ms is generally enough for React to complete a render cycle
-    setTimeout(() => {
-      // Extract options from the rendered select element
-      const selectElement = hiddenRenderContainer.querySelector('select');
-      if (selectElement) {
-        const options = Array.from(selectElement.options);
-        const values = options.map(opt => opt.value);
-
-        // Find current language index
-        const currentIndex = values.indexOf(currentLanguage);
-        let newIndex = currentIndex;
-
-        if (direction === 'prev') {
-          // Go to previous language
-          newIndex = (currentIndex - 1 + values.length) % values.length;
-        } else {
-          // Default to next language
-          newIndex = (currentIndex + 1) % values.length;
-        }
-
-        if (newIndex !== currentIndex) {
-          setLanguage(values[newIndex]);
-          window.electronAPI.updateConfig({ language: values[newIndex] });
-        }
-      }
-
-      // Clean up
-      root.unmount();
-      document.body.removeChild(hiddenRenderContainer);
-    }, 50);
-  };
 
   useEffect(() => {
     let tooltipHeight = 0
@@ -93,48 +39,48 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     onTooltipVisibilityChange(isTooltipVisible, tooltipHeight)
   }, [isTooltipVisible])
 
-  // 🆕 修改为使用增强认证的退出登录
+  // Enhanced authentication logout
   const handleSignOut = async () => {
-    console.log('🚪 QueueCommands handleSignOut 被调用');
+    console.log('🚪 QueueCommands handleSignOut called');
     try {
       showToast('正在登出...', '请稍等', 'loading');
-      console.log('📞 调用 webLogout...');
+      console.log('📞 Calling webLogout...');
       const result = await webLogout();
-      console.log('📋 webLogout 结果:', result);
+      console.log('📋 webLogout result:', result);
 
       if (result.success) {
-        console.log('✅ 登出成功');
+        console.log('✅ Logout successful');
         showToast('登出成功', '已成功退出登录', 'success');
-        // 不需要手动刷新，App.tsx会自动处理界面切换
+        // No need to manually refresh, App.tsx will handle UI switching automatically
       } else {
-        console.log('❌ 登出失败:', result.error);
+        console.log('❌ Logout failed:', result.error);
         showToast('登出失败', result.error || '请重试', 'error');
       }
     } catch (error) {
-      console.error('❌ 登出异常:', error);
+      console.error('❌ Logout exception:', error);
       showToast('登出失败', '网络错误，请重试', 'error');
     }
   }
 
-  // 🆕 添加登录处理方法
+  // Add login handler method
   const handleLogin = async () => {
-    console.log('🔐 QueueCommands handleLogin 被调用');
+    console.log('🔐 QueueCommands handleLogin called');
     try {
       showToast('正在登录...', '请稍等', 'loading');
-      console.log('📞 调用 webLogin...');
+      console.log('📞 Calling webLogin...');
       const result = await webLogin();
-      console.log('📋 webLogin 结果:', result);
+      console.log('📋 webLogin result:', result);
 
       if (result.success) {
-        console.log('✅ 登录成功');
+        console.log('✅ Login successful');
         showToast('登录成功', '已成功登录', 'success');
-        // 不需要手动刷新，App.tsx会自动处理界面切换
+        // No need to manually refresh, App.tsx will handle UI switching automatically
       } else {
-        console.log('❌ 登录失败:', result.error);
+        console.log('❌ Login failed:', result.error);
         showToast('登录失败', result.error || '请重试', 'error');
       }
     } catch (error) {
-      console.error('❌ 登录异常:', error);
+      console.error('❌ Login exception:', error);
       showToast('登录失败', '网络错误，请重试', 'error');
     }
   }
@@ -446,45 +392,6 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
 
                         {/* Separator and Log Out */}
                         <div className="pt-3 mt-3 border-t border-white/10">
-                          {/* 语言选择器 - 可点击切换 */}
-                          <div className="mb-3 px-2">
-                            <div className="flex items-center justify-between cursor-pointer hover:bg-white/10 rounded px-2 py-1 transition-colors">
-                              <span className="text-[11px] text-white/70">语言</span>
-                              <div className="flex items-center gap-2">
-                                <select
-                                    className="bg-transparent border-none text-[11px] text-white/90 cursor-pointer focus:outline-none"
-                                    value={currentLanguage}
-                                    onChange={(e) => {
-                                      const newLang = e.target.value;
-                                      setLanguage(newLang);
-                                      window.electronAPI.updateConfig({ language: newLang });
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-                                        extractLanguagesAndUpdate('prev');
-                                      } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-                                        extractLanguagesAndUpdate('next');
-                                      }
-                                    }}
-                                >
-                                  <option value="python">Python</option>
-                                  <option value="javascript">JavaScript</option>
-                                  <option value="java">Java</option>
-                                  <option value="cpp">C++</option>
-                                  <option value="csharp">C#</option>
-                                  <option value="go">Go</option>
-                                  <option value="rust">Rust</option>
-                                  <option value="typescript">TypeScript</option>
-                                  <option value="kotlin">Kotlin</option>
-                                  <option value="swift">Swift</option>
-                                  <option value="php">PHP</option>
-                                  <option value="ruby">Ruby</option>
-                                  <option value="scala">Scala</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-
                           {/* 用户欢迎信息和认证按钮 */}
                           {authenticated && user ? (
                             /* 已登录状态 - 显示欢迎信息和登出按钮 */

@@ -9,6 +9,13 @@ const electron_1 = require("electron");
 const events_1 = require("events");
 const axios_1 = __importDefault(require("axios"));
 const ConfigHelper_1 = require("./ConfigHelper");
+// Set UTF-8 encoding for console output in this module
+if (process.stdout.setEncoding) {
+    process.stdout.setEncoding('utf8');
+}
+if (process.stderr.setEncoding) {
+    process.stderr.setEncoding('utf8');
+}
 /**
  * 简化的认证管理器 - 采用Cursor式设计
  * 核心原则：
