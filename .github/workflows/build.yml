@@ -82,13 +82,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEBUG: electron-builder
           
+      - name: 🍎 Disable macOS code signing
+        if: matrix.os == 'macos-latest'
+        run: |
+          # 清除所有可能导致签名的环境变量
+          unset CSC_LINK 2>/dev/null || true
+          unset CSC_KEY_PASSWORD 2>/dev/null || true
+          unset APPLE_ID 2>/dev/null || true
+          unset APPLE_APP_SPECIFIC_PASSWORD 2>/dev/null || true
+          unset APPLE_TEAM_ID 2>/dev/null || true
+          # 设置禁用签名的环境变量
+          export CSC_IDENTITY_AUTO_DISCOVERY=false
+          # 清空keychain中的所有证书
+          security delete-keychain login.keychain 2>/dev/null || true
+          echo "✅ Code signing disabled"
+          
       - name: 🍎 Package macOS app
         if: matrix.os == 'macos-latest'
-        run: npm run package-unsigned
+        run: npm run package-mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_LINK: ""
-          CSC_KEY_PASSWORD: ""
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEBUG: electron-builder
           

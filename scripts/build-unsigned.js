@@ -48,13 +48,7 @@ async function buildUnsigned() {
           { target: 'zip', arch: ['x64', 'arm64'] }
         ],
         artifactName: 'Interview-Coder-${arch}.${ext}',
-        icon: 'assets/icons/mac/logo_qz.icns',
-        // 明确禁用所有签名相关设置
-        identity: null,
-        signIgnore: /.*/,
-        hardenedRuntime: false,
-        gatekeeperAssess: false,
-        notarize: false
+        icon: 'assets/icons/mac/logo_qz.icns'
       },
       
       // Windows配置
