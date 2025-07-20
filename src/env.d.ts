@@ -59,6 +59,20 @@ interface ElectronAPI {
   installUpdate: () => void
   onUpdateAvailable: (callback: (info: any) => void) => () => void
   onUpdateDownloaded: (callback: (info: any) => void) => () => void
+  // 添加鼠标事件穿透控制API
+  setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => Promise<void>
+  // 新增：区域性穿透API
+  setIgnoreMouseEventsExcept: (exceptRegions: Array<{x: number, y: number, width: number, height: number}>) => Promise<void>
+  // 添加配置相关API
+  getConfig: () => Promise<any>
+  updateConfig: (config: any) => Promise<any>
+  checkApiKey: () => Promise<boolean>
+  onShowSettings: (callback: () => void) => () => void
+  onApiKeyInvalid: (callback: () => void) => () => void
+  validateApiKey: (apiKey: string) => Promise<{ valid: boolean; error?: string }>
+  openSettingsPortal: () => Promise<{ success: boolean; error?: string }>
+  onDeleteLastScreenshot: (callback: () => void) => () => void
+  deleteLastScreenshot: () => Promise<{ success: boolean; error?: string }>
 }
 
 interface Window {

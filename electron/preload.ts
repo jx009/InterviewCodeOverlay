@@ -193,6 +193,16 @@ const electronAPI = {
       ipcRenderer.removeListener("update-downloaded", subscription)
     }
   },
+  // 🆕 新的积分管理方法
+  creditsGet: () => ipcRenderer.invoke("credits:get"),
+  creditsCheck: (params: { modelName: string; questionType: string }) => 
+    ipcRenderer.invoke("credits:check", params),
+  creditsDeduct: (params: { modelName: string; questionType: string; operationId?: string }) => 
+    ipcRenderer.invoke("credits:deduct", params),
+  creditsRefund: (params: { operationId: string; amount: number; reason?: string }) => 
+    ipcRenderer.invoke("credits:refund", params),
+
+  // 🆕 兼容旧系统的方法（逐步废弃）
   decrementCredits: () => ipcRenderer.invoke("decrement-credits"),
   onCreditsUpdated: (callback: (credits: number) => void) => {
     const subscription = (_event: any, credits: number) => callback(credits)
@@ -236,7 +246,66 @@ const electronAPI = {
       ipcRenderer.removeListener("delete-last-screenshot", subscription)
     }
   },
-  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot")
+  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot"),
+  
+  // 添加控制鼠标事件穿透的方法
+  setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => {
+    return ipcRenderer.invoke('set-ignore-mouse-events', ignore, options);
+  },
+  
+  // 新增：区域性穿透API
+  setIgnoreMouseEventsExcept: (exceptRegions: Array<{x: number, y: number, width: number, height: number}>) => {
+    return ipcRenderer.invoke('set-ignore-mouse-events-except', exceptRegions);
+  },
+
+  // 新增：显示设置对话框
+  showSettings: () => {
+    return ipcRenderer.send('show-settings-dialog');
+  },
+
+  // Web Authentication methods
+  webAuthLogin: () => ipcRenderer.invoke("web-auth-login"),
+  webAuthLogout: () => ipcRenderer.invoke("web-auth-logout"),
+  webAuthStatus: () => ipcRenderer.invoke("web-auth-status"),
+  webSyncConfig: () => ipcRenderer.invoke("web-sync-config"),
+  webUpdateConfig: (config: any) => ipcRenderer.invoke("web-update-config", config),
+  webGetAIModels: () => ipcRenderer.invoke("web-get-ai-models"),
+  webGetLanguages: () => ipcRenderer.invoke("web-get-languages"),
+  webCheckConnection: () => ipcRenderer.invoke("web-check-connection"),
+  
+  // Web Authentication event listeners
+  onWebAuthStatus: (callback: (data: { authenticated: boolean; user: any }) => void) => {
+    const subscription = (_: any, data: { authenticated: boolean; user: any }) => callback(data)
+    ipcRenderer.on("web-auth-status", subscription)
+    return () => {
+      ipcRenderer.removeListener("web-auth-status", subscription)
+    }
+  },
+  onConfigUpdated: (callback: (config: any) => void) => {
+    const subscription = (_: any, config: any) => callback(config)
+    ipcRenderer.on("config-updated", subscription)
+    return () => {
+      ipcRenderer.removeListener("config-updated", subscription)
+    }
+  },
+  
+  // 添加通知事件监听器
+  onNotification: (callback: (notification: any) => void) => {
+    const subscription = (_: any, notification: any) => callback(notification)
+    ipcRenderer.on("show-notification", subscription)
+    return () => {
+      ipcRenderer.removeListener("show-notification", subscription)
+    }
+  },
+  
+  // 添加清除通知事件监听器
+  onClearNotification: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on("clear-notification", subscription)
+    return () => {
+      ipcRenderer.removeListener("clear-notification", subscription)
+    }
+  },
 }
 
 // Before exposing the API

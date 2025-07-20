@@ -68,3 +68,19 @@ option {
   inset: -16px;
   opacity: 1;
 }
+
+/* 添加鼠标事件处理相关样式 */
+.top-area {
+  position: relative;
+  z-index: 100;
+  pointer-events: auto !important;
+}
+
+.main-content {
+  position: relative;
+  pointer-events: none !important;
+}
+
+.main-content .pointer-events-auto {
+  pointer-events: auto !important;
+}

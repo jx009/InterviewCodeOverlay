@@ -10,11 +10,15 @@ import {
   ToastDescription,
   ToastProvider,
   ToastTitle,
-  ToastViewport
+  ToastViewport,
+  ToastVariant
 } from "./components/ui/toast"
 import { ToastContext } from "./contexts/toast"
 import { WelcomeScreen } from "./components/WelcomeScreen"
 import SettingsDialog from "./components/Settings/SettingsDialog"
+import { WebAuthDialog } from "./components/WebAuth/WebAuthDialog"
+import ClickThroughManager from "./components/ClickThroughManager"
+import { useWebAuth } from "./hooks/useWebAuth"
 
 // Create a React Query client
 const queryClient = new QueryClient({
@@ -37,29 +41,68 @@ function App() {
     open: false,
     title: "",
     description: "",
-    variant: "neutral" as "neutral" | "success" | "error"
+    variant: "neutral" as ToastVariant,
+    actionText: "",
+    onActionClick: undefined as (() => void) | undefined
   })
-  const [credits, setCredits] = useState<number>(999) // Unlimited credits
-  const [currentLanguage, setCurrentLanguage] = useState<string>("python")
+  const [credits, setCredits] = useState<number>(0) // Real credits from server
   const [isInitialized, setIsInitialized] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState(false)
-  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
-  // Note: Model selection is now handled via separate extraction/solution/debugging model settings
-
+  
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [config, setConfig] = useState({})
 
-  // Set unlimited credits
-  const updateCredits = useCallback(() => {
-    setCredits(999) // No credit limit in this version
-    window.__CREDITS__ = 999
+  // Web Authentication Hook
+  const { 
+    authenticated, 
+    user, 
+    loading: authLoading, 
+    connectionStatus 
+  } = useWebAuth()
+
+  // 🆕 控制认证对话框显示
+  // 当未认证时自动显示登录对话框，认证后自动关闭
+  const [isWebAuthOpen, setIsWebAuthOpen] = useState(false)
+  
+  // Update credits from server
+  const updateCredits = useCallback((newCredits: number) => {
+    setCredits(newCredits)
+    window.__CREDITS__ = newCredits
   }, [])
 
-  // Helper function to safely update language
-  const updateLanguage = useCallback((newLanguage: string) => {
-    setCurrentLanguage(newLanguage)
-    window.__LANGUAGE__ = newLanguage
-  }, [])
+  // 🆕 获取用户积分余额 (通过IPC)
+  const fetchUserCredits = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.creditsGet()
+      if (result.success) {
+        updateCredits(result.credits)
+        console.log('✅ (IPC) Credits balance fetched successfully:', result.credits)
+      } else {
+        console.error('❌ (IPC) Failed to fetch credits balance:', result.error)
+        updateCredits(0)
+      }
+    } catch (error) {
+      console.error('❌ (IPC) Credits balance fetch error:', error)
+      updateCredits(0)
+    }
+  }, [updateCredits])
+
+  // 🆕 监听认证状态变化，自动控制对话框显示
+  useEffect(() => {
+    if (isInitialized && !authLoading) {
+      if (!authenticated) {
+        // 未认证时显示登录对话框
+        setIsWebAuthOpen(true)
+        // 重置积分为0
+        updateCredits(0)
+      } else {
+        // 已认证时关闭登录对话框
+        setIsWebAuthOpen(false)
+        // 🆕 认证成功后获取积分余额
+        fetchUserCredits()
+      }
+    }
+  }, [isInitialized, authenticated, authLoading, updateCredits, fetchUserCredits])
+
 
   // Helper function to mark initialization complete
   const markInitialized = useCallback(() => {
@@ -67,45 +110,90 @@ function App() {
     window.__IS_INITIALIZED__ = true
   }, [])
 
-  // Show toast method
+  // Show toast method (enhanced with action support)
   const showToast = useCallback(
     (
       title: string,
       description: string,
-      variant: "neutral" | "success" | "error"
+      variant: ToastVariant,
+      actionText?: string,
+      onActionClick?: () => void
     ) => {
       setToastState({
         open: true,
         title,
         description,
-        variant
+        variant,
+        actionText: actionText || "",
+        onActionClick: onActionClick || undefined
       })
     },
     []
   )
 
-  // Check for OpenAI API key and prompt if not found
+  // 监听后端发送的通知消息（优化用户体验）
   useEffect(() => {
-    const checkApiKey = async () => {
-      try {
-        const hasKey = await window.electronAPI.checkApiKey()
-        setHasApiKey(hasKey)
+    const unsubscribers: (() => void)[] = []
+    
+    if (window.electronAPI?.onNotification) {
+      const unsubscribeNotification = window.electronAPI.onNotification((notification: any) => {
+        console.log('Received notification:', notification)
         
-        // If no API key is found, show the settings dialog after a short delay
-        if (!hasKey) {
-          setTimeout(() => {
-            setIsSettingsOpen(true)
-          }, 1000)
+        // 映射通知类型到Toast变体
+        const getToastVariant = (type: string): ToastVariant => {
+          switch (type) {
+            case 'error': return 'error'
+            case 'success': return 'success'
+            case 'warning': return 'warning'
+            case 'info': return 'info'
+            case 'loading': return 'loading'
+            default: return 'neutral'
+          }
         }
-      } catch (error) {
-        console.error("Failed to check API key:", error)
-      }
+        
+        showToast(
+          notification.title,
+          notification.message,
+          getToastVariant(notification.type),
+          notification.actions && notification.actions.length > 0 ? notification.actions[0].text : undefined,
+          notification.actions && notification.actions.length > 0 ? () => {
+            if (notification.actions[0].action === 'open-web-login') {
+              // Actually trigger login operation
+              setTimeout(async () => {
+                console.log('Preparing to trigger login operation')
+                try {
+                  // Call backend login function
+                  const result = await window.electronAPI.webAuthLogin()
+                  if (result.success) {
+                    showToast('登录成功', '欢迎回来！', 'success')
+                  } else {
+                    showToast('登录失败', result.error || '请重试', 'error')
+                  }
+                } catch (error) {
+                  console.error('Login operation failed:', error)
+                  showToast('登录失败', '网络错误，请重试', 'error')
+                }
+              }, 1000)
+            }
+          } : undefined
+        )
+      })
+      unsubscribers.push(unsubscribeNotification)
     }
     
-    if (isInitialized) {
-      checkApiKey()
+    // 监听清除通知事件
+    if (window.electronAPI?.onClearNotification) {
+      const unsubscribeClear = window.electronAPI.onClearNotification(() => {
+        console.log('收到清除通知事件')
+        setToastState(prev => ({ ...prev, open: false }))
+      })
+      unsubscribers.push(unsubscribeClear)
     }
-  }, [isInitialized])
+    
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe())
+    }
+  }, [showToast])
 
   // Initialize dropdown handler
   useEffect(() => {
@@ -129,7 +217,7 @@ function App() {
           }
         });
         
-        console.log(`Enabled ${selectElements.length} select elements and ${customDropdowns.length} custom dropdowns`);
+        // 减少终端输出
       }, 1000);
       
       return () => clearTimeout(timer);
@@ -139,7 +227,7 @@ function App() {
   // Listen for settings dialog open requests
   useEffect(() => {
     const unsubscribeSettings = window.electronAPI.onShowSettings(() => {
-      console.log("Show settings dialog requested");
+      // 减少终端输出
       setIsSettingsOpen(true);
     });
     
@@ -153,28 +241,20 @@ function App() {
     // Load config and set values
     const initializeApp = async () => {
       try {
-        // Set unlimited credits
-        updateCredits()
+        // Initialize with 0 credits, will be loaded from server when authenticated
+        updateCredits(0)
         
-        // Load config including language and model settings
+        // Load config including model settings
         const loadedConfig = await window.electronAPI.getConfig()
         setConfig(loadedConfig || {})
-        
-        // Load language preference
-        if (loadedConfig && loadedConfig.language) {
-          updateLanguage(loadedConfig.language)
-        } else {
-          updateLanguage("python")
-        }
         
         // Model settings are now managed through the settings dialog
         // and stored in config as extractionModel, solutionModel, and debuggingModel
         
         markInitialized()
       } catch (error) {
-        console.error("Failed to initialize app:", error)
+        // 减少终端输出
         // Fallback to defaults
-        updateLanguage("python")
         markInitialized()
       }
     }
@@ -184,11 +264,11 @@ function App() {
     // Event listeners for process events
     const onApiKeyInvalid = () => {
       showToast(
-        "API Key Invalid",
-        "Your OpenAI API key appears to be invalid or has insufficient credits",
+        "认证失效",
+        "请重新登录Web配置中心",
         "error"
       )
-      setApiKeyDialogOpen(true)
+      setIsWebAuthOpen(true)
     }
 
     // Setup API key invalid listener
@@ -197,7 +277,7 @@ function App() {
     // Define a no-op handler for solution success
     const unsubscribeSolutionSuccess = window.electronAPI.onSolutionSuccess(
       () => {
-        console.log("Solution success - no credits deducted in this version")
+        // 减少终端输出
         // No credit deduction in this version
       }
     )
@@ -209,16 +289,16 @@ function App() {
       window.__IS_INITIALIZED__ = false
       setIsInitialized(false)
     }
-  }, [updateCredits, updateLanguage, markInitialized, showToast])
+  }, [updateCredits, markInitialized, showToast])
 
   // API Key dialog management
   const handleOpenSettings = useCallback(() => {
-    console.log('Opening settings dialog');
+    // 减少终端输出
     setIsSettingsOpen(true);
   }, []);
   
   const handleCloseSettings = useCallback((open: boolean) => {
-    console.log('Settings dialog state changed:', open);
+    // 减少终端输出
     setIsSettingsOpen(open);
   }, []);
 
@@ -226,18 +306,12 @@ function App() {
     try {
       await window.electronAPI.updateConfig(newConfig)
       setConfig(newConfig)
-      setHasApiKey(true)
-      showToast("Success", "Settings saved successfully", "success")
-      
-      // Update language if changed
-      if (newConfig.language) {
-        updateLanguage(newConfig.language)
-      }
+      showToast("成功", "设置已保存", "success")
     } catch (error) {
-      console.error("Failed to save config:", error)
-      showToast("Error", "Failed to save settings", "error")
+      // 减少终端输出
+      showToast("错误", "保存设置失败", "error")
     }
-  }, [showToast, updateLanguage])
+  }, [showToast])
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -245,21 +319,74 @@ function App() {
         <ToastContext.Provider value={{ showToast }}>
           <div className="relative">
             {isInitialized ? (
-              hasApiKey ? (
-                <SubscribedApp
-                  credits={credits}
-                  currentLanguage={currentLanguage}
-                  setLanguage={updateLanguage}
-                />
+              // 🆕 修改逻辑：只有在已认证时才显示主应用
+              authenticated ? (
+                <ClickThroughManager
+                  nonClickThroughSelectors={[
+                    // 顶部区域
+                    '.top-area', 
+                    // 交互元素
+                    '.pointer-events-auto',
+                    'button',
+                    'select',
+                    'input',
+                    '.settings-button',
+                    // 设置相关
+                    '.settings-dialog',
+                    '[role="dialog"]',
+                    // 复制按钮
+                    '.absolute.top-2.right-2',
+                    // 其他可能需要交互的元素
+                    'a',
+                    '[role="button"]',
+                    '[role="menuitem"]',
+                    '[role="tab"]',
+                    '[role="switch"]',
+                    '[role="checkbox"]',
+                    '[role="radio"]',
+                    '.react-select__control',
+                    '.react-select__menu'
+                  ]}
+                >
+                  <SubscribedApp
+                    credits={credits}
+                  />
+                </ClickThroughManager>
               ) : (
-                <WelcomeScreen onOpenSettings={handleOpenSettings} />
+                // 🆕 未认证时显示等待登录的界面
+                <div className="min-h-screen bg-black flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    {authLoading ? (
+                      <>
+                        <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
+                        <p className="text-white/60 text-sm">
+                          检查认证状态...
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 border-2 border-white/20 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h2 className="text-white text-lg font-medium mb-2">需要登录</h2>
+                          <p className="text-white/60 text-sm">
+                            请通过Web配置中心登录以使用增强认证功能
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               )
             ) : (
               <div className="min-h-screen bg-black flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
                   <p className="text-white/60 text-sm">
-                    Initializing...
+                    初始化中...
                   </p>
                 </div>
               </div>
@@ -275,6 +402,12 @@ function App() {
             config={config}
           />
           
+          {/* 🆕 Web Authentication Dialog - 根据认证状态自动控制显示 */}
+          <WebAuthDialog 
+            open={isWebAuthOpen}
+            onOpenChange={setIsWebAuthOpen}
+          />
+          
           <Toast
             open={toastState.open}
             onOpenChange={(open) =>
@@ -282,6 +415,8 @@ function App() {
             }
             variant={toastState.variant}
             duration={1500}
+            actionText={toastState.actionText}
+            onActionClick={toastState.onActionClick || undefined}
           >
             <ToastTitle>{toastState.title}</ToastTitle>
             <ToastDescription>{toastState.description}</ToastDescription>

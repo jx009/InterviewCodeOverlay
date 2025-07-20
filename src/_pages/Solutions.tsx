@@ -6,11 +6,12 @@ import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism"
 
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue"
 
-import { ProblemStatementData } from "../types/solutions"
+import { ProblemStatementData, SolutionData, MultipleChoiceAnswer } from "../types/solutions"
 import SolutionCommands from "../components/Solutions/SolutionCommands"
 import Debug from "./Debug"
 import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
+import { useLanguageConfig } from "../hooks/useLanguageConfig"
 
 export const ContentSection = ({
   title,
@@ -28,7 +29,7 @@ export const ContentSection = ({
     {isLoading ? (
       <div className="mt-4 flex">
         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-          Extracting problem statement...
+          提取问题描述中...
         </p>
       </div>
     ) : (
@@ -50,6 +51,19 @@ const SolutionSection = ({
   currentLanguage: string
 }) => {
   const [copied, setCopied] = useState(false)
+  const [showCopyButton, setShowCopyButton] = useState(true)
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const config = await window.electronAPI.getConfig()
+        setShowCopyButton(config.showCopyButton !== false)
+      } catch (error) {
+        console.error("Failed to load copy button config:", error)
+      }
+    }
+    fetchConfig()
+  }, [])
 
   const copyToClipboard = () => {
     if (typeof content === "string") {
@@ -69,34 +83,57 @@ const SolutionSection = ({
         <div className="space-y-1.5">
           <div className="mt-4 flex">
             <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-              Loading solutions...
+              加载解决方案中...
             </p>
           </div>
         </div>
       ) : (
-        <div className="w-full relative">
-          <button
-            onClick={copyToClipboard}
-            className="absolute top-2 right-2 text-xs text-white bg-white/10 hover:bg-white/20 rounded px-2 py-1 transition"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
-          <SyntaxHighlighter
-            showLineNumbers
-            language={currentLanguage == "golang" ? "go" : currentLanguage}
-            style={dracula}
-            customStyle={{
-              maxWidth: "100%",
-              margin: 0,
-              padding: "1rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-              backgroundColor: "rgba(22, 27, 34, 0.5)"
-            }}
-            wrapLongLines={true}
-          >
-            {content as string}
-          </SyntaxHighlighter>
+        <div className="w-full relative pointer-events-none">
+          {showCopyButton && (
+            <button
+              onClick={copyToClipboard}
+              className="absolute top-2 right-2 text-xs text-white bg-white/10 hover:bg-white/20 rounded px-2 py-1 transition pointer-events-auto z-10"
+            >
+              {copied ? "已复制!" : "复制"}
+            </button>
+          )}
+          <div>
+            <SyntaxHighlighter
+              showLineNumbers
+              language={
+                currentLanguage === "Go" || currentLanguage === "Golang" ? "go" : 
+                currentLanguage === "JavaScript" ? "javascript" :
+                currentLanguage === "TypeScript" ? "typescript" :
+                currentLanguage === "Cpp" || currentLanguage === "C++" ? "cpp" :
+                currentLanguage === "Csharp" || currentLanguage === "C#" ? "csharp" :
+                currentLanguage === "Java" ? "java" :
+                currentLanguage === "Python" ? "python" :
+                currentLanguage === "Swift" ? "swift" :
+                currentLanguage === "Kotlin" ? "kotlin" :
+                currentLanguage === "Ruby" ? "ruby" :
+                currentLanguage === "Php" || currentLanguage === "PHP" ? "php" :
+                currentLanguage === "Scala" ? "scala" :
+                currentLanguage === "Rust" ? "rust" :
+                currentLanguage === "Sql" || currentLanguage === "SQL" ? "sql" :
+                currentLanguage === "R" ? "r" :
+                currentLanguage.toLowerCase()
+              }
+              style={dracula}
+              customStyle={{
+                maxWidth: "100%",
+                margin: 0,
+                padding: "1rem",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+                backgroundColor: "rgba(22, 27, 34, 0.5)",
+                userSelect: "none"
+              }}
+              wrapLongLines={true}
+              className="pointer-events-none"
+            >
+              {content as string}
+            </SyntaxHighlighter>
+          </div>
         </div>
       )}
     </div>
@@ -116,7 +153,7 @@ export const ComplexitySection = ({
   const formatComplexity = (complexity: string | null): string => {
     // Default if no complexity returned by LLM
     if (!complexity || complexity.trim() === "") {
-      return "Complexity not available";
+      return "复杂度不可用";
     }
 
     const bigORegex = /O\([^)]+\)/i;
@@ -135,11 +172,11 @@ export const ComplexitySection = ({
   return (
     <div className="space-y-2">
       <h2 className="text-[13px] font-medium text-white tracking-wide">
-        Complexity
+        复杂度
       </h2>
       {isLoading ? (
         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-          Calculating complexity...
+          计算复杂度中...
         </p>
       ) : (
         <div className="space-y-3">
@@ -165,20 +202,66 @@ export const ComplexitySection = ({
   );
 }
 
+// 选择题答案显示组件
+export const MultipleChoiceSection = ({
+  answers,
+  isLoading
+}: {
+  answers: Array<{
+    question_number: string;
+    answer: string;
+    reasoning?: string;
+  }> | null;
+  isLoading: boolean;
+}) => {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-[13px] font-medium text-white tracking-wide">
+        答案
+      </h2>
+      {isLoading ? (
+        <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
+          分析选择题中...
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {answers?.map((answer, index) => (
+            <div key={index} className="text-[13px] leading-[1.4] text-gray-100 bg-white/5 rounded-md p-3">
+              <div className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-green-400/80 mt-2 shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <strong>题目 {answer.question_number}:</strong>
+                    <span className="bg-green-500/20 text-green-300 px-2 py-0.5 rounded text-xs font-semibold">
+                      {answer.answer}
+                    </span>
+                  </div>
+                  {answer.reasoning && (
+                    <div className="text-gray-300 text-xs mt-1">
+                      {answer.reasoning}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface SolutionsProps {
   setView: (view: "queue" | "solutions" | "debug") => void
   credits: number
-  currentLanguage: string
-  setLanguage: (language: string) => void
 }
 const Solutions: React.FC<SolutionsProps> = ({
   setView,
-  credits,
-  currentLanguage,
-  setLanguage
+  credits
 }) => {
   const queryClient = useQueryClient()
   const contentRef = useRef<HTMLDivElement>(null)
+  const { language: currentLanguage } = useLanguageConfig()
 
   const [debugProcessing, setDebugProcessing] = useState(false)
   const [problemStatementData, setProblemStatementData] =
@@ -191,6 +274,7 @@ const Solutions: React.FC<SolutionsProps> = ({
   const [spaceComplexityData, setSpaceComplexityData] = useState<string | null>(
     null
   )
+  const [multipleChoiceAnswers, setMultipleChoiceAnswers] = useState<MultipleChoiceAnswer[] | null>(null)
 
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const [tooltipHeight, setTooltipHeight] = useState(0)
@@ -305,7 +389,7 @@ const Solutions: React.FC<SolutionsProps> = ({
       }),
       //if there was an error processing the initial solution
       window.electronAPI.onSolutionError((error: string) => {
-        showToast("Processing Failed", error, "error")
+        showToast("处理失败", error, "error")
         // Reset solutions in the cache (even though this shouldn't ever happen) and complexities to previous states
         const solution = queryClient.getQueryData(["solution"]) as {
           code: string
@@ -328,19 +412,29 @@ const Solutions: React.FC<SolutionsProps> = ({
           console.warn("Received empty or invalid solution data")
           return
         }
-        console.log({ data })
-        const solutionData = {
-          code: data.code,
-          thoughts: data.thoughts,
-          time_complexity: data.time_complexity,
-          space_complexity: data.space_complexity
-        }
+        console.log("📨 Received solution data:", { data })
 
-        queryClient.setQueryData(["solution"], solutionData)
-        setSolutionData(solutionData.code || null)
-        setThoughtsData(solutionData.thoughts || null)
-        setTimeComplexityData(solutionData.time_complexity || null)
-        setSpaceComplexityData(solutionData.space_complexity || null)
+        // Save original data to query cache, including type information
+        queryClient.setQueryData(["solution"], data)
+
+        // Set state based on data type
+        if (data.type === 'multiple_choice') {
+          // Multiple choice data processing
+          console.log("🎯 Processing multiple choice data")
+          setSolutionData(null) // Multiple choice doesn't show code
+          setThoughtsData(data.thoughts || null)
+          setTimeComplexityData(null) // Multiple choice doesn't show complexity
+          setSpaceComplexityData(null)
+          setMultipleChoiceAnswers(data.answers || null)
+        } else {
+          // Programming problem data processing
+          console.log("💻 Processing programming problem data")
+          setSolutionData(data.code || null)
+          setThoughtsData(data.thoughts || null)
+          setTimeComplexityData(data.time_complexity || null)
+          setSpaceComplexityData(data.space_complexity || null)
+          setMultipleChoiceAnswers(null)
+        }
 
         // Fetch latest screenshots when solution is successful
         const fetchScreenshots = async () => {
@@ -377,16 +471,16 @@ const Solutions: React.FC<SolutionsProps> = ({
       //when there was an error in the initial debugging, we'll show a toast and stop the little generating pulsing thing.
       window.electronAPI.onDebugError(() => {
         showToast(
-          "Processing Failed",
-          "There was an error debugging your code.",
+          "处理失败",
+          "调试代码时发生错误",
           "error"
         )
         setDebugProcessing(false)
       }),
       window.electronAPI.onProcessingNoScreenshots(() => {
         showToast(
-          "No Screenshots",
-          "There are no extra screenshots to process.",
+          "无截图",
+          "没有额外的截图需要处理",
           "neutral"
         )
       }),
@@ -412,17 +506,24 @@ const Solutions: React.FC<SolutionsProps> = ({
         )
       }
       if (event?.query.queryKey[0] === "solution") {
-        const solution = queryClient.getQueryData(["solution"]) as {
-          code: string
-          thoughts: string[]
-          time_complexity: string
-          space_complexity: string
-        } | null
+        const solution = queryClient.getQueryData(["solution"]) as SolutionData | null
 
-        setSolutionData(solution?.code ?? null)
-        setThoughtsData(solution?.thoughts ?? null)
-        setTimeComplexityData(solution?.time_complexity ?? null)
-        setSpaceComplexityData(solution?.space_complexity ?? null)
+        // 根据解决方案类型处理不同的数据
+        if (solution?.type === 'multiple_choice') {
+          // 选择题：不显示代码，显示答案
+          setSolutionData(null)
+          setThoughtsData(solution?.thoughts ?? null)
+          setTimeComplexityData(null)
+          setSpaceComplexityData(null)
+          setMultipleChoiceAnswers(solution?.answers ?? null)
+        } else {
+          // 编程题：显示代码和复杂度
+          setSolutionData(solution?.code ?? null)
+          setThoughtsData(solution?.thoughts ?? null)
+          setTimeComplexityData(solution?.time_complexity ?? null)
+          setSpaceComplexityData(solution?.space_complexity ?? null)
+          setMultipleChoiceAnswers(null)
+        }
       }
     })
     return () => unsubscribe()
@@ -455,7 +556,7 @@ const Solutions: React.FC<SolutionsProps> = ({
         setExtraScreenshots(screenshots)
       } else {
         console.error("Failed to delete extra screenshot:", response.error)
-        showToast("Error", "Failed to delete the screenshot", "error")
+        showToast("错误", "删除截图失败", "error")
       }
     } catch (error) {
       console.error("Error deleting extra screenshot:", error)
@@ -469,15 +570,13 @@ const Solutions: React.FC<SolutionsProps> = ({
         <Debug
           isProcessing={debugProcessing}
           setIsProcessing={setDebugProcessing}
-          currentLanguage={currentLanguage}
-          setLanguage={setLanguage}
         />
       ) : (
         <div ref={contentRef} className="relative">
           <div className="space-y-3 px-4 py-3">
           {/* Conditionally render the screenshot queue if solutionData is available */}
-          {solutionData && (
-            <div className="bg-transparent w-fit">
+          {(solutionData || multipleChoiceAnswers) && (
+            <div className="bg-transparent w-fit top-area">
               <div className="pb-3">
                 <div className="space-y-3 w-fit">
                   <ScreenshotQueue
@@ -491,40 +590,40 @@ const Solutions: React.FC<SolutionsProps> = ({
           )}
 
           {/* Navbar of commands with the SolutionsHelper */}
-          <SolutionCommands
-            onTooltipVisibilityChange={handleTooltipVisibilityChange}
-            isProcessing={!problemStatementData || !solutionData}
-            extraScreenshots={extraScreenshots}
-            credits={credits}
-            currentLanguage={currentLanguage}
-            setLanguage={setLanguage}
-          />
+          <div className="top-area">
+            <SolutionCommands
+              onTooltipVisibilityChange={handleTooltipVisibilityChange}
+              isProcessing={!problemStatementData || (!solutionData && !multipleChoiceAnswers)}
+              extraScreenshots={extraScreenshots}
+              credits={credits}
+            />
+          </div>
 
           {/* Main Content - Modified width constraints */}
-          <div className="w-full text-sm text-black bg-black/60 rounded-md">
+          <div className="w-full text-sm text-black bg-black/60 rounded-md pointer-events-none main-content">
             <div className="rounded-lg overflow-hidden">
               <div className="px-4 py-3 space-y-4 max-w-full">
-                {!solutionData && (
+                {!solutionData && !multipleChoiceAnswers && (
                   <>
                     <ContentSection
-                      title="Problem Statement"
+                      title="问题描述"
                       content={problemStatementData?.problem_statement}
                       isLoading={!problemStatementData}
                     />
                     {problemStatementData && (
                       <div className="mt-4 flex">
                         <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-                          Generating solutions...
+                          生成解决方案中...
                         </p>
                       </div>
                     )}
                   </>
                 )}
 
-                {solutionData && (
+                {(solutionData || multipleChoiceAnswers) && (
                   <>
                     <ContentSection
-                      title={`My Thoughts (${COMMAND_KEY} + Arrow keys to scroll)`}
+                      title={`我的思路 (${COMMAND_KEY} + 方向键滚动)`}
                       content={
                         thoughtsData && (
                           <div className="space-y-3">
@@ -545,18 +644,31 @@ const Solutions: React.FC<SolutionsProps> = ({
                       isLoading={!thoughtsData}
                     />
 
-                    <SolutionSection
-                      title="Solution"
-                      content={solutionData}
-                      isLoading={!solutionData}
-                      currentLanguage={currentLanguage}
-                    />
+                    {/* 编程题显示代码和复杂度 */}
+                    {solutionData && (
+                      <>
+                        <SolutionSection
+                          title="解决方案"
+                          content={solutionData}
+                          isLoading={!solutionData}
+                          currentLanguage={currentLanguage}
+                        />
 
-                    <ComplexitySection
-                      timeComplexity={timeComplexityData}
-                      spaceComplexity={spaceComplexityData}
-                      isLoading={!timeComplexityData || !spaceComplexityData}
-                    />
+                        <ComplexitySection
+                          timeComplexity={timeComplexityData}
+                          spaceComplexity={spaceComplexityData}
+                          isLoading={!timeComplexityData || !spaceComplexityData}
+                        />
+                      </>
+                    )}
+
+                    {/* 选择题显示答案 */}
+                    {multipleChoiceAnswers && multipleChoiceAnswers.length > 0 && (
+                      <MultipleChoiceSection
+                        answers={multipleChoiceAnswers}
+                        isLoading={!multipleChoiceAnswers}
+                      />
+                    )}
                   </>
                 )}
               </div>

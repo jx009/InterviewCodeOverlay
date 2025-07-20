@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>认证状态测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .success { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+        .error { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .info { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #2563eb; }
+        .logs {
+            background: #111;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔐 认证状态一致性测试</h1>
+    
+    <div class="status info">
+        <h3>测试目标</h3>
+        <p>验证登录后在不同页面间切换时，导航栏的认证状态是否保持一致</p>
+    </div>
+
+    <div class="controls">
+        <button onclick="checkAuthStatus()">检查认证状态</button>
+        <button onclick="simulateLogin()">模拟登录</button>
+        <button onclick="simulateLogout()">模拟登出</button>
+        <button onclick="clearLogs()">清空日志</button>
+    </div>
+
+    <div id="status-display" class="status info">
+        <h3>当前状态</h3>
+        <p id="current-status">检查中...</p>
+    </div>
+
+    <div class="logs">
+        <h3>测试日志</h3>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('logs');
+            const color = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6';
+            logElement.innerHTML += `<div style="color: ${color};">[${timestamp}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(status, isAuthenticated, hasUser, hasSessionId) {
+            const statusElement = document.getElementById('current-status');
+            const statusDisplay = document.getElementById('status-display');
+            
+            statusElement.innerHTML = `
+                <strong>认证状态:</strong> ${isAuthenticated ? '✅ 已认证' : '❌ 未认证'}<br>
+                <strong>用户信息:</strong> ${hasUser ? '✅ 存在' : '❌ 不存在'}<br>
+                <strong>SessionId:</strong> ${hasSessionId ? '✅ 存在' : '❌ 不存在'}<br>
+                <strong>状态一致性:</strong> ${isAuthenticated === (hasUser || hasSessionId) ? '✅ 一致' : '❌ 不一致'}
+            `;
+            
+            statusDisplay.className = `status ${isAuthenticated ? 'success' : 'error'}`;
+        }
+
+        function checkAuthStatus() {
+            log('🔍 开始检查认证状态...');
+            
+            // 模拟检查localStorage
+            const sessionId = localStorage.getItem('sessionId');
+            const hasSessionId = !!sessionId;
+            
+            // 模拟检查用户状态（实际中这会来自React状态）
+            const userStr = localStorage.getItem('mockUser');
+            const hasUser = !!userStr;
+            
+            // 计算认证状态
+            const isAuthenticated = hasUser || hasSessionId;
+            
+            log(`📋 SessionId: ${hasSessionId ? '存在' : '不存在'}`);
+            log(`👤 用户信息: ${hasUser ? '存在' : '不存在'}`);
+            log(`🔐 认证状态: ${isAuthenticated ? '已认证' : '未认证'}`);
+            
+            updateStatus('checked', isAuthenticated, hasUser, hasSessionId);
+            
+            if (isAuthenticated === (hasUser || hasSessionId)) {
+                log('✅ 认证状态一致性检查通过', 'success');
+            } else {
+                log('❌ 认证状态不一致！', 'error');
+            }
+        }
+
+        function simulateLogin() {
+            log('🔄 模拟登录流程...');
+            
+            // 模拟设置sessionId和用户信息
+            const mockSessionId = 'session_' + Date.now();
+            const mockUser = JSON.stringify({
+                id: '1',
+                username: 'testuser',
+                email: 'test@example.com'
+            });
+            
+            localStorage.setItem('sessionId', mockSessionId);
+            localStorage.setItem('mockUser', mockUser);
+            
+            log(`🔑 已设置SessionId: ${mockSessionId.substring(0, 15)}...`);
+            log('👤 已设置用户信息');
+            log('✅ 模拟登录完成', 'success');
+            
+            // 检查状态
+            setTimeout(checkAuthStatus, 100);
+        }
+
+        function simulateLogout() {
+            log('🚪 模拟登出流程...');
+            
+            localStorage.removeItem('sessionId');
+            localStorage.removeItem('mockUser');
+            
+            log('🗑️ 已清除SessionId');
+            log('🗑️ 已清除用户信息');
+            log('✅ 模拟登出完成', 'success');
+            
+            // 检查状态
+            setTimeout(checkAuthStatus, 100);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            log('🚀 页面加载完成，开始初始检查...');
+            checkAuthStatus();
+        };
+
+        // 监听localStorage变化
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'sessionId' || e.key === 'mockUser') {
+                log(`📡 检测到localStorage变化: ${e.key}`, 'info');
+                setTimeout(checkAuthStatus, 100);
+            }
+        });
+    </script>
+</body>
+</html> 

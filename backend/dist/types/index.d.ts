@@ -1,0 +1,195 @@
+import { Request } from 'express';
+export interface UserPayload {
+    id: number;
+    username: string;
+    email?: string | null;
+}
+export interface SimpleUserPayload {
+    userId: number;
+}
+export interface AuthenticatedRequest extends Request {
+    user?: {
+        userId: number;
+    };
+}
+export type QuestionType = 'programming' | 'multiple_choice';
+export interface MultipleChoiceQuestion {
+    question_number: string;
+    question_text: string;
+    options: string[];
+    correct_answer?: string;
+}
+export interface ProblemInfo {
+    type: QuestionType;
+    problem_statement: string;
+    constraints?: string;
+    example_input?: string;
+    example_output?: string;
+    multiple_choice_questions?: MultipleChoiceQuestion[];
+}
+export interface ProgrammingResponse {
+    type: 'programming';
+    code: string;
+    thoughts: string[];
+    time_complexity: string;
+    space_complexity: string;
+}
+export interface MultipleChoiceAnswer {
+    question_number: string;
+    answer: string;
+    reasoning?: string;
+}
+export interface MultipleChoiceResponse {
+    type: 'multiple_choice';
+    answers: MultipleChoiceAnswer[];
+    thoughts: string[];
+}
+export type AIResponse = ProgrammingResponse | MultipleChoiceResponse;
+export interface AIModel {
+    id: string;
+    modelId: string;
+    name: string;
+    provider: 'claude' | 'gemini' | 'openai';
+    category: 'extraction' | 'solution' | 'debugging' | 'general';
+    isActive: boolean;
+    priority: number;
+}
+export interface UserConfigData {
+    selectedProvider: 'claude' | 'gemini' | 'openai';
+    programmingModel: string;
+    multipleChoiceModel: string;
+    extractionModel?: string;
+    solutionModel?: string;
+    debuggingModel?: string;
+    language: string;
+    opacity: number;
+    showCopyButton: boolean;
+}
+export interface ApiResponse<T = any> {
+    success: boolean;
+    data?: T;
+    message?: string;
+    error?: string;
+}
+export interface LoginRequest {
+    username: string;
+    password: string;
+}
+export interface RegisterRequest {
+    username: string;
+    password: string;
+    email?: string;
+}
+export interface TokenResponse {
+    token: string;
+    refreshToken: string;
+    expiresIn: string;
+    user: UserPayload;
+}
+export interface ChatRequest {
+    model: string;
+    messages: Array<{
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+    }>;
+    temperature?: number;
+    maxTokens?: number;
+}
+export interface UsageStats {
+    totalRequests: number;
+    requestsByModel: Record<string, number>;
+    requestsByAction: Record<string, number>;
+    tokensUsed: number;
+    recentActivity: Array<{
+        date: string;
+        count: number;
+    }>;
+}
+export declare const SUPPORTED_MODELS: {
+    readonly claude: readonly [{
+        readonly id: "claude-sonnet-4-20250514";
+        readonly name: "claude-4-sonnet";
+        readonly category: "general";
+    }];
+    readonly gemini: readonly [{
+        readonly id: "gemini-2.5-pro-deepsearch";
+        readonly name: "gemini-pro-2.5";
+        readonly category: "general";
+    }, {
+        readonly id: "gemini-2.5-flash-preview-04-17";
+        readonly name: "gemini-flash-2.5";
+        readonly category: "general";
+    }];
+    readonly openai: readonly [{
+        readonly id: "gpt-4o";
+        readonly name: "gpt-4o";
+        readonly category: "general";
+    }, {
+        readonly id: "gpt-4o-mini";
+        readonly name: "gpt-4o-mini";
+        readonly category: "general";
+    }, {
+        readonly id: "o4-mini-high-all";
+        readonly name: "o4-mini-high";
+        readonly category: "general";
+    }, {
+        readonly id: "o4-mini-all";
+        readonly name: "o4-mini";
+        readonly category: "general";
+    }];
+};
+export declare const PROGRAMMING_LANGUAGES: readonly [{
+    readonly value: "python";
+    readonly label: "Python";
+}, {
+    readonly value: "javascript";
+    readonly label: "JavaScript";
+}, {
+    readonly value: "java";
+    readonly label: "Java";
+}, {
+    readonly value: "cpp";
+    readonly label: "C++";
+}, {
+    readonly value: "c";
+    readonly label: "C";
+}, {
+    readonly value: "csharp";
+    readonly label: "C#";
+}, {
+    readonly value: "go";
+    readonly label: "Go";
+}, {
+    readonly value: "rust";
+    readonly label: "Rust";
+}, {
+    readonly value: "typescript";
+    readonly label: "TypeScript";
+}, {
+    readonly value: "kotlin";
+    readonly label: "Kotlin";
+}, {
+    readonly value: "swift";
+    readonly label: "Swift";
+}, {
+    readonly value: "php";
+    readonly label: "PHP";
+}, {
+    readonly value: "ruby";
+    readonly label: "Ruby";
+}, {
+    readonly value: "scala";
+    readonly label: "Scala";
+}];
+declare module 'express' {
+    interface Request {
+        userId?: number;
+        user?: {
+            userId: number;
+            username?: string;
+            email?: string;
+            role?: string;
+        };
+    }
+}
+//# sourceMappingURL=index.d.ts.map

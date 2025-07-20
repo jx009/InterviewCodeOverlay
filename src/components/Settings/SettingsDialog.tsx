@@ -7,7 +7,8 @@ import {
   DialogFooter 
 } from '../ui/dialog';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { useWebAuth } from '../../hooks/useWebAuth';
+import { ExternalLink, User, Settings, CheckCircle, AlertCircle, Loader2, Sparkles, Shield } from 'lucide-react';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -22,278 +23,197 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onConfigUpdate,
   config
 }) => {
-  const [formData, setFormData] = useState({
-    apiProvider: config.apiProvider || 'openai',
-    extractionModel: config.extractionModel || '',
-    solutionModel: config.solutionModel || '',
-    debuggingModel: config.debuggingModel || '',
-    language: config.language || 'python',
-    opacity: config.opacity || 1.0
-  });
+  const { 
+    authenticated, 
+    user, 
+    connectionStatus, 
+    login: webLogin,
+    logout: webLogout,
+    loading
+  } = useWebAuth();
 
-  const [isDirty, setIsDirty] = useState(false);
+  const [userConfig, setUserConfig] = useState<any>(null);
 
-  // 更新formData当config变化时
   useEffect(() => {
-    setFormData({
-      apiProvider: config.apiProvider || 'openai',
-      extractionModel: config.extractionModel || '',
-      solutionModel: config.solutionModel || '',
-      debuggingModel: config.debuggingModel || '',
-      language: config.language || 'python',
-      opacity: config.opacity || 1.0
-    });
-  }, [config]);
+    if (authenticated && isOpen) {
+      // 模拟获取用户配置
+      setUserConfig({
+        aiModel: 'Claude Sonnet（智能推荐）',
+        language: 'Python',
+        plan: '免费版',
+        usage: '本月已使用 45/100 次'
+      });
+    }
+  }, [authenticated, isOpen]);
 
-  // 根据API提供商获取可用模型
-  const getAvailableModels = (provider: string): { value: string; label: string }[] => {
-    switch (provider) {
-      case 'openai':
-        return [
-          { value: 'gpt-4o', label: 'GPT-4o (推荐)' },
-          { value: 'gpt-4o-mini', label: 'GPT-4o mini (快速)' },
-          { value: 'gpt-4', label: 'GPT-4 (经典)' },
-          { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (高效)' }
-        ];
-      case 'gemini':
-        return [
-          { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (推荐)' },
-          { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (专业)' },
-          { value: 'gemini-pro', label: 'Gemini Pro (经典)' }
-        ];
-      case 'anthropic':
-        return [
-          { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet (推荐)' },
-          { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (稳定)' },
-          { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus (最强)' }
-        ];
-      default:
-        return [];
+  const handleWebLogin = async () => {
+    try {
+      await webLogin();
+    } catch (error) {
+      console.error('Login failed:', error);
     }
   };
 
-  const handleProviderChange = (provider: string) => {
-    const models = getAvailableModels(provider);
-    const defaultModel = models[0]?.value || '';
-    
-    setFormData(prev => ({
-      ...prev,
-      apiProvider: provider,
-      extractionModel: defaultModel,
-      solutionModel: defaultModel,
-      debuggingModel: defaultModel
-    }));
-    setIsDirty(true);
+  const handleLogout = async () => {
+    try {
+      // 先调用登出API
+      await webLogout();
+      // 然后打开web退出页面
+      window.electronAPI?.openLink('http://localhost:3001/logout');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    setIsDirty(true);
+  const handleOpenConfig = () => {
+    window.electronAPI?.openLink('http://localhost:3000/dashboard');
   };
-
-  const handleSave = () => {
-    onConfigUpdate(formData);
-    setIsDirty(false);
-    onClose();
-  };
-
-  const handleCancel = () => {
-    setFormData({
-      apiProvider: config.apiProvider || 'openai',
-      extractionModel: config.extractionModel || '',
-      solutionModel: config.solutionModel || '',
-      debuggingModel: config.debuggingModel || '',
-      language: config.language || 'python',
-      opacity: config.opacity || 1.0
-    });
-    setIsDirty(false);
-    onClose();
-  };
-
-  const programLanguages = [
-    { value: 'python', label: 'Python' },
-    { value: 'javascript', label: 'JavaScript' },
-    { value: 'java', label: 'Java' },
-    { value: 'cpp', label: 'C++' },
-    { value: 'c', label: 'C' },
-    { value: 'csharp', label: 'C#' },
-    { value: 'go', label: 'Go' },
-    { value: 'rust', label: 'Rust' },
-    { value: 'typescript', label: 'TypeScript' },
-    { value: 'kotlin', label: 'Kotlin' },
-    { value: 'swift', label: 'Swift' },
-    { value: 'php', label: 'PHP' },
-    { value: 'ruby', label: 'Ruby' },
-    { value: 'scala', label: 'Scala' }
-  ];
-
-  const availableModels = getAvailableModels(formData.apiProvider);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[480px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>应用设置</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Settings className="h-5 w-5 text-blue-600" />
+            设置中心
+          </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-          {/* API服务商选择 */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium block">AI 服务商</label>
-            <div className="grid grid-cols-1 gap-2">
-              {[
-                { value: 'openai', label: 'OpenAI', badge: 'GPT系列' },
-                { value: 'gemini', label: 'Google Gemini', badge: 'Gemini系列' },
-                { value: 'anthropic', label: 'Anthropic', badge: 'Claude系列' }
-              ].map(provider => (
-                <div
-                  key={provider.value}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors border ${
-                    formData.apiProvider === provider.value
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleProviderChange(provider.value)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          formData.apiProvider === provider.value ? 'bg-blue-500' : 'bg-gray-300'
-                        }`}
-                      />
-                      <span className="font-medium">{provider.label}</span>
+          {/* 账户状态卡片 */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-xl p-5">
+            {loading ? (
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <span className="text-sm text-gray-600">检查登录状态...</span>
+              </div>
+            ) : authenticated ? (
+              <div className="space-y-4">
+                {/* 用户信息 */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">{user?.username}</div>
+                    <div className="text-sm text-gray-600">{user?.email}</div>
+                  </div>
+                  <CheckCircle className="h-5 w-5 text-green-600 ml-auto" />
+                </div>
+
+                {/* 配置状态 */}
+                {userConfig && (
+                  <div className="bg-white/60 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                      <Sparkles className="h-4 w-4 text-purple-600" />
+                      当前配置
                     </div>
-                    <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
-                      {provider.badge}
-                    </span>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-gray-600">AI模型</div>
+                        <div className="font-medium">{userConfig.aiModel}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600">编程语言</div>
+                        <div className="font-medium">{userConfig.language}</div>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200">
+                      <div className="text-xs text-gray-500">{userConfig.usage}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 操作按钮 */}
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleOpenConfig}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    管理配置
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={handleLogout}
+                    className="text-gray-600 hover:text-gray-800"
+                  >
+                    登出
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center space-y-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                  <Shield className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">登录账户</div>
+                  <div className="text-sm text-gray-600 mb-4">
+                    登录后可以使用AI智能分析功能
                   </div>
                 </div>
-              ))}
-            </div>
-            
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>内置API密钥：</strong>应用已集成AI服务，无需额外配置。只需选择您偏好的AI服务商和模型即可开始使用。
+                <Button 
+                  onClick={handleWebLogin}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <User className="h-4 w-4 mr-2" />
+                  )}
+                  立即登录
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* 连接状态（仅在有问题时显示） */}
+          {!connectionStatus.connected && !connectionStatus.checking && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-amber-800 mb-2">
+                <AlertCircle className="h-4 w-4" />
+                <span className="font-medium">连接问题</span>
+              </div>
+              <p className="text-sm text-amber-700 mb-3">
+                无法连接到服务器，请检查网络连接
               </p>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="text-amber-700 border-amber-300 hover:bg-amber-100"
+              >
+                重试连接
+              </Button>
             </div>
-          </div>
+          )}
 
-          <hr className="border-gray-200" />
-
-          {/* 模型选择 */}
-          <div className="space-y-4">
-            <label className="text-sm font-medium block">模型配置</label>
-            
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <label htmlFor="extractionModel" className="text-xs text-gray-600 block">
-                  题目识别模型
-                </label>
-                <select
-                  value={formData.extractionModel}
-                  onChange={(e) => handleInputChange('extractionModel', e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {availableModels.map(model => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
+          {/* 应用信息 */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="text-sm text-gray-600 space-y-2">
+              <div className="flex justify-between">
+                <span>应用版本</span>
+                <span className="font-medium">v2.0.0</span>
               </div>
-
-              <div className="space-y-2">
-                <label htmlFor="solutionModel" className="text-xs text-gray-600 block">
-                  解题生成模型
-                </label>
-                <select
-                  value={formData.solutionModel}
-                  onChange={(e) => handleInputChange('solutionModel', e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {availableModels.map(model => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="debuggingModel" className="text-xs text-gray-600 block">
-                  调试分析模型
-                </label>
-                <select
-                  value={formData.debuggingModel}
-                  onChange={(e) => handleInputChange('debuggingModel', e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {availableModels.map(model => (
-                    <option key={model.value} value={model.value}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex justify-between">
+                <span>配置方式</span>
+                <span className="font-medium text-blue-600">云端同步</span>
               </div>
             </div>
-          </div>
-
-          <hr className="border-gray-200" />
-
-          {/* 编程语言选择 */}
-          <div className="space-y-3">
-            <label htmlFor="language" className="text-sm font-medium block">
-              首选编程语言
-            </label>
-            <select
-              value={formData.language}
-              onChange={(e) => handleInputChange('language', e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {programLanguages.map(lang => (
-                <option key={lang.value} value={lang.value}>
-                  {lang.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <hr className="border-gray-200" />
-
-          {/* 窗口透明度 */}
-          <div className="space-y-3">
-            <label htmlFor="opacity" className="text-sm font-medium block">
-              窗口透明度: {Math.round(formData.opacity * 100)}%
-            </label>
-            <input
-              type="range"
-              min="0.1"
-              max="1.0"
-              step="0.05"
-              value={formData.opacity}
-              onChange={(e) => handleInputChange('opacity', parseFloat(e.target.value))}
-              className="w-full"
-            />
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleCancel}
-          >
-            取消
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            关闭
           </Button>
-          <Button 
-            onClick={handleSave}
-            disabled={!isDirty}
-          >
-            保存设置
-          </Button>
+          {authenticated && (
+            <Button onClick={handleOpenConfig} className="bg-blue-600 hover:bg-blue-700">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              打开配置中心
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>分页组件测试</title>
+    <style>
+        .pagination-test {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+        }
+        .page-button {
+            display: inline-block;
+            margin: 0 5px;
+            padding: 5px 10px;
+            border: 1px solid #007bff;
+            background: #f8f9fa;
+            cursor: pointer;
+        }
+        .current-page {
+            background: #007bff;
+            color: white;
+        }
+        .ellipsis {
+            padding: 5px 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>分页组件逻辑测试</h1>
+    
+    <div class="pagination-test">
+        <h3>测试2页的情况</h3>
+        <div id="test-2-pages"></div>
+    </div>
+    
+    <div class="pagination-test">
+        <h3>测试3页的情况</h3>
+        <div id="test-3-pages"></div>
+    </div>
+    
+    <div class="pagination-test">
+        <h3>测试10页的情况</h3>
+        <div id="test-10-pages"></div>
+    </div>
+
+    <script>
+        function renderPaginationLogic(totalPages, currentPage = 1) {
+            const items = [];
+            
+            if (totalPages <= 3) {
+                // 3页以内，显示所有页码
+                for (let i = 1; i <= totalPages; i++) {
+                    items.push({
+                        type: 'button',
+                        page: i,
+                        current: i === currentPage
+                    });
+                }
+            } else {
+                // 超过3页，显示1、2、3...最后一页的模式
+                for (let i = 1; i <= 3; i++) {
+                    items.push({
+                        type: 'button',
+                        page: i,
+                        current: i === currentPage
+                    });
+                }
+                
+                if (totalPages > 4) {
+                    items.push({
+                        type: 'ellipsis',
+                        text: '...'
+                    });
+                }
+                
+                if (totalPages > 3) {
+                    items.push({
+                        type: 'button',
+                        page: totalPages,
+                        current: totalPages === currentPage
+                    });
+                }
+            }
+            
+            return items;
+        }
+        
+        function renderPagination(containerId, totalPages, currentPage = 1) {
+            const container = document.getElementById(containerId);
+            const items = renderPaginationLogic(totalPages, currentPage);
+            
+            container.innerHTML = items.map(item => {
+                if (item.type === 'button') {
+                    return `<span class="page-button ${item.current ? 'current-page' : ''}">${item.page}</span>`;
+                } else {
+                    return `<span class="ellipsis">${item.text}</span>`;
+                }
+            }).join('');
+            
+            container.innerHTML += `<br><small>总页数: ${totalPages}, 当前页: ${currentPage}, 按钮数量: ${items.filter(i => i.type === 'button').length}</small>`;
+        }
+        
+        // 渲染测试用例
+        renderPagination('test-2-pages', 2, 1);
+        renderPagination('test-3-pages', 3, 1);  
+        renderPagination('test-10-pages', 10, 1);
+    </script>
+</body>
+</html>
