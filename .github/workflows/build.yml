@@ -105,27 +105,37 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEBUG: electron-builder
           
-      - name: 📤 Upload Windows artifacts
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: |
-            release/**/*.exe
-            release/**/*.nsis.7z
-            release/**/*.yml
-          retention-days: 1
+      - name: 🏗️ Build completed successfully
+        run: |
+          echo "✅ Build completed! Artifacts temporarily disabled due to storage quota."
+          echo "📦 Built files are located in the release/ directory"
+          if [ -d "release" ]; then
+            echo "📋 Generated files:"
+            find release/ -type f -name "*.exe" -o -name "*.dmg" -o -name "*.zip" | head -10
+          fi
           
-      - name: 📤 Upload macOS artifacts
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: |
-            release/**/*.dmg
-            release/**/*.zip
-            release/**/*.yml
-          retention-days: 1
+      # Artifacts temporarily disabled due to storage quota
+      # - name: 📤 Upload Windows artifacts
+      #   if: matrix.os == 'windows-latest'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: windows-build
+      #     path: |
+      #       release/**/*.exe
+      #       release/**/*.nsis.7z
+      #       release/**/*.yml
+      #     retention-days: 1
+          
+      # - name: 📤 Upload macOS artifacts
+      #   if: matrix.os == 'macos-latest'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: macos-build
+      #     path: |
+      #       release/**/*.dmg
+      #       release/**/*.zip
+      #       release/**/*.yml
+      #     retention-days: 1
         
   # 创建GitHub Release（仅在推送tag时触发）
   release:

@@ -9,8 +9,8 @@ const https = require('https');
 
 // GitHub API配置
 const GITHUB_API = 'https://api.github.com';
-const REPO_OWNER = 'jx009'; // 请根据实际情况修改
-const REPO_NAME = 'InterviewCodeOverlay'; // 请根据实际情况修改
+const REPO_OWNER = 'jx009';
+const REPO_NAME = 'InterviewCodeOverlay';
 
 // 从环境变量或命令行参数获取GitHub token
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.argv[2];
