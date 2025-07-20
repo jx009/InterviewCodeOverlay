@@ -259,19 +259,9 @@ export function useAuth() {
       console.log('注册API响应:', response);
       
       if (response.success && response.user) {
-        if (response.sessionId) {
-          SessionProtection.saveSessionId(response.sessionId);
-          setSessionId(response.sessionId);
-          console.log('🔑 已保存sessionId:', response.sessionId.substring(0, 10) + '...');
-        }
-        
-        if (response.token) {
-          localStorage.setItem('token', response.token);
-          console.log('🔑 已保存token:', response.token.substring(0, 10) + '...');
-        }
-        
-        setUser(response.user);
+        // 注册成功后不自动登录，需要用户手动登录
         console.log('注册成功，用户信息:', response.user);
+        console.log('🔄 注册成功，需要跳转到登录页面');
         return { success: true, user: response.user };
       } else {
         const errorMsg = response.message || '注册失败';
