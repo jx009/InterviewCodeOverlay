@@ -16,6 +16,14 @@ database-config.json
 *.sqlite
 *.sqlite3
 
+# Windows problematic files
+nul
+nul?
+*/nul
+*/nul?
+**/nul
+**/nul?
+
 # 日志文件
 logs/
 *.log
