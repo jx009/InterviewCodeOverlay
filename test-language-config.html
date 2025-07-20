@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试语言配置API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .test-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            background: #333;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .error {
+            background: #d32f2f;
+            color: white;
+        }
+        .success {
+            background: #388e3c;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>测试语言配置API</h1>
+    
+    <div class="test-section">
+        <h2>1. 获取当前语言配置</h2>
+        <button onclick="getLanguageConfig()">获取语言配置</button>
+        <div id="getResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 设置语言配置</h2>
+        <label for="languageSelect">选择语言:</label>
+        <select id="languageSelect" style="padding: 5px; margin: 5px;">
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="java">Java</option>
+            <option value="golang">Go</option>
+            <option value="cpp">C++</option>
+            <option value="swift">Swift</option>
+            <option value="kotlin">Kotlin</option>
+            <option value="ruby">Ruby</option>
+            <option value="sql">SQL</option>
+            <option value="r">R</option>
+        </select>
+        <button onclick="setLanguageConfig()">设置语言配置</button>
+        <div id="setResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 模拟客户端获取配置</h2>
+        <button onclick="simulateClientFetch()">模拟客户端获取</button>
+        <div id="clientResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        // 从实际的SessionId中获取认证token，而不是localStorage
+        const SESSION_ID = '93xWREXtggW25WVQvqAMy00mhXWBHv'; // 使用你日志中显示的SessionId
+
+        async function getLanguageConfig() {
+            const resultDiv = document.getElementById('getResult');
+            try {
+                const response = await fetch(`${API_BASE}/config`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Id': SESSION_ID
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const config = await response.json();
+                resultDiv.innerHTML = `<span class="success">成功获取配置:</span><br>${JSON.stringify(config, null, 2)}`;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">获取失败:</span><br>${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function setLanguageConfig() {
+            const resultDiv = document.getElementById('setResult');
+            const languageSelect = document.getElementById('languageSelect');
+            const selectedLanguage = languageSelect.value;
+
+            try {
+                const response = await fetch(`${API_BASE}/config`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Id': SESSION_ID
+                    },
+                    body: JSON.stringify({ language: selectedLanguage })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                resultDiv.innerHTML = `<span class="success">设置成功:</span><br>语言已设置为: ${selectedLanguage}<br>响应: ${JSON.stringify(result, null, 2)}`;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">设置失败:</span><br>${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function simulateClientFetch() {
+            const resultDiv = document.getElementById('clientResult');
+            try {
+                // 模拟客户端useLanguageConfig hook的行为
+                console.log('🌐 模拟客户端获取语言配置...');
+                
+                const response = await fetch(`${API_BASE}/config`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Id': SESSION_ID
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const config = await response.json();
+                const language = config.language || 'python';
+                
+                console.log(`🌐 从Web配置获取编程语言: ${language}`);
+                
+                resultDiv.innerHTML = `<span class="success">客户端获取成功:</span><br>当前语言: <strong>${language}</strong><br>完整配置: ${JSON.stringify(config, null, 2)}`;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                console.error('获取语言配置失败:', error);
+                resultDiv.innerHTML = `<span class="error">客户端获取失败:</span><br>${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        // 页面加载时自动获取配置
+        window.onload = function() {
+            getLanguageConfig();
+        };
+    </script>
+</body>
+</html>
