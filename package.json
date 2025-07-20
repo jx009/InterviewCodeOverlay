@@ -12,7 +12,8 @@
     "run-prod": "cross-env NODE_ENV=production electron ./dist-electron/main.js",
     "package": "npm run build && electron-builder build",
     "package-mac": "npm run build && electron-builder build --mac",
-    "package-win": "npm run build && electron-builder build --win"
+    "package-win": "npm run build && electron-builder build --win",
+    "package-unsigned": "npm run build && node scripts/build-unsigned.js"
   },
   "build": {
     "appId": "com.chunginlee.interviewcoder",
@@ -50,9 +51,6 @@
       ],
       "artifactName": "Interview-Coder-${arch}.${ext}",
       "icon": "assets/icons/mac/logo_qz.icns",
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false,
-      "notarize": false,
       "protocols": {
         "name": "interview-coder-protocol",
         "schemes": [
