@@ -6,6 +6,10 @@ node_modules
 .env.development
 .env.production
 
+# Windows problematic files
+nul
+nul
+
 # 数据库配置文件
 backend/config/database-config.json
 config/database-config.json
