@@ -114,27 +114,58 @@ jobs:
             find release/ -type f -name "*.exe" -o -name "*.dmg" -o -name "*.zip" | head -10
           fi
           
-      - name: 📤 Upload Windows artifacts
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build-${{ github.run_number }}
-          path: |
-            release/**/*.exe
-            release/**/*.nsis.7z
-            release/**/*.yml
-          retention-days: 1
+      - name: 📋 Show generated files (instead of upload due to quota)
+        run: |
+          echo "🎉 构建成功完成！"
+          echo ""
+          echo "📦 生成的安装包文件："
+          echo "================================"
           
-      - name: 📤 Upload macOS artifacts
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build-${{ github.run_number }}
-          path: |
-            release/**/*.dmg
-            release/**/*.zip
-            release/**/*.yml
-          retention-days: 1
+          if [ -d "release" ]; then
+            # 显示所有生成的文件
+            find release/ -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.nsis.7z" \) -exec ls -lh {} \; | while read line; do
+              echo "📄 $line"
+            done
+            
+            echo ""
+            echo "🔢 文件统计："
+            echo "Windows .exe files: $(find release/ -name "*.exe" | wc -l)"
+            echo "macOS .dmg files: $(find release/ -name "*.dmg" | wc -l)"  
+            echo "macOS .zip files: $(find release/ -name "*.zip" | wc -l)"
+            echo "Other files: $(find release/ -name "*.nsis.7z" -o -name "*.yml" | wc -l)"
+            
+            echo ""
+            echo "📂 完整目录结构："
+            ls -la release/ || true
+            
+            echo ""
+            echo "⚠️  注意：由于GitHub存储配额限制，文件未上传"
+            echo "📋 但构建已成功，上述文件已在CI环境中生成"
+            echo "💡 等待存储配额恢复后可重新启用artifact上传"
+            
+            echo ""
+            echo "🔗 如果能上传，下载链接将会是："
+            if [ "${{ matrix.os }}" = "windows-latest" ]; then
+              find release/ -name "*.exe" | while read file; do
+                filename=$(basename "$file")
+                echo "   Windows安装包: $filename"
+              done
+            fi
+            
+            if [ "${{ matrix.os }}" = "macos-latest" ]; then
+              find release/ -name "*.dmg" | while read file; do
+                filename=$(basename "$file")  
+                echo "   macOS安装包: $filename"
+              done
+            fi
+            
+          else
+            echo "❌ 错误：release目录不存在"
+            echo "📋 可能的原因："
+            echo "   - 构建过程中出现错误"
+            echo "   - electron-builder配置问题"
+            echo "   - 文件输出路径配置错误"
+          fi
         
   # GitHub Release temporarily disabled due to artifacts storage issues
   # Will be re-enabled after storage quota is resolved
