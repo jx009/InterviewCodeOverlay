@@ -50,10 +50,9 @@
       ],
       "artifactName": "Interview-Coder-${arch}.${ext}",
       "icon": "assets/icons/mac/logo_qz.icns",
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "identity": "Developer ID Application",
-      "notarize": true,
+      "notarize": false,
       "protocols": {
         "name": "interview-coder-protocol",
         "schemes": [
