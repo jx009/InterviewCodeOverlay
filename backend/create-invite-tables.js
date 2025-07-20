@@ -23,7 +23,7 @@ function parseDatabaseUrl(url) {
 
 async function createInviteTables() {
   // 从环境变量读取数据库连接，如果没有则使用提供的连接
-  const databaseUrl = process.env.DATABASE_URL || "mysql://root:Jianxin0520!@localhost:3306/interview_coder";
+  const databaseUrl = process.env.DATABASE_URL;
   const config = parseDatabaseUrl(databaseUrl);
   
   try {
