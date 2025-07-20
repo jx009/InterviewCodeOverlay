@@ -49,7 +49,7 @@
         }
       ],
       "artifactName": "Interview-Coder-${arch}.${ext}",
-      "icon": "assets/icons/mac/icon.icns",
+      "icon": "assets/icons/mac/logo_qz.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -67,7 +67,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "assets/icons/win/icon.ico",
+      "icon": "assets/icons/win/logo_qz.ico",
       "artifactName": "${productName}-Windows-${version}.${ext}",
       "protocols": {
         "name": "interview-coder-protocol",

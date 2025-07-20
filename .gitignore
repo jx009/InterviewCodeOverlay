@@ -33,6 +33,17 @@ dist/
 build/
 *.tsbuildinfo
 
+# Electron 构建产物
+dist-electron/
+release/
+*.exe
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+*.zip
+*.tar.gz
+
 # 编辑器配置
 .vscode/settings.json
 .idea/workspace.xml
