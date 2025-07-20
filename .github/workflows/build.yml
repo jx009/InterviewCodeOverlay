@@ -3,10 +3,10 @@ name: 🚀 Build and Release Electron App
 # 触发条件
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, test1 ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, test1 ]
   workflow_dispatch:
 
 # 环境变量

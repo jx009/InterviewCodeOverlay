@@ -3,9 +3,9 @@ name: 🧪 Build Check
 # 轻量级构建检查，用于PR和推送验证
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, test1 ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, test1 ]
 
 env:
   NODE_VERSION: 18
