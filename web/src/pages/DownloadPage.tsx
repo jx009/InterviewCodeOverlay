@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import BaiduPanModal from '../components/shared/BaiduPanModal';
 
 const DownloadPage: React.FC = () => {
-  const version = 'v2.1.0';
-  const releaseDate = '2024-01-15';
+  // const version = 'v2.1.0';
+  // const releaseDate = '2024-01-15';
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'macos'>('windows');
 
