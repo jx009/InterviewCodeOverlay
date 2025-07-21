@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.chunginlee.interviewcoder",
-    "productName": "Interview Coder",
+    "productName": "QuizCoze",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

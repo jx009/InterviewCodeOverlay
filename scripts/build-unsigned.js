@@ -16,11 +16,19 @@ async function buildUnsigned() {
     process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
     process.env.CSC_LINK = '';
     process.env.CSC_KEY_PASSWORD = '';
+    process.env.WIN_CSC_LINK = '';
+    process.env.WIN_CSC_KEY_PASSWORD = '';
+    
+    // 删除可能存在的环境变量
+    delete process.env.CSC_LINK;
+    delete process.env.CSC_KEY_PASSWORD;
+    delete process.env.WIN_CSC_LINK;
+    delete process.env.WIN_CSC_KEY_PASSWORD;
     
     const config = {
       // 基本配置
       appId: 'com.chunginlee.interviewcoder',
-      productName: 'Interview Coder',
+      productName: 'QuizCoze',
       
       // 文件包含
       files: [
@@ -51,11 +59,13 @@ async function buildUnsigned() {
         icon: 'assets/icons/mac/logo_qz.icns'
       },
       
-      // Windows配置
+      // Windows配置（完全禁用签名）
       win: {
         target: ['nsis'],
         icon: 'assets/icons/win/logo_qz.ico',
-        artifactName: '${productName}-Windows-${version}.${ext}'
+        artifactName: '${productName}-Windows-${version}.${ext}',
+        sign: null, // 禁用签名
+        verifyUpdateCodeSignature: false // 禁用更新验证
       },
       
       // Linux配置

@@ -59,14 +59,14 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({
       // 先调用登出API
       await webLogout();
       // 然后打开web退出页面
-      window.electronAPI?.openLink('http://localhost:3001/logout');
+      window.electronAPI?.openLink('http://quiz.playoffer.cn/logout');
     } catch (error) {
       console.error('Logout failed:', error);
     }
   };
 
   const handleOpenConfig = () => {
-    window.electronAPI?.openLink('http://localhost:3000/dashboard');
+    window.electronAPI?.openLink('http://quiz.playoffer.cn/dashboard');
   };
 
   return (
