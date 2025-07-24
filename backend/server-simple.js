@@ -754,6 +754,17 @@ app.post('/api/logout', async (req, res) => {
       console.log(`✅ 用户登出: ${sessionData.username}, Session: ${sessionId}`);
     }
     
+    // 🔧 修复：删除共享会话文件
+    try {
+      const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
+      if (fs.existsSync(sharedSessionPath)) {
+        fs.unlinkSync(sharedSessionPath);
+        console.log('🗑️ 共享会话文件已删除');
+      }
+    } catch (error) {
+      console.warn('⚠️ 删除共享会话文件失败:', error);
+    }
+    
     res.json({
       success: true,
       message: '登出成功'

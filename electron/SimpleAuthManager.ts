@@ -766,7 +766,19 @@ export class SimpleAuthManager extends EventEmitter {
                 resolve(sessionId)
               }, 1500);
             } else {
-              console.log('❌ 定期检查：sessionId验证失败，继续等待...')
+              console.log('❌ 定期检查：sessionId验证失败，清除无效sessionId...')
+              // 🔧 修复：清除localStorage中的无效sessionId
+              try {
+                await authWindow.webContents.executeJavaScript(`
+                  localStorage.removeItem('sessionId');
+                  localStorage.removeItem('sessionId_backup');
+                  localStorage.removeItem('lastActivity');
+                  console.log('🗑️ 已清除无效的sessionId');
+                `);
+                console.log('✅ 无效sessionId已清除，继续等待新的登录...')
+              } catch (clearError) {
+                console.log('⚠️ 清除无效sessionId失败:', clearError.message)
+              }
             }
           }
         } catch (error) {
@@ -908,7 +920,13 @@ export class SimpleAuthManager extends EventEmitter {
       console.log('🔍 快速验证结果:', isValid ? '有效' : '无效')
       return isValid;
     } catch (error) {
-      console.log('🔍 快速验证失败:', error.message)
+      // 🔧 修复：区分401错误和其他错误
+      if (error.response && error.response.status === 401) {
+        console.log('🔍 快速验证失败: Request failed with status code 401')
+        console.log('🔧 SessionId已过期或无效，需要清除')
+      } else {
+        console.log('🔍 快速验证失败:', error.message)
+      }
       return false;
     }
   }
@@ -941,21 +959,46 @@ export class SimpleAuthManager extends EventEmitter {
     // 清除本地存储
     configHelper.updateConfig({ authToken: null })
 
-    // 🆕 清除共享会话文件
-    try {
-      const path = require('path')
-      const fs = require('fs')
-      const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json')
-
-      if (fs.existsSync(sharedSessionPath)) {
-        fs.unlinkSync(sharedSessionPath)
-        console.log('🗑️ 共享会话文件已删除')
-      }
-    } catch (error) {
-      console.warn('⚠️ 清除共享会话文件失败:', error)
-    }
+    // 🔧 修复：清除所有可能的共享会话文件位置
+    this.clearSharedSessionFiles()
 
     console.log('🗑️ 认证数据已清除')
+  }
+
+  /**
+   * 🔧 清除所有可能位置的共享会话文件
+   */
+  private clearSharedSessionFiles(): void {
+    const path = require('path')
+    const fs = require('fs')
+    
+    // 所有可能的共享会话文件路径
+    const possiblePaths = [
+      path.join(process.cwd(), 'shared-session.json'),
+      path.join(__dirname, '..', 'shared-session.json'),
+      path.join(__dirname, '..', '..', 'shared-session.json'),
+      path.join(process.resourcesPath || '', '..', 'shared-session.json')
+    ]
+
+    let clearedCount = 0
+    
+    for (const sessionPath of possiblePaths) {
+      try {
+        if (fs.existsSync(sessionPath)) {
+          fs.unlinkSync(sessionPath)
+          console.log(`🗑️ 共享会话文件已删除: ${sessionPath}`)
+          clearedCount++
+        }
+      } catch (error) {
+        console.warn(`⚠️ 删除共享会话文件失败 ${sessionPath}:`, error)
+      }
+    }
+    
+    if (clearedCount === 0) {
+      console.log('ℹ️ 未找到需要清除的共享会话文件')
+    } else {
+      console.log(`✅ 已清除 ${clearedCount} 个共享会话文件`)
+    }
   }
 }
 
