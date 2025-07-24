@@ -2,7 +2,7 @@ directories:
   output: release
   buildResources: assets
 appId: com.chunginlee.interviewcoder
-productName: Interview Coder
+productName: QuizCoze
 files:
   - filter:
       - dist/**/*
@@ -23,14 +23,16 @@ mac:
       arch:
         - x64
         - arm64
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
   artifactName: Interview-Coder-${arch}.${ext}
-  icon: assets/icons/mac/icon.icns
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
-  identity: Developer ID Application
-  notarize: true
+  icon: assets/icons/mac/logo_qz.icns
   protocols:
     name: interview-coder-protocol
     schemes:
@@ -38,12 +40,14 @@ mac:
 win:
   target:
     - nsis
-  icon: assets/icons/win/icon.ico
+  icon: assets/icons/win/logo_qz.ico
   artifactName: ${productName}-Windows-${version}.${ext}
   protocols:
     name: interview-coder-protocol
     schemes:
       - interview-coder
+  sign: null
+  verifyUpdateCodeSignature: false
 linux:
   target:
     - AppImage
@@ -59,11 +63,6 @@ publish:
     repo: interview-coder
     private: false
     releaseType: release
-extraResources:
-  - from: .env
-    to: .env
-    filter:
-      - '**/*'
 extraMetadata:
   main: dist-electron/main.js
-electronVersion: 29.4.6
+electronVersion: 37.2.1

@@ -1,5 +1,5 @@
 {
-  "name": "quizcoze-v1",
+  "name": "interview-coder-v1",
   "version": "2.0.1",
   "main": "./dist-electron/main.js",
   "scripts": {
@@ -16,8 +16,8 @@
     "package-unsigned": "npm run build && node scripts/build-unsigned.js"
   },
   "build": {
-    "appId": "com.chunginlee.quizcoze",
-    "productName": "QuizCoze",
+    "appId": "com.chunginlee.interviewcoder",
+    "productName": "Interview Coder",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -49,12 +49,12 @@
           ]
         }
       ],
-      "artifactName": "QuizCoze-${arch}.${ext}",
+      "artifactName": "Interview-Coder-${arch}.${ext}",
       "icon": "assets/icons/mac/logo_qz.icns",
       "protocols": {
-        "name": "quizcoze-protocol",
+        "name": "interview-coder-protocol",
         "schemes": [
-          "quizcoze"
+          "interview-coder"
         ]
       }
     },
@@ -65,9 +65,9 @@
       "icon": "assets/icons/win/logo_qz.ico",
       "artifactName": "${productName}-Windows-${version}.${ext}",
       "protocols": {
-        "name": "quizcoze-protocol",
+        "name": "interview-coder-protocol",
         "schemes": [
-          "quizcoze"
+          "interview-coder"
         ]
       }
     },
@@ -78,9 +78,9 @@
       "icon": "assets/icons/png/icon-256x256.png",
       "artifactName": "${productName}-Linux-${version}.${ext}",
       "protocols": {
-        "name": "quizcoze-protocol",
+        "name": "interview-coder-protocol",
         "schemes": [
-          "quizcoze"
+          "interview-coder"
         ]
       }
     },
@@ -106,7 +106,7 @@
   ],
   "author": "Interview Coder Contributors",
   "license": "AGPL-3.0-or-later",
-  "description": "An intelligent desktop application for quiz assistance and learning.",
+  "description": "An invisible desktop application to help you pass your technical interviews.",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@electron/notarize": "^2.3.0",

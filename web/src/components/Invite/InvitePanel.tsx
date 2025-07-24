@@ -76,19 +76,39 @@ export const InvitePanel: React.FC = () => {
 
   // 复制邀请链接
   const copyInviteUrl = async () => {
+    if (!inviteUrl) {
+      alert('请先生成邀请链接');
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(inviteUrl);
       alert('邀请链接已复制到剪贴板');
     } catch (error) {
       console.error('复制失败:', error);
       // 降级方案
-      const textArea = document.createElement('textarea');
-      textArea.value = inviteUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert('邀请链接已复制到剪贴板');
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = inviteUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        textArea.style.top = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          alert('邀请链接已复制到剪贴板');
+        } else {
+          alert('复制失败，请手动复制邀请链接');
+        }
+      } catch (fallbackError) {
+        console.error('降级复制方案也失败了:', fallbackError);
+        alert('复制失败，请手动复制邀请链接');
+      }
     }
   };
 
