@@ -19,8 +19,8 @@ async function buildUnsigned() {
     
     const config = {
       // 基本配置
-      appId: 'com.chunginlee.interviewcoder',
-      productName: 'Interview Coder',
+      appId: 'com.chunginlee.quizcoze',
+      productName: 'QuizCoze',
       
       // 文件包含
       files: [
@@ -40,15 +40,24 @@ async function buildUnsigned() {
       asar: true,
       compression: 'maximum',
       
-      // macOS特定配置（无签名）
+      // macOS特定配置（无签名DMG）
       mac: {
         category: 'public.app-category.developer-tools',
         target: [
-          { target: 'dmg', arch: ['x64', 'arm64'] },
-          { target: 'zip', arch: ['x64', 'arm64'] }
+          { target: 'dmg', arch: ['x64', 'arm64'] }
         ],
-        artifactName: 'Interview-Coder-${arch}.${ext}',
-        icon: 'assets/icons/mac/logo_qz.icns'
+        artifactName: 'QuizCoze-${arch}.${ext}',
+        icon: 'assets/icons/mac/logo_qz.icns',
+        identity: null, // 禁用代码签名
+        type: 'development', // 开发版本，不需要签名
+        forceCodeSigning: false, // 强制禁用代码签名
+        gatekeeperAssess: false // 禁用Gatekeeper评估
+      },
+      
+      // DMG特定配置
+      dmg: {
+        sign: false, // 禁用DMG签名
+        artifactName: 'QuizCoze-${arch}.${ext}'
       },
       
       // Windows配置

@@ -266,17 +266,30 @@ export default function LoginPage() {
 
   // 如果用户已认证，显示加载状态
   if (isAuthenticated) {
+    console.log('🔍 LoginPage: 用户已认证，显示跳转界面');
+    
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p className="text-gray-300">正在跳转到仪表板...</p>
+            <p className="text-gray-500 text-sm mt-2">
+              如果长时间没有跳转，请{' '}
+              <button 
+                onClick={() => window.location.reload()} 
+                className="text-blue-400 hover:text-blue-300 underline"
+              >
+                刷新页面
+              </button>
+            </p>
           </div>
         </div>
       </div>
     );
   }
+  
+  console.log('🔍 LoginPage: 用户未认证，显示登录表单');
 
   // 忘记密码页面
   if (currentPage === 'forgot-password') {

@@ -113,20 +113,11 @@ export function useAuth() {
             return;
           } else {
             console.log('❌ 增强认证会话无效或API调用失败');
-            // 只有在明确收到会话过期的响应时才清除sessionId
-            const isSessionExpired = response && 
-              (response.status === 401 && 
-               (response.message?.includes('会话') || 
-                response.message?.includes('过期') ||
-                response.message?.includes('未登录')));
-            
-                         if (isSessionExpired) {
-               console.log('🔑 确认会话过期，清理sessionId');
-               SessionProtection.clearSessionId();
-               setSessionId(null);
-            } else {
-              console.log('⚠️ 保留sessionId，可能是临时网络问题或其他错误');
-            }
+            // 更严格的会话清理策略：如果有sessionId但无法获取用户信息，直接清除
+            console.log('🔑 会话验证失败，清理sessionId和用户状态');
+            SessionProtection.clearSessionId();
+            setSessionId(null);
+            setUser(null);
           }
         } catch (error) {
           console.error('❌ 检查增强认证会话状态失败:', error);
@@ -340,6 +331,17 @@ export function useAuth() {
     setError(null);
   };
 
+  // 🆕 添加手动清除认证状态的方法，用于调试和紧急情况
+  const clearAuthState = (): void => {
+    console.log('🧹 手动清除认证状态...');
+    SessionProtection.clearSessionId();
+    localStorage.removeItem('token');
+    setSessionId(null);
+    setUser(null);
+    setError(null);
+    console.log('✅ 认证状态已清除');
+  };
+
   const sendResetCode = async (email: string): Promise<AuthResponse> => {
     try {
       setLoading(true);
@@ -457,8 +459,9 @@ export function useAuth() {
   const isAuthenticated = useMemo(() => {
     const hasUser = !!user;
     const hasSessionId = !!sessionId;
-    const result = hasUser || hasSessionId;
-    console.log('🔍 useAuth isAuthenticated计算:', { hasUser, hasSessionId, result });
+    // 修复：必须同时有用户信息和sessionId才认为已认证，避免无效sessionId导致的问题
+    const result = hasUser && hasSessionId;
+    console.log('🔍 useAuth isAuthenticated计算:', { hasUser, hasSessionId, result, userInfo: user?.email });
     return result;
   }, [user, sessionId]);
   
@@ -475,6 +478,7 @@ export function useAuth() {
     enhancedLogout: logout,
     checkSessionStatus,
     clearError,
+    clearAuthState, // 新增：手动清除认证状态
     sendResetCode,
     verifyResetCode,
     resetPassword

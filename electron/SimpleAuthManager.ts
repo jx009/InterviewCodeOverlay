@@ -60,7 +60,7 @@ export class SimpleAuthManager extends EventEmitter {
   private apiClient: AxiosInstance
   private configCacheExpiry: number = 0 // 配置缓存过期时间
 
-  constructor(apiBaseUrl: string = 'http://localhost:3001') {
+  constructor(apiBaseUrl: string = 'http://quiz.playoffer.cn') {
     super()
     this.apiBaseUrl = apiBaseUrl
 
@@ -814,7 +814,7 @@ export class SimpleAuthManager extends EventEmitter {
         url.includes('?auth=success') ||
         url.includes('#auth-success') ||
         url.includes('/auth-success') ||
-        (url.includes('localhost:3000') && !url.includes('/login') && !url.includes('/register'))
+        (url.includes('quiz.playoffer.cn') && !url.includes('/login') && !url.includes('/register'))
     );
 
     const isBackendRedirect = url.includes('/api/auth/callback');
