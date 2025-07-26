@@ -1,7 +1,7 @@
 directories:
   output: release
   buildResources: assets
-appId: com.chunginlee.interviewcoder
+appId: com.chunginlee.quizcoze
 productName: QuizCoze
 files:
   - filter:
@@ -23,40 +23,30 @@ mac:
       arch:
         - x64
         - arm64
-    - target: dmg
-      arch:
-        - x64
-        - arm64
-    - target: zip
-      arch:
-        - x64
-        - arm64
   artifactName: Interview-Coder-${arch}.${ext}
   icon: assets/icons/mac/logo_qz.icns
   protocols:
-    name: interview-coder-protocol
+    name: quizcoze-protocol
     schemes:
-      - interview-coder
+      - quizcoze
 win:
   target:
     - nsis
   icon: assets/icons/win/logo_qz.ico
   artifactName: ${productName}-Windows-${version}.${ext}
   protocols:
-    name: interview-coder-protocol
+    name: quizcoze-protocol
     schemes:
-      - interview-coder
-  sign: null
-  verifyUpdateCodeSignature: false
+      - quizcoze
 linux:
   target:
     - AppImage
   icon: assets/icons/png/icon-256x256.png
   artifactName: ${productName}-Linux-${version}.${ext}
   protocols:
-    name: interview-coder-protocol
+    name: quizcoze-protocol
     schemes:
-      - interview-coder
+      - quizcoze
 publish:
   - provider: github
     owner: ibttf
@@ -65,4 +55,4 @@ publish:
     releaseType: release
 extraMetadata:
   main: dist-electron/main.js
-electronVersion: 37.2.1
+electronVersion: 37.2.3

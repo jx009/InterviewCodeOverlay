@@ -90,7 +90,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
     await prisma.userConfig.create({
       data: {
         userId: user.id,
-        aiModel: 'claude-3-5-sonnet-20241022',
+        aiModel: 'claude-sonnet-4-20250514',
         language: 'python',
         theme: 'system'
       }
@@ -198,7 +198,7 @@ router.post('/oauth/callback', async (req: Request, res: Response) => {
       await prisma.userConfig.create({
         data: {
           userId: user.id,
-          aiModel: 'claude-3-5-sonnet-20241022',
+          aiModel: 'claude-sonnet-4-20250514',
           language: 'python',
           theme: 'system'
         }

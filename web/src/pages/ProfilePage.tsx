@@ -678,7 +678,7 @@ export default function ProfilePage() {
             {isAdmin && (
               <button
                 onClick={handleNavigateToManager}
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-4 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center gap-2"
               >
                 <svg 
                   className="w-4 h-4" 
@@ -704,7 +704,7 @@ export default function ProfilePage() {
             )}
             <button
               onClick={handleNavigateToRecharge}
-              className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 px-4 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center gap-2"
             >
               <svg 
                 className="w-4 h-4" 
@@ -723,7 +723,7 @@ export default function ProfilePage() {
             </button>
             <button
               onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors"
+              className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 px-4 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               退出登录
             </button>
@@ -743,8 +743,8 @@ export default function ProfilePage() {
             onClick={() => setCurrentTab('config')}
             className={`px-4 py-2 font-medium transition-colors ${
               currentTab === 'config'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-blue-400 border-b-2 border-blue-400 bg-gradient-to-r from-blue-600/20 to-indigo-600/20'
+                : 'text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-blue-600/10 hover:to-indigo-600/10'
             }`}
           >
             个人配置
@@ -753,8 +753,8 @@ export default function ProfilePage() {
             onClick={() => setCurrentTab('history')}
             className={`px-4 py-2 font-medium transition-colors ${
               currentTab === 'history'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-orange-400 border-b-2 border-orange-400 bg-gradient-to-r from-orange-600/20 to-amber-600/20'
+                : 'text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-orange-600/10 hover:to-amber-600/10'
             }`}
           >
             历史记录
@@ -763,8 +763,8 @@ export default function ProfilePage() {
             onClick={() => setCurrentTab('invite')}
             className={`px-4 py-2 font-medium transition-colors ${
               currentTab === 'invite'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                ? 'text-green-400 border-b-2 border-green-400 bg-gradient-to-r from-green-600/20 to-emerald-600/20'
+                : 'text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-green-600/10 hover:to-emerald-600/10'
             }`}
           >
             邀请管理

@@ -55,7 +55,7 @@ const Features: React.FC = () => {
   };
 
   return (
-    <section className="py-20 bg-gray-900/50">
+    <section className="py-20 bg-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 标题 */}
         <div className="text-center mb-16">

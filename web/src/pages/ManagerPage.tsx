@@ -725,40 +725,40 @@ export default function ManagerPage() {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setCurrentTab('configs')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
                   currentTab === 'configs'
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    ? 'border-purple-500 text-purple-400 bg-gradient-to-r from-purple-600/20 to-indigo-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-purple-600/10 hover:to-indigo-600/10'
                 }`}
               >
                 积分配置管理
               </button>
               <button
                 onClick={() => setCurrentTab('users')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
                   currentTab === 'users'
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    ? 'border-cyan-500 text-cyan-400 bg-gradient-to-r from-cyan-600/20 to-blue-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-cyan-600/10 hover:to-blue-600/10'
                 }`}
               >
                 用户角色管理
               </button>
               <button
                 onClick={() => setCurrentTab('credits')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
                   currentTab === 'credits'
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    ? 'border-emerald-500 text-emerald-400 bg-gradient-to-r from-emerald-600/20 to-green-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-emerald-600/10 hover:to-green-600/10'
                 }`}
               >
                 用户积分管理
               </button>
               <button
                 onClick={() => setCurrentTab('invites')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
                   currentTab === 'invites'
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    ? 'border-pink-500 text-pink-400 bg-gradient-to-r from-pink-600/20 to-rose-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-pink-600/10 hover:to-rose-600/10'
                 }`}
               >
                 用户邀请管理

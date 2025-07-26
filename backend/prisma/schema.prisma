@@ -50,11 +50,11 @@ model UserConfig {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // 分离的AI模型设置
-  programmingModel     String   @default("claude-3-5-sonnet-20241022") @db.VarChar(100) @map("programming_model")
-  multipleChoiceModel  String   @default("claude-3-5-sonnet-20241022") @db.VarChar(100) @map("multiple_choice_model")
+  programmingModel     String   @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("programming_model")
+  multipleChoiceModel  String   @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("multiple_choice_model")
   
   // 简化的AI模型设置（保持向后兼容）
-  aiModel          String?  @default("claude-3-5-sonnet-20241022") @db.VarChar(100) @map("ai_model")
+  aiModel          String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("ai_model")
   
   // 原有的AI Model Settings（保持兼容性）
   selectedProvider String   @default("claude") @db.VarChar(50) @map("selected_provider")
