@@ -595,15 +595,14 @@ export class SimpleProcessingHelper {
       message?: string 
     } | null = null;
     try {
-      const model = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
-      deductionInfo = await this.checkAndDeductCredits(model, 'programming', operationId);
-
-      if (!deductionInfo.success) {
-        return {
-          success: false,
-          error: deductionInfo.message || "积分检查失败"
-        }
-      }
+      // 🔧 使用可用的模型，优先使用用户配置，然后使用可用的备选模型
+      let model = userConfig.programmingModel || userConfig.aiModel || 'gpt-3.5-turbo'
+      
+      // 移除硬编码的模型限制，允许使用用户配置的模型
+      
+      console.log('🎯 使用模型:', model)
+      // 注意：积分检查和扣除已经在processScreenshotsWithAI中完成，这里不需要重复检查
+      console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
 
       const promptText = `
 请为以下编程题目提供最优解决方案：
@@ -664,6 +663,25 @@ ${problemInfo.example_output || "未提供示例输出"}
         }, { signal })
         
         console.log('✅ 编程题AI调用成功')
+        
+        // 🔧 调试：打印完整的API响应结构
+        console.log('🔍 API响应调试信息:')
+        console.log('  - 响应类型:', typeof solutionResponse)
+        console.log('  - 响应对象存在:', !!solutionResponse)
+        console.log('  - choices字段存在:', !!solutionResponse?.choices)
+        console.log('  - choices类型:', Array.isArray(solutionResponse?.choices) ? 'array' : typeof solutionResponse?.choices)
+        console.log('  - choices长度:', solutionResponse?.choices?.length)
+        
+        // 如果响应是字符串，尝试解析为JSON
+        if (typeof solutionResponse === 'string') {
+          console.log('⚠️ 响应是字符串格式，尝试解析JSON...')
+          try {
+            solutionResponse = JSON.parse(solutionResponse)
+            console.log('✅ JSON解析成功')
+          } catch (parseError) {
+            console.error('❌ JSON解析失败:', parseError)
+          }
+        }
       } catch (error) {
         console.error('❌ 编程题AI调用失败:', error)
         // AI调用失败，退还积分
@@ -671,6 +689,27 @@ ${problemInfo.example_output || "未提供示例输出"}
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '编程题AI调用失败')
         }
         throw error
+      }
+
+      // 🔧 修复：安全访问API响应，防止undefined错误
+      if (!solutionResponse || !solutionResponse.choices || solutionResponse.choices.length === 0) {
+        console.error('❌ AI响应格式错误:', {
+          hasResponse: !!solutionResponse,
+          hasChoices: !!solutionResponse?.choices,
+          choicesLength: solutionResponse?.choices?.length
+        })
+        if (deductionInfo.requiredPoints) {
+          await this.refundCredits(operationId, deductionInfo.requiredPoints, 'AI响应格式错误')
+        }
+        throw new Error('AI响应格式错误：缺少choices数据')
+      }
+
+      if (!solutionResponse.choices[0]?.message?.content) {
+        console.error('❌ AI响应缺少内容:', solutionResponse.choices[0])
+        if (deductionInfo.requiredPoints) {
+          await this.refundCredits(operationId, deductionInfo.requiredPoints, 'AI响应缺少内容')
+        }
+        throw new Error('AI响应格式错误：缺少message内容')
       }
 
       const responseContent = solutionResponse.choices[0].message.content
@@ -841,6 +880,27 @@ ${questionsText}
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI调用失败')
         }
         throw error
+      }
+
+      // 🔧 修复：安全访问API响应，防止undefined错误
+      if (!solutionResponse || !solutionResponse.choices || solutionResponse.choices.length === 0) {
+        console.error('❌ 选择题AI响应格式错误:', {
+          hasResponse: !!solutionResponse,
+          hasChoices: !!solutionResponse?.choices,
+          choicesLength: solutionResponse?.choices?.length
+        })
+        if (deductionInfo.requiredPoints) {
+          await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI响应格式错误')
+        }
+        throw new Error('选择题AI响应格式错误：缺少choices数据')
+      }
+
+      if (!solutionResponse.choices[0]?.message?.content) {
+        console.error('❌ 选择题AI响应缺少内容:', solutionResponse.choices[0])
+        if (deductionInfo.requiredPoints) {
+          await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI响应缺少内容')
+        }
+        throw new Error('选择题AI响应格式错误：缺少message内容')
       }
 
       const responseContent = solutionResponse.choices[0].message.content
