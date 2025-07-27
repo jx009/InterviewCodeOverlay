@@ -42,6 +42,39 @@ interface EditingPackage {
   bonusPoints: number;
 }
 
+interface UsageTransaction {
+  id: number;
+  transaction_type: string;
+  amount: number;
+  balance_after: number;
+  model_name?: string;
+  question_type?: string;
+  description?: string;
+  created_at: string;
+  username: string;
+  email: string;
+  operationType: string;
+}
+
+interface UsageSummaryUser {
+  user_id: number;
+  username: string;
+  email: string;
+  total_consumed: number;
+  total_recharged: number;
+  consume_count: number;
+  recharge_count: number;
+  programming_consumed: number;
+  choice_consumed: number;
+}
+
+interface UsageFilters {
+  startDate: string;
+  endDate: string;
+  userEmail: string;
+  transactionType: string;
+}
+
 interface InviteFilters {
   startDate: string;
   endDate: string;
@@ -84,7 +117,7 @@ export default function ManagerPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchEmail, setSearchEmail] = useState<string>('');
-  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages'>('configs');
+  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages' | 'usage-stats'>('configs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -147,6 +180,28 @@ export default function ManagerPage() {
   });
   const [editingPackageId, setEditingPackageId] = useState<number | null>(null);
 
+  // 使用情况统计相关状态
+  const [usageTab, setUsageTab] = useState<'details' | 'summary'>('details');
+  const [usageFilters, setUsageFilters] = useState<UsageFilters>(() => {
+    const now = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(now.getMonth() - 1);
+    
+    return {
+      startDate: oneMonthAgo.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0],
+      userEmail: '',
+      transactionType: ''
+    };
+  });
+  const [usageTransactions, setUsageTransactions] = useState<UsageTransaction[]>([]);
+  const [usageSummary, setUsageSummary] = useState<UsageSummaryUser[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usagePage, setUsagePage] = useState(1);
+  const [usageTotalPages, setUsageTotalPages] = useState(1);
+  const [usagePageSize, setUsagePageSize] = useState(10);
+  const [usageTotal, setUsageTotal] = useState(0);
+
   // 检查管理员权限
   const isAdmin = user?.role === 'ADMIN';
 
@@ -166,6 +221,8 @@ export default function ManagerPage() {
         loadInviteData();
       } else if (currentTab === 'packages') {
         loadPackages();
+      } else if (currentTab === 'usage-stats') {
+        loadUsageData();
       }
     }
   }, [isAdmin, currentTab]);
@@ -176,6 +233,13 @@ export default function ManagerPage() {
       loadInviteData();
     }
   }, [inviteTab]);
+
+  // 当使用情况统计子标签页变化时，重新加载数据
+  useEffect(() => {
+    if (isAdmin && currentTab === 'usage-stats') {
+      loadUsageData();
+    }
+  }, [usageTab]);
 
   // 筛选用户的Effect
   useEffect(() => {
@@ -368,6 +432,95 @@ export default function ManagerPage() {
     } catch (error) {
       console.error('删除套餐失败:', error);
       setMessage('删除套餐失败');
+    }
+  };
+
+  // 加载使用情况统计数据
+  const loadUsageData = async () => {
+    try {
+      setUsageLoading(true);
+      if (usageTab === 'details') {
+        await loadUsageTransactions(1);
+        setUsagePage(1);
+      } else {
+        await loadUsageSummary();
+      }
+    } catch (error) {
+      console.error('加载使用情况数据失败:', error);
+      setMessage(`加载使用情况数据失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
+  // 加载积分交易明细
+  const loadUsageTransactions = async (page: number = 1) => {
+    const sessionId = localStorage.getItem('sessionId');
+    const queryParams = new URLSearchParams();
+    
+    queryParams.append('page', page.toString());
+    queryParams.append('limit', usagePageSize.toString());
+    
+    if (usageFilters.startDate) queryParams.append('startDate', usageFilters.startDate);
+    if (usageFilters.endDate) queryParams.append('endDate', usageFilters.endDate);
+    if (usageFilters.userEmail) queryParams.append('userEmail', usageFilters.userEmail);
+    if (usageFilters.transactionType) queryParams.append('transactionType', usageFilters.transactionType);
+    
+    const response = await fetch(`http://localhost:3003/api/admin/usage-stats/transactions?${queryParams.toString()}`, {
+      headers: {
+        'X-Session-Id': sessionId || '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取交易明细失败');
+    }
+
+    const data = await response.json();
+    setUsageTransactions(data.data.transactions || []);
+    setUsagePage(data.data.pagination.page || page);
+    setUsageTotalPages(data.data.pagination.totalPages || 1);
+    setUsageTotal(data.data.pagination.total || 0);
+  };
+
+  // 加载积分使用汇总
+  const loadUsageSummary = async () => {
+    const sessionId = localStorage.getItem('sessionId');
+    const queryParams = new URLSearchParams();
+    
+    queryParams.append('groupBy', 'user');
+    if (usageFilters.startDate) queryParams.append('startDate', usageFilters.startDate);
+    if (usageFilters.endDate) queryParams.append('endDate', usageFilters.endDate);
+    if (usageFilters.userEmail) queryParams.append('userEmail', usageFilters.userEmail);
+    
+    const response = await fetch(`http://localhost:3003/api/admin/usage-stats/summary?${queryParams.toString()}`, {
+      headers: {
+        'X-Session-Id': sessionId || '',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取使用汇总失败');
+    }
+
+    const data = await response.json();
+    setUsageSummary(data.data.summary || []);
+  };
+
+  // 处理使用情况页面大小变化
+  const handleUsagePageSizeChange = async (newSize: number) => {
+    setUsagePageSize(newSize);
+    setUsagePage(1);
+    try {
+      setUsageLoading(true);
+      await loadUsageTransactions(1);
+    } catch (error) {
+      console.error('加载交易明细失败:', error);
+      setMessage('加载交易明细失败');
+    } finally {
+      setUsageLoading(false);
     }
   };
 
@@ -957,6 +1110,16 @@ export default function ManagerPage() {
                 }`}
               >
                 充值管理
+              </button>
+              <button
+                onClick={() => setCurrentTab('usage-stats')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
+                  currentTab === 'usage-stats'
+                    ? 'border-teal-500 text-teal-400 bg-gradient-to-r from-teal-600/20 to-cyan-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-teal-600/10 hover:to-cyan-600/10'
+                }`}
+              >
+                使用情况统计
               </button>
             </nav>
           </div>
@@ -2218,6 +2381,300 @@ export default function ManagerPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </>
+        )}
+
+        {/* 使用情况统计标签页 */}
+        {currentTab === 'usage-stats' && (
+          <>
+            {/* 筛选条件 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+              <h2 className="text-xl font-semibold mb-4">筛选条件</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">开始日期</label>
+                  <input
+                    type="date"
+                    value={usageFilters.startDate}
+                    onChange={(e) => setUsageFilters({...usageFilters, startDate: e.target.value})}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">结束日期</label>
+                  <input
+                    type="date"
+                    value={usageFilters.endDate}
+                    onChange={(e) => setUsageFilters({...usageFilters, endDate: e.target.value})}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">用户邮箱</label>
+                  <input
+                    type="email"
+                    value={usageFilters.userEmail}
+                    onChange={(e) => setUsageFilters({...usageFilters, userEmail: e.target.value})}
+                    placeholder="输入用户邮箱搜索"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">操作类型</label>
+                  <select
+                    value={usageFilters.transactionType}
+                    onChange={(e) => setUsageFilters({...usageFilters, transactionType: e.target.value})}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                  >
+                    <option value="">全部类型</option>
+                    <option value="consume">消费</option>
+                    <option value="recharge">充值</option>
+                    <option value="reward">奖励</option>
+                    <option value="refund">退款</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={loadUsageData}
+                  disabled={usageLoading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-6 py-2 rounded-lg transition-colors"
+                >
+                  {usageLoading ? '查询中...' : '查询'}
+                </button>
+              </div>
+            </div>
+
+            {/* 明细和汇总标签页 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex space-x-4 mb-6">
+                <button
+                  onClick={() => setUsageTab('details')}
+                  className={`py-2 px-4 border-b-2 font-medium transition-all duration-200 ${
+                    usageTab === 'details'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-white'
+                  }`}
+                >
+                  明细
+                </button>
+                <button
+                  onClick={() => setUsageTab('summary')}
+                  className={`py-2 px-4 border-b-2 font-medium transition-all duration-200 ${
+                    usageTab === 'summary'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-white'
+                  }`}
+                >
+                  汇总
+                </button>
+              </div>
+
+              {/* 明细标签页内容 */}
+              {usageTab === 'details' && (
+                <div>
+                  {usageLoading ? (
+                    <div className="text-center py-12">
+                      <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="mt-4 text-gray-400">加载中...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full table-auto">
+                          <thead>
+                            <tr className="bg-gray-700">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                用户名
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                邮箱
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                操作类型
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                积分变化
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                操作后余额
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                操作时间
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                描述
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-700">
+                            {usageTransactions.map((transaction) => (
+                              <tr key={transaction.id} className="hover:bg-gray-700">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  {transaction.username}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {transaction.email}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    transaction.transaction_type === 'recharge' 
+                                      ? 'bg-green-600 text-green-100'
+                                      : transaction.transaction_type === 'consume'
+                                      ? 'bg-red-600 text-red-100'
+                                      : transaction.transaction_type === 'reward'
+                                      ? 'bg-blue-600 text-blue-100'
+                                      : 'bg-gray-600 text-gray-100'
+                                  }`}>
+                                    {transaction.operationType}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={
+                                    transaction.amount > 0 ? 'text-green-400' : 'text-red-400'
+                                  }>
+                                    {transaction.amount > 0 ? '+' : ''}{transaction.amount}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {transaction.balance_after}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {new Date(transaction.created_at).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate">
+                                  {transaction.description || '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {usageTransactions.length === 0 && (
+                          <div className="text-center py-12 text-gray-400">
+                            <p>暂无交易记录</p>
+                            <p className="text-sm mt-2">请调整筛选条件后重新查询</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {usageTransactions.length > 0 && (
+                        <div className="mt-6">
+                          <Pagination
+                            currentPage={usagePage}
+                            totalPages={usageTotalPages}
+                            pageSize={usagePageSize}
+                            totalItems={usageTotal}
+                            onPageChange={async (page) => {
+                              try {
+                                setUsageLoading(true);
+                                await loadUsageTransactions(page);
+                              } catch (error) {
+                                console.error('加载交易明细失败:', error);
+                                setMessage('加载交易明细失败');
+                              } finally {
+                                setUsageLoading(false);
+                              }
+                            }}
+                            onPageSizeChange={handleUsagePageSizeChange}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* 汇总标签页内容 */}
+              {usageTab === 'summary' && (
+                <div>
+                  {usageLoading ? (
+                    <div className="text-center py-12">
+                      <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="mt-4 text-gray-400">加载中...</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full table-auto">
+                        <thead>
+                          <tr className="bg-gray-700">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              用户名
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              邮箱
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              总消费积分
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              总充值积分
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              编程题消费
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              选择题消费
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              消费次数
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              充值次数
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                          {usageSummary.map((summary) => (
+                            <tr key={summary.user_id} className="hover:bg-gray-700">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                {summary.username}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {summary.email}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span className="text-red-400">
+                                  {summary.total_consumed}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                <span className="text-green-400">
+                                  {summary.total_recharged}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {summary.programming_consumed}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {summary.choice_consumed}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {summary.consume_count}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {summary.recharge_count}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {usageSummary.length === 0 && (
+                        <div className="text-center py-12 text-gray-400">
+                          <p>暂无汇总数据</p>
+                          <p className="text-sm mt-2">请调整筛选条件后重新查询</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
