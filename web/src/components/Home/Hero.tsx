@@ -44,12 +44,14 @@ const Hero: React.FC = () => {
             >
               立即下载
             </Link>
-            <Link
-              to="/recharge"
+            <a
+              href="https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-8 py-4 bg-transparent border-2 border-gray-600 text-white font-semibold rounded-lg hover:border-gray-400 hover:bg-gray-800/50 transition-all duration-200"
             >
-              查看套餐
-            </Link>
+              使用文档
+            </a>
           </div>
 
           {/* 统计数据 */}
