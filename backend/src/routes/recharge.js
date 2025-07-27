@@ -207,64 +207,31 @@ router.get('/packages', async (req, res) => {
     
     console.log('📋 正在查询数据库...');
     
-    // 从数据库读取充值套餐，使用兼容性查询
-    let packages;
-    try {
-      // 尝试使用包含新字段的查询
-      packages = await database.prisma.paymentPackage.findMany({
-        where: {
-          isActive: true
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          amount: true,
-          points: true,
-          bonusPoints: true,
-          isActive: true,
-          sortOrder: true,
-          icon: true,
-          label: true,
-          labelColor: true,
-          isRecommended: true,
-          createdAt: true,
-          updatedAt: true
-        },
-        orderBy: [
-          { isRecommended: 'desc' }, // 推荐套餐排在前面
-          { sortOrder: 'asc' },      // 按排序权重排序
-          { id: 'asc' }              // 最后按ID排序
-        ]
-      });
-    } catch (error) {
-      console.log('⚠️ 新字段查询失败，尝试兼容性查询:', error.message);
-      // 如果新字段不存在，使用旧字段查询
-      packages = await database.prisma.paymentPackage.findMany({
-        where: {
-          isActive: true
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          amount: true,
-          points: true,
-          bonusPoints: true,
-          isActive: true,
-          sortOrder: true,
-          icon: true,
-          isRecommended: true,
-          createdAt: true,
-          updatedAt: true
-        },
-        orderBy: [
-          { isRecommended: 'desc' }, // 推荐套餐排在前面
-          { sortOrder: 'asc' },      // 按排序权重排序
-          { id: 'asc' }              // 最后按ID排序
-        ]
-      });
-    }
+    // 从数据库读取充值套餐
+    const packages = await database.prisma.paymentPackage.findMany({
+      where: {
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        amount: true,
+        points: true,
+        bonusPoints: true,
+        isActive: true,
+        sortOrder: true,
+        icon: true,
+        isRecommended: true,
+        createdAt: true,
+        updatedAt: true
+      },
+      orderBy: [
+        { isRecommended: 'desc' }, // 推荐套餐排在前面
+        { sortOrder: 'asc' },      // 按排序权重排序
+        { id: 'asc' }              // 最后按ID排序
+      ]
+    });
     
     console.log(`✅ 查询成功，获得 ${packages.length} 个套餐`);
     
@@ -277,13 +244,7 @@ router.get('/packages', async (req, res) => {
       bonusPoints: pkg.bonusPoints,
       totalPoints: pkg.points + pkg.bonusPoints,
       isRecommended: pkg.isRecommended,
-      icon: pkg.icon,
-      label: pkg.label || (pkg.isRecommended ? 'hot_sale' : 
-                                       (pkg.amount <= 10 ? 'best_value' : 
-                                        pkg.amount <= 30 ? 'popular' : 'premium')),  // 优先使用数据库值，否则计算
-      labelColor: pkg.labelColor || (pkg.isRecommended ? 'red' : 
-                                     (pkg.amount <= 10 ? 'blue' : 
-                                      pkg.amount <= 30 ? 'green' : 'orange'))       // 优先使用数据库值，否则计算
+      icon: pkg.icon
     }));
     
     console.log('📦 格式化完成，返回数据');

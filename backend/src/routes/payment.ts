@@ -196,51 +196,24 @@ router.get('/packages', async (req: Request, res: Response) => {
   try {
     console.log('📦 获取支付套餐列表请求');
 
-    let packages;
-    try {
-      // 尝试使用包含新字段的查询
-      packages = await prisma.paymentPackage.findMany({
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          amount: true,
-          points: true,
-          bonusPoints: true,
-          isActive: true,
-          sortOrder: true,
-          icon: true,
-          label: true,
-          labelColor: true,
-          isRecommended: true,
-          createdAt: true,
-          updatedAt: true
-        },
-        orderBy: { sortOrder: 'asc' }
-      });
-    } catch (error) {
-      console.log('⚠️ 新字段查询失败，尝试兼容性查询:', error.message);
-      // 如果新字段不存在，使用旧字段查询
-      packages = await prisma.paymentPackage.findMany({
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          amount: true,
-          points: true,
-          bonusPoints: true,
-          isActive: true,
-          sortOrder: true,
-          icon: true,
-          isRecommended: true,
-          createdAt: true,
-          updatedAt: true
-        },
-        orderBy: { sortOrder: 'asc' }
-      });
-    }
+    const packages = await prisma.paymentPackage.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        amount: true,
+        points: true,
+        bonusPoints: true,
+        isActive: true,
+        sortOrder: true,
+        icon: true,
+        isRecommended: true,
+        createdAt: true,
+        updatedAt: true
+      },
+      orderBy: { sortOrder: 'asc' }
+    });
 
     console.log(`✅ 获取到 ${packages.length} 个套餐`);
     
@@ -248,13 +221,7 @@ router.get('/packages', async (req: Request, res: Response) => {
     const formattedPackages = packages.map(pkg => ({
       ...pkg,
       status: pkg.isActive ? 'active' : 'inactive',
-      totalPoints: pkg.points + pkg.bonusPoints,
-      label: (pkg as any).label || (pkg.isRecommended ? 'hot_sale' : 
-                                        (Number(pkg.amount) <= 10 ? 'best_value' : 
-                                         Number(pkg.amount) <= 30 ? 'popular' : 'premium')),
-      labelColor: (pkg as any).labelColor || (pkg.isRecommended ? 'red' : 
-                                              (Number(pkg.amount) <= 10 ? 'blue' : 
-                                               Number(pkg.amount) <= 30 ? 'green' : 'orange'))
+      totalPoints: pkg.points + pkg.bonusPoints
     }));
     
     ResponseUtils.success(res, formattedPackages);
