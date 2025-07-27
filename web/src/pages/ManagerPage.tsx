@@ -3,6 +3,11 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { User } from '../types';
 import { Pagination } from '../components/shared/Pagination';
 
+// 使用与其他模块一致的API基础URL
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://quiz.playoffer.cn/api' 
+  : 'https://quiz.playoffer.cn/api';
+
 interface ModelPointConfig {
   id: number;
   modelName: string;
@@ -57,15 +62,21 @@ interface UsageTransaction {
 }
 
 interface UsageSummaryUser {
-  user_id: number;
+  userId: number;
   username: string;
   email: string;
-  total_consumed: number;
-  total_recharged: number;
-  consume_count: number;
-  recharge_count: number;
-  programming_consumed: number;
-  choice_consumed: number;
+  totalConsumed: number;     // 总消费积分
+  totalRecharged: number;    // 总充值积分  
+  totalRewarded: number;     // 总奖励积分
+  programmingCount: number;  // 编程题次数
+  multipleChoiceCount: number; // 选择题次数
+  rechargeCount: number;     // 充值次数
+  operations: {
+    [key: string]: {
+      count: number;
+      totalAmount: number;
+    };
+  };
 }
 
 interface UsageFilters {
@@ -331,7 +342,7 @@ export default function ManagerPage() {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
       
-      const response = await fetch('http://localhost:3003/api/admin/payment-packages', {
+      const response = await fetch('/api/admin/payment-packages', {
         headers: {
           'X-Session-Id': sessionId || '',
           'Content-Type': 'application/json'
@@ -346,7 +357,7 @@ export default function ManagerPage() {
 
       const data = await response.json();
       console.log('loadPackages - Response data:', data);
-      setPackages(data.data.packages || []);
+      setPackages(data.packages || []);
       setMessage('充值套餐加载成功');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
@@ -361,6 +372,10 @@ export default function ManagerPage() {
   const handleSavePackage = async () => {
     try {
       setSaving(true);
+
+      // 临时提示：管理功能需要后端部署
+      setMessage('充值套餐管理功能需要后端更新，请联系技术人员部署最新代码');
+      return;
 
       // 验证输入
       if (!editingPackage.name.trim()) {
@@ -385,8 +400,8 @@ export default function ManagerPage() {
 
       const sessionId = localStorage.getItem('sessionId');
       const url = editingPackageId 
-        ? `http://localhost:3003/api/admin/payment-packages/${editingPackageId}`
-        : 'http://localhost:3003/api/admin/payment-packages';
+        ? `/api/admin/payment-packages/${editingPackageId}`
+        : `/api/admin/payment-packages`;
       const method = editingPackageId ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -454,7 +469,7 @@ export default function ManagerPage() {
 
     try {
       const sessionId = localStorage.getItem('sessionId');
-      const response = await fetch(`http://localhost:3003/api/admin/payment-packages/${packageId}`, {
+      const response = await fetch(`/api/admin/payment-packages/${packageId}`, {
         method: 'DELETE',
         headers: {
           'X-Session-Id': sessionId || '',
@@ -506,7 +521,7 @@ export default function ManagerPage() {
     if (usageFilters.userEmail) queryParams.append('userEmail', usageFilters.userEmail);
     if (usageFilters.transactionType) queryParams.append('transactionType', usageFilters.transactionType);
     
-    const response = await fetch(`http://localhost:3003/api/admin/usage-stats/transactions?${queryParams.toString()}`, {
+    const response = await fetch(`/api/admin/usage-stats/transactions?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
         'Content-Type': 'application/json'
@@ -516,6 +531,7 @@ export default function ManagerPage() {
     if (!response.ok) {
       throw new Error('获取交易明细失败');
     }
+    
 
     const data = await response.json();
     setUsageTransactions(data.data.transactions || []);
@@ -534,7 +550,7 @@ export default function ManagerPage() {
     if (usageFilters.endDate) queryParams.append('endDate', usageFilters.endDate);
     if (usageFilters.userEmail) queryParams.append('userEmail', usageFilters.userEmail);
     
-    const response = await fetch(`http://localhost:3003/api/admin/usage-stats/summary?${queryParams.toString()}`, {
+    const response = await fetch(`/api/admin/usage-stats/summary?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
         'Content-Type': 'application/json'
@@ -546,7 +562,7 @@ export default function ManagerPage() {
     }
 
     const data = await response.json();
-    setUsageSummary(data.data.summary || []);
+    setUsageSummary(data.data.userSpending || []);
   };
 
   // 处理使用情况页面大小变化
@@ -570,7 +586,7 @@ export default function ManagerPage() {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
       
-      const response = await fetch('http://localhost:3003/api/admin/announcements', {
+      const response = await fetch('/api/admin/announcements', {
         headers: {
           'X-Session-Id': sessionId || '',
           'Content-Type': 'application/json'
@@ -616,8 +632,8 @@ export default function ManagerPage() {
       const isEditing = editingAnnouncementId !== null;
       
       const url = isEditing 
-        ? `http://localhost:3003/api/admin/announcements/${editingAnnouncementId}` 
-        : 'http://localhost:3003/api/admin/announcements';
+        ? `/api/admin/announcements/${editingAnnouncementId}`
+        : '/api/admin/announcements';
       
       const method = isEditing ? 'PUT' : 'POST';
 
@@ -692,7 +708,7 @@ export default function ManagerPage() {
 
     try {
       const sessionId = localStorage.getItem('sessionId');
-      const response = await fetch(`http://localhost:3003/api/admin/announcements/${announcementId}`, {
+      const response = await fetch(`/api/admin/announcements/${announcementId}`, {
         method: 'DELETE',
         headers: {
           'X-Session-Id': sessionId || '',
@@ -2722,13 +2738,17 @@ export default function ManagerPage() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    transaction.transaction_type === 'recharge' 
+                                    transaction.operationType === '充值' 
                                       ? 'bg-green-600 text-green-100'
-                                      : transaction.transaction_type === 'consume'
-                                      ? 'bg-red-600 text-red-100'
-                                      : transaction.transaction_type === 'reward'
+                                      : transaction.operationType === '编程题'
+                                      ? 'bg-purple-600 text-purple-100'
+                                      : transaction.operationType === '选择题'
+                                      ? 'bg-orange-600 text-orange-100'
+                                      : transaction.operationType === '奖励'
                                       ? 'bg-blue-600 text-blue-100'
-                                      : 'bg-gray-600 text-gray-100'
+                                      : transaction.operationType === '退款'
+                                      ? 'bg-yellow-600 text-yellow-100'
+                                      : 'bg-red-600 text-red-100'
                                   }`}>
                                     {transaction.operationType}
                                   </span>
@@ -2802,62 +2822,70 @@ export default function ManagerPage() {
                       <table className="w-full table-auto">
                         <thead>
                           <tr className="bg-gray-700">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                               用户名
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                               邮箱
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                               总消费积分
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                               总充值积分
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                              编程题消费
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              总奖励积分
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                              选择题消费
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              编程题次数
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                              消费次数
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              选择题次数
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                               充值次数
                             </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700">
                           {usageSummary.map((summary) => (
-                            <tr key={summary.user_id} className="hover:bg-gray-700">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <tr key={summary.userId} className="hover:bg-gray-700">
+                              <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                                 {summary.username}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
                                 {summary.email}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <span className="text-red-400">
-                                  {summary.total_consumed}
+                              <td className="px-4 py-4 whitespace-nowrap text-sm">
+                                <span className="text-red-400 font-semibold">
+                                  {summary.totalConsumed}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <span className="text-green-400">
-                                  {summary.total_recharged}
+                              <td className="px-4 py-4 whitespace-nowrap text-sm">
+                                <span className="text-green-400 font-semibold">
+                                  {summary.totalRecharged}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                {summary.programming_consumed}
+                              <td className="px-4 py-4 whitespace-nowrap text-sm">
+                                <span className="text-blue-400 font-semibold">
+                                  {summary.totalRewarded}
+                                </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                {summary.choice_consumed}
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
+                                <span className="bg-purple-600 text-purple-100 px-2 py-1 rounded-full text-xs font-medium">
+                                  {summary.programmingCount}
+                                </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                {summary.consume_count}
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
+                                <span className="bg-orange-600 text-orange-100 px-2 py-1 rounded-full text-xs font-medium">
+                                  {summary.multipleChoiceCount}
+                                </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                {summary.recharge_count}
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
+                                <span className="bg-green-600 text-green-100 px-2 py-1 rounded-full text-xs font-medium">
+                                  {summary.rechargeCount}
+                                </span>
                               </td>
                             </tr>
                           ))}

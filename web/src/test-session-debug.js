@@ -30,7 +30,7 @@ async function testApiRequest(sessionId) {
     
     try {
         console.log('📡 发送请求...');
-        const response = await fetch('http://localhost:3001/api/config', {
+        const response = await fetch('/api/config', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',

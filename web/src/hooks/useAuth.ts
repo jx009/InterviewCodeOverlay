@@ -70,7 +70,7 @@ export function useAuth() {
             
             try {
               console.log('🔍 尝试端点: /api/auth-enhanced/session-status');
-              response = await fetch(`http://localhost:3001/api/auth-enhanced/session-status?sessionId=${storedSessionId}`, {
+              response = await fetch(`/api/auth-enhanced/session-status?sessionId=${storedSessionId}`, {
                 headers: {
                   'X-Session-Id': storedSessionId
                 },
@@ -89,7 +89,7 @@ export function useAuth() {
               
               try {
                 console.log('🔍 尝试端点: /api/debug/session');
-                await fetch(`http://localhost:3001/api/debug/session`, {
+                await fetch(`/api/debug/session`, {
                   headers: {
                     'X-Session-Id': storedSessionId
                   },

@@ -10,7 +10,7 @@ export default defineConfig({
     allowedHosts: ['quiz.playoffer.cn', 'localhost'],
     proxy: {
       '/api': {
-        target: 'https://quiz.playoffer.cn:3001',
+        target: 'https://quiz.playoffer.cn',
         changeOrigin: true,
         secure: true
       }

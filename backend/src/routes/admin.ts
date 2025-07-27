@@ -14,24 +14,35 @@ let sessionManager: SessionManager;
 // Session认证中间件
 const sessionAuthMiddleware = async (req: any, res: Response, next: any) => {
   try {
+    console.log('🔐 Session认证中间件 - 开始验证');
+    console.log('请求路径:', req.path);
+    console.log('请求方法:', req.method);
+    
     const sessionId = req.headers['x-session-id'];
+    console.log('会话ID:', sessionId);
     
     if (!sessionId) {
+      console.log('❌ 未提供会话ID');
       return ResponseUtils.unauthorized(res, '未提供会话ID');
     }
 
     // 延迟初始化SessionManager
     if (!sessionManager) {
+      console.log('🔧 初始化SessionManager');
       sessionManager = new SessionManager();
     }
 
+    console.log('🔍 验证会话...');
     const sessionValidation = await sessionManager.validateSession(sessionId);
+    console.log('会话验证结果:', sessionValidation);
     
     if (!sessionValidation.valid) {
+      console.log('❌ 会话无效');
       return ResponseUtils.unauthorized(res, '会话已过期或无效');
     }
 
     // 获取用户信息
+    console.log('👤 查询用户信息...');
     const user = await prisma.user.findUnique({
       where: { id: sessionValidation.userId },
       select: {
@@ -43,18 +54,21 @@ const sessionAuthMiddleware = async (req: any, res: Response, next: any) => {
     });
 
     if (!user) {
+      console.log('❌ 用户不存在');
       return ResponseUtils.unauthorized(res, '用户不存在');
     }
 
     if (!user.isActive) {
+      console.log('❌ 用户账户已被禁用');
       return ResponseUtils.forbidden(res, '用户账户已被禁用');
     }
 
+    console.log('✅ Session认证成功:', user.username);
     // 将用户信息添加到请求对象
     req.user = { userId: user.id, username: user.username, email: user.email };
     next();
   } catch (error) {
-    console.error('Session认证失败:', error);
+    console.error('❌ Session认证失败:', error);
     ResponseUtils.internalError(res, '认证服务异常');
   }
 };
@@ -62,29 +76,37 @@ const sessionAuthMiddleware = async (req: any, res: Response, next: any) => {
 // 管理员权限检查中间件
 const adminMiddleware = async (req: any, res: Response, next: any) => {
   try {
+    console.log('👑 管理员权限检查 - 开始验证');
     const userId = req.user?.userId;
+    console.log('用户ID:', userId);
     
     if (!userId) {
+      console.log('❌ 用户未认证');
       return ResponseUtils.unauthorized(res, '用户未认证');
     }
 
     // 查询用户角色
+    console.log('🔍 查询用户角色...');
     const user = await prisma.user.findUnique({
       where: { id: userId }
     }) as any;
 
     if (!user) {
+      console.log('❌ 用户不存在');
       return ResponseUtils.unauthorized(res, '用户不存在');
     }
 
+    console.log('用户信息:', { username: user.username, role: user.role });
+
     if (user.role !== 'ADMIN') {
+      console.log('❌ 权限不足，需要管理员权限');
       return ResponseUtils.forbidden(res, '需要管理员权限');
     }
 
     console.log(`✅ 管理员权限验证成功: ${user.username} (角色: ${user.role})`);
     next();
   } catch (error) {
-    console.error('管理员权限检查失败:', error);
+    console.error('❌ 管理员权限检查失败:', error);
     ResponseUtils.internalError(res, '权限检查失败');
   }
 };
@@ -640,6 +662,8 @@ router.put('/users/credits', sessionAuthMiddleware, adminMiddleware, async (req:
  */
 router.get('/payment-packages', async (req: Request, res: Response) => {
   try {
+    console.log('🔍 开始查询充值套餐...');
+    
     const packages = await prisma.paymentPackage.findMany({
       orderBy: [
         { sortOrder: 'asc' },
@@ -647,13 +671,21 @@ router.get('/payment-packages', async (req: Request, res: Response) => {
       ]
     });
 
+    console.log(`✅ 查询成功，找到 ${packages.length} 个套餐`);
+    console.log('套餐数据:', packages);
+
     ResponseUtils.success(res, {
       packages,
       total: packages.length,
       message: '获取充值套餐成功'
     });
   } catch (error) {
-    console.error('获取充值套餐失败:', error);
+    console.error('❌ 获取充值套餐失败:', error);
+    console.error('错误详情:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
     ResponseUtils.internalError(res, '获取充值套餐失败');
   }
 });
@@ -812,6 +844,306 @@ router.delete('/payment-packages/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('删除充值套餐失败:', error);
     ResponseUtils.internalError(res, '删除充值套餐失败');
+  }
+});
+
+/**
+ * 获取使用情况统计 - 交易记录
+ * GET /api/admin/usage-stats/transactions
+ */
+router.get('/usage-stats/transactions', async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 20, transactionType, userEmail, startDate, endDate } = req.query;
+    
+    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    const take = parseInt(limit as string);
+
+    // 构建查询条件
+    const where: any = {};
+    
+    if (transactionType && transactionType !== 'all') {
+      where.transactionType = transactionType;
+    }
+    
+    if (startDate) {
+      where.createdAt = { gte: new Date(startDate as string) };
+    }
+    
+    if (endDate) {
+      where.createdAt = { 
+        ...where.createdAt,
+        lte: new Date(endDate as string) 
+      };
+    }
+
+    // 如果有用户邮箱筛选，需要通过用户表关联查询
+    let userWhere = {};
+    if (userEmail) {
+      userWhere = {
+        email: { contains: userEmail as string, mode: 'insensitive' as any }
+      };
+    }
+
+    const transactions = await prisma.pointTransaction.findMany({
+      skip,
+      take,
+      where: {
+        ...where,
+        ...(userEmail ? { user: userWhere } : {})
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const total = await prisma.pointTransaction.count({
+      where: {
+        ...where,
+        ...(userEmail ? { user: userWhere } : {})
+      }
+    });
+
+    ResponseUtils.success(res, {
+      transactions,
+      pagination: {
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit as string))
+      },
+      message: '获取交易记录成功'
+    });
+  } catch (error) {
+    console.error('获取交易记录失败:', error);
+    ResponseUtils.internalError(res, '获取交易记录失败');
+  }
+});
+
+/**
+ * 获取使用情况统计 - 摘要信息
+ * GET /api/admin/usage-stats/summary
+ */
+router.get('/usage-stats/summary', async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate, userEmail } = req.query;
+    
+    // 构建时间范围条件
+    const dateWhere: any = {};
+    if (startDate) {
+      dateWhere.createdAt = { gte: new Date(startDate as string) };
+    }
+    if (endDate) {
+      dateWhere.createdAt = { 
+        ...dateWhere.createdAt,
+        lte: new Date(endDate as string) 
+      };
+    }
+
+    // 用户筛选条件
+    let userWhere = {};
+    if (userEmail) {
+      userWhere = {
+        email: { contains: userEmail as string, mode: 'insensitive' as any }
+      };
+    }
+
+    // 获取总用户数
+    const totalUsers = await prisma.user.count({
+      where: userEmail ? userWhere : {}
+    });
+
+    // 获取活跃用户数（有积分交易的用户）
+    const activeUsers = await prisma.pointTransaction.groupBy({
+      by: ['userId'],
+      where: {
+        ...dateWhere,
+        ...(userEmail ? { user: userWhere } : {})
+      }
+    });
+
+    // 获取交易统计
+    const transactionStats = await prisma.pointTransaction.aggregate({
+      where: {
+        ...dateWhere,
+        ...(userEmail ? { user: userWhere } : {})
+      },
+      _count: { id: true },
+      _sum: { amount: true }
+    });
+
+    // 按交易类型统计
+    const transactionByType = await prisma.pointTransaction.groupBy({
+      by: ['transactionType'],
+      where: {
+        ...dateWhere,
+        ...(userEmail ? { user: userWhere } : {})
+      },
+      _count: { id: true },
+      _sum: { amount: true }
+    });
+
+    ResponseUtils.success(res, {
+      summary: {
+        totalUsers,
+        activeUsers: activeUsers.length,
+        totalTransactions: transactionStats._count.id || 0,
+        totalAmount: transactionStats._sum.amount || 0,
+        transactionsByType: transactionByType.map(item => ({
+          type: item.transactionType,
+          count: item._count.id,
+          amount: item._sum.amount || 0
+        }))
+      },
+      message: '获取使用统计成功'
+    });
+  } catch (error) {
+    console.error('获取使用统计失败:', error);
+    ResponseUtils.internalError(res, '获取使用统计失败');
+  }
+});
+
+/**
+ * 获取公告列表
+ * GET /api/admin/announcements
+ */
+router.get('/announcements', async (req: Request, res: Response) => {
+  try {
+    const announcements = await prisma.announcement.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    ResponseUtils.success(res, {
+      announcements,
+      total: announcements.length,
+      message: '获取公告列表成功'
+    });
+  } catch (error) {
+    console.error('获取公告列表失败:', error);
+    ResponseUtils.internalError(res, '获取公告列表失败');
+  }
+});
+
+/**
+ * 创建公告
+ * POST /api/admin/announcements
+ */
+router.post('/announcements', async (req: Request, res: Response) => {
+  try {
+    const { title, content, showStyle = 'info', isActive = true, priority = 0, startTime, endTime } = req.body;
+
+    if (!title || !content) {
+      return ResponseUtils.error(res, '标题和内容不能为空');
+    }
+
+    const announcement = await prisma.announcement.create({
+      data: {
+        title,
+        content,
+        showStyle,
+        isActive,
+        priority: parseInt(priority) || 0,
+        startTime: startTime ? new Date(startTime) : null,
+        endTime: endTime ? new Date(endTime) : null
+      }
+    });
+
+    ResponseUtils.success(res, {
+      announcement,
+      message: '创建公告成功'
+    });
+  } catch (error) {
+    console.error('创建公告失败:', error);
+    ResponseUtils.internalError(res, '创建公告失败');
+  }
+});
+
+/**
+ * 更新公告
+ * PUT /api/admin/announcements/:id
+ */
+router.put('/announcements/:id', async (req: Request, res: Response) => {
+  try {
+    const announcementId = parseInt(req.params.id);
+    const { title, content, showStyle, isActive, priority, startTime, endTime } = req.body;
+
+    if (isNaN(announcementId)) {
+      return ResponseUtils.error(res, '公告ID无效');
+    }
+
+    if (!title || !content) {
+      return ResponseUtils.error(res, '标题和内容不能为空');
+    }
+
+    // 检查公告是否存在
+    const existingAnnouncement = await prisma.announcement.findUnique({
+      where: { id: announcementId }
+    });
+
+    if (!existingAnnouncement) {
+      return ResponseUtils.notFound(res, '公告不存在');
+    }
+
+    const announcement = await prisma.announcement.update({
+      where: { id: announcementId },
+      data: {
+        title,
+        content,
+        showStyle,
+        isActive,
+        priority: priority !== undefined ? parseInt(priority) : undefined,
+        startTime: startTime ? new Date(startTime) : null,
+        endTime: endTime ? new Date(endTime) : null
+      }
+    });
+
+    ResponseUtils.success(res, {
+      announcement,
+      message: '更新公告成功'
+    });
+  } catch (error) {
+    console.error('更新公告失败:', error);
+    ResponseUtils.internalError(res, '更新公告失败');
+  }
+});
+
+/**
+ * 删除公告
+ * DELETE /api/admin/announcements/:id
+ */
+router.delete('/announcements/:id', async (req: Request, res: Response) => {
+  try {
+    const announcementId = parseInt(req.params.id);
+
+    if (isNaN(announcementId)) {
+      return ResponseUtils.error(res, '公告ID无效');
+    }
+
+    // 检查公告是否存在
+    const existingAnnouncement = await prisma.announcement.findUnique({
+      where: { id: announcementId }
+    });
+
+    if (!existingAnnouncement) {
+      return ResponseUtils.notFound(res, '公告不存在');
+    }
+
+    await prisma.announcement.delete({
+      where: { id: announcementId }
+    });
+
+    ResponseUtils.success(res, {
+      message: '删除公告成功'
+    });
+  } catch (error) {
+    console.error('删除公告失败:', error);
+    ResponseUtils.internalError(res, '删除公告失败');
   }
 });
 
