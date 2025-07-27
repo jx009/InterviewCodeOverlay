@@ -63,7 +63,8 @@ export interface PaymentPackage {
   isActive: boolean;
   sortOrder: number;
   icon?: string | null;
-  tags?: string | null;
+  label?: string | null;
+  labelColor?: string | null;
   isRecommended: boolean;
   createdAt: Date;
   updatedAt: Date;

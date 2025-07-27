@@ -311,7 +311,7 @@ export const systemApi = {
 export const paymentApi = {
   // 获取支付套餐列表
   getPackages: async () => {
-    const response = await api.get('/recharge/packages');
+    const response = await api.get('/payment/packages');
     return response.data;
   },
 

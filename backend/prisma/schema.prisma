@@ -251,8 +251,12 @@ model PaymentPackage {
   isActive    Boolean  @default(true) @map("is_active") // 是否启用
   sortOrder   Int      @default(0) @map("sort_order") // 排序权重
   icon        String?  @db.VarChar(255) // 套餐图标
-  tags        String?  @db.Text // 标签(JSON格式: ["推荐", "限时"])
+  
+  // 标签系统
+  label       String?  @db.VarChar(50) // 套餐标签：hot_sale(热门推荐), best_value(性价比之选), limited_time(限时优惠)
+  labelColor  String?  @db.VarChar(20) @map("label_color") // 标签颜色：red, blue, green, orange
   isRecommended Boolean @default(false) @map("is_recommended") // 是否推荐
+  
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -261,6 +265,7 @@ model PaymentPackage {
 
   @@index([isActive])
   @@index([sortOrder])
+  @@index([isRecommended])
   @@map("payment_packages")
 }
 

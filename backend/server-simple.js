@@ -14,43 +14,39 @@ const Database = require('./database');
 // 创建数据库实例
 const db = new Database();
 
-// 添加支付套餐列表方法
-db.getPaymentPackages = function() {
-  return [
-    {
-      id: 1,
-      name: "入门套餐",
-      description: "基础AI功能使用",
-      points: 100,
-      bonusPoints: 0,
-      amount: 10.00,
-      status: "active",
-      isRecommended: false,
-      sortOrder: 1
-    },
-    {
-      id: 2,
-      name: "标准套餐",
-      description: "所有AI功能全部使用",
-      points: 500,
-      bonusPoints: 50,
-      amount: 45.00,
-      status: "active",
-      isRecommended: true,
-      sortOrder: 0
-    },
-    {
-      id: 3,
-      name: "高级套餐",
-      description: "无限使用所有功能",
-      points: 1200,
-      bonusPoints: 200,
-      amount: 98.00,
-      status: "active",
-      isRecommended: false,
-      sortOrder: 2
-    }
-  ];
+// 添加支付套餐列表方法 - 从数据库读取
+db.getPaymentPackages = async function() {
+  try {
+    const packages = await this.prisma.paymentPackage.findMany({
+      where: {
+        isActive: true
+      },
+      orderBy: [
+        { isRecommended: 'desc' }, // 推荐套餐排在前面
+        { sortOrder: 'asc' },      // 按排序权重排序
+        { id: 'asc' }              // 最后按ID排序
+      ]
+    });
+    
+    return packages.map(pkg => ({
+      id: pkg.id,
+      name: pkg.name,
+      description: pkg.description,
+      points: pkg.points,
+      bonusPoints: pkg.bonusPoints,
+      amount: parseFloat(pkg.amount),
+      status: "active", // 兼容旧格式
+      isRecommended: pkg.isRecommended,
+      sortOrder: pkg.sortOrder,
+      label: pkg.label,
+      labelColor: pkg.labelColor,
+      totalPoints: pkg.points + pkg.bonusPoints
+    }));
+  } catch (error) {
+    console.error('从数据库获取套餐失败:', error);
+    // 返回空数组而不是硬编码数据
+    return [];
+  }
 };
 
 const app = express();
@@ -2048,10 +2044,13 @@ app.post('/api/client/credits/recharge', authenticateSession, async (req, res) =
 })
 
 // 支付套餐API
-app.get('/api/payment/packages', optionalVerifyToken, (req, res) => {
+app.get('/api/payment/packages', optionalVerifyToken, async (req, res) => {
   try {
+    console.log('🔍 前端请求 /api/payment/packages');
     // 获取支付套餐列表
-    const packages = db.getPaymentPackages();
+    const packages = await db.getPaymentPackages();
+    
+    console.log('📦 返回套餐数据:', packages);
     
     res.json({
       success: true, 
@@ -3303,6 +3302,10 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
 // =====================================
 // 充值相关API路由
 // =====================================
+
+// 将数据库实例提供给路由使用
+app.locals.db = db;
+global.db = db; // 备用方式
 
 // 引入充值路由和微信支付回调路由
 const rechargeRoutes = require('./src/routes/recharge');

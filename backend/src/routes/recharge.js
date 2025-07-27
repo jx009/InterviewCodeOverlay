@@ -1,12 +1,15 @@
 const express = require('express');
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { v4: uuidv4 } = require('uuid');
 const WechatPayV2Service = require('../services/WechatPayV2Service');
-const { getAvailablePackages, getPackageById, getTotalPoints } = require('../config/recharge-packages');
-const Database = require('../../database');
 
 const router = express.Router();
 const wechatPay = new WechatPayV2Service();
-const db = new Database();
+
+// 通过中间件获取数据库实例（由server-simple.js提供）
+const getDatabase = (req) => {
+  return req.app.locals.db || global.db;
+};
 
 // 生产级认证中间件 - 与server-simple.js完全一致
 async function requireAuth(req, res, next) {
@@ -189,28 +192,138 @@ function getClientIp(req) {
  */
 router.get('/packages', async (req, res) => {
   try {
-    const packages = getAvailablePackages();
+    console.log('🔍 收到充值套餐请求');
+    
+    // 获取数据库实例 
+    const database = getDatabase(req);
+    if (!database || !database.prisma) {
+      console.error('❌ 数据库实例不可用');
+      return res.status(500).json({
+        success: false,
+        message: '数据库服务不可用',
+        errorCode: 'DATABASE_UNAVAILABLE'
+      });
+    }
+    
+    console.log('📋 正在查询数据库...');
+    
+    // 从数据库读取充值套餐，使用兼容性查询
+    let packages;
+    try {
+      // 尝试使用包含新字段的查询
+      packages = await database.prisma.paymentPackage.findMany({
+        where: {
+          isActive: true
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          amount: true,
+          points: true,
+          bonusPoints: true,
+          isActive: true,
+          sortOrder: true,
+          icon: true,
+          label: true,
+          labelColor: true,
+          isRecommended: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: [
+          { isRecommended: 'desc' }, // 推荐套餐排在前面
+          { sortOrder: 'asc' },      // 按排序权重排序
+          { id: 'asc' }              // 最后按ID排序
+        ]
+      });
+    } catch (error) {
+      console.log('⚠️ 新字段查询失败，尝试兼容性查询:', error.message);
+      // 如果新字段不存在，使用旧字段查询
+      packages = await database.prisma.paymentPackage.findMany({
+        where: {
+          isActive: true
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          amount: true,
+          points: true,
+          bonusPoints: true,
+          isActive: true,
+          sortOrder: true,
+          icon: true,
+          isRecommended: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: [
+          { isRecommended: 'desc' }, // 推荐套餐排在前面
+          { sortOrder: 'asc' },      // 按排序权重排序
+          { id: 'asc' }              // 最后按ID排序
+        ]
+      });
+    }
+    
+    console.log(`✅ 查询成功，获得 ${packages.length} 个套餐`);
+    
+    const formattedPackages = packages.map(pkg => ({
+      id: pkg.id,
+      name: pkg.name,
+      description: pkg.description,
+      amount: parseFloat(pkg.amount), // 转换Decimal为number
+      points: pkg.points,
+      bonusPoints: pkg.bonusPoints,
+      totalPoints: pkg.points + pkg.bonusPoints,
+      isRecommended: pkg.isRecommended,
+      icon: pkg.icon,
+      label: pkg.label || (pkg.isRecommended ? 'hot_sale' : 
+                                       (pkg.amount <= 10 ? 'best_value' : 
+                                        pkg.amount <= 30 ? 'popular' : 'premium')),  // 优先使用数据库值，否则计算
+      labelColor: pkg.labelColor || (pkg.isRecommended ? 'red' : 
+                                     (pkg.amount <= 10 ? 'blue' : 
+                                      pkg.amount <= 30 ? 'green' : 'orange'))       // 优先使用数据库值，否则计算
+    }));
+    
+    console.log('📦 格式化完成，返回数据');
     
     res.json({
       success: true,
-      data: packages.map(pkg => ({
-        id: pkg.id,
-        name: pkg.name,
-        description: pkg.description,
-        amount: pkg.amount,
-        points: pkg.points,
-        bonusPoints: pkg.bonusPoints,
-        totalPoints: pkg.points + pkg.bonusPoints,
-        isRecommended: pkg.isRecommended,
-        icon: pkg.icon,
-        tags: pkg.tags
-      }))
+      data: formattedPackages
     });
   } catch (error) {
-    console.error('获取充值套餐失败:', error);
+    console.error('❌ 获取充值套餐失败 - 详细错误信息:');
+    console.error('  错误类型:', error.constructor.name);
+    console.error('  错误消息:', error.message);
+    console.error('  错误代码:', error.code);
+    console.error('  错误堆栈:', error.stack);
+    
+    // 检查是否是数据库连接问题
+    if (error.message && error.message.includes('connect')) {
+      console.error('🔍 可能是数据库连接问题');
+    }
+    
+    // 检查是否是Prisma相关错误
+    if (error.constructor.name === 'PrismaClientKnownRequestError') {
+      console.error('🔍 Prisma已知错误 - 错误代码:', error.code);
+      console.error('🔍 Prisma错误详情:', error.meta);
+    }
+    
+    // 检查是否是初始化问题
+    if (error.message && error.message.includes('prisma')) {
+      console.error('🔍 可能是Prisma实例初始化问题');
+    }
+    
     res.status(500).json({
       success: false,
-      message: '获取充值套餐失败'
+      message: '获取充值套餐失败: ' + error.message,
+      errorCode: error.code || 'UNKNOWN_ERROR',
+      // 在开发环境下提供更多错误信息
+      ...(process.env.NODE_ENV === 'development' && {
+        stack: error.stack,
+        errorType: error.constructor.name
+      })
     });
   }
 });
@@ -224,8 +337,24 @@ router.post('/create-order', requireAuth, async (req, res) => {
     const { packageId } = req.body;
     const userId = req.userId;
 
-    // 验证套餐
-    const package = getPackageById(packageId);
+    // 获取数据库实例
+    const database = getDatabase(req);
+    if (!database || !database.prisma) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库服务不可用',
+        errorCode: 'DATABASE_UNAVAILABLE'
+      });
+    }
+    
+    // 从数据库验证套餐
+    const package = await database.prisma.paymentPackage.findFirst({
+      where: {
+        id: packageId,
+        isActive: true
+      }
+    });
+    
     if (!package) {
       return res.status(400).json({
         success: false,
@@ -236,7 +365,7 @@ router.post('/create-order', requireAuth, async (req, res) => {
     // 生成订单信息
     const orderNo = generateOrderNo();
     const outTradeNo = `RECHARGE_${orderNo}`;
-    const totalFee = wechatPay.yuanToFen(package.amount);
+    const totalFee = wechatPay.yuanToFen(parseFloat(package.amount)); // 转换Decimal为number
     const clientIp = getClientIp(req);
     
     // 订单过期时间（30分钟）
@@ -244,44 +373,24 @@ router.post('/create-order', requireAuth, async (req, res) => {
     const formattedExpireTime = wechatPay.formatExpireTime(30);
 
     // 保存订单到数据库
-    const orderData = {
+    const createData = {
       orderNo,
       outTradeNo,
       userId,
-      amount: package.amount,
+      amount: parseFloat(package.amount), // 转换Decimal为number
       points: package.points,
       bonusPoints: package.bonusPoints,
       paymentMethod: 'WECHAT_PAY',
       paymentStatus: 'PENDING',
       expireTime,
-      packageId: package.id,
+      packageId: package.id, // 数据库中的套餐一定有有效ID
       metadata: JSON.stringify({
         packageName: package.name,
         clientIp
       })
     };
-
-    // 保存到数据库使用Prisma
-    // 对于测试套餐(ID=999)，不设置packageId以避免外键约束错误
-    const createData = {
-      orderNo,
-      outTradeNo,
-      userId,
-      amount: package.amount,
-      points: package.points,
-      bonusPoints: package.bonusPoints,
-      paymentMethod: 'WECHAT_PAY',
-      paymentStatus: 'PENDING',
-      expireTime,
-      metadata: orderData.metadata
-    };
     
-    // 只有非测试套餐才设置packageId
-    if (package.id !== 999) {
-      createData.packageId = package.id;
-    }
-    
-    await db.prisma.paymentOrder.create({
+    await database.prisma.paymentOrder.create({
       data: createData
     });
 
@@ -298,7 +407,7 @@ router.post('/create-order', requireAuth, async (req, res) => {
       console.error('微信支付统一下单失败:', wechatResult.error || '未知错误');
       
       // 更新订单状态为失败
-      await db.prisma.paymentOrder.update({
+      await database.prisma.paymentOrder.update({
         where: { orderNo },
         data: {
           paymentStatus: 'FAILED',
@@ -318,7 +427,7 @@ router.post('/create-order', requireAuth, async (req, res) => {
       data: {
         orderNo,
         qrCodeUrl: wechatResult.codeUrl,
-        amount: package.amount,
+        amount: parseFloat(package.amount), // 转换Decimal为number
         points: package.points + package.bonusPoints,
         expireTime: expireTime.toISOString(),
         packageInfo: {
@@ -354,8 +463,18 @@ router.get('/order-status/:orderNo', requireAuth, async (req, res) => {
     const { orderNo } = req.params;
     const userId = req.userId;
 
+    // 获取数据库实例
+    const database = getDatabase(req);
+    if (!database || !database.prisma) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库服务不可用',
+        errorCode: 'DATABASE_UNAVAILABLE'
+      });
+    }
+    
     // 从数据库查询订单
-    const order = await db.prisma.paymentOrder.findFirst({
+    const order = await database.prisma.paymentOrder.findFirst({
       where: {
         orderNo,
         userId
@@ -519,9 +638,19 @@ router.get('/history', requireAuth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
+    // 获取数据库实例
+    const database = getDatabase(req);
+    if (!database || !database.prisma) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库服务不可用',
+        errorCode: 'DATABASE_UNAVAILABLE'
+      });
+    }
+
     // 查询充值记录
     const [records, total] = await Promise.all([
-      db.prisma.paymentOrder.findMany({
+      database.prisma.paymentOrder.findMany({
         where: {
           userId,
           paymentMethod: 'WECHAT_PAY'
@@ -540,7 +669,7 @@ router.get('/history', requireAuth, async (req, res) => {
         take: limit,
         skip: offset
       }),
-      db.prisma.paymentOrder.count({
+      database.prisma.paymentOrder.count({
         where: {
           userId,
           paymentMethod: 'WECHAT_PAY'
@@ -614,8 +743,14 @@ async function processSuccessfulPayment(order, wechatResult) {
       userId: order.userId
     });
     
+    // 获取数据库实例（processSuccessfulPayment不是路由处理器，需要传递database）
+    const database = global.db;
+    if (!database || !database.prisma) {
+      throw new Error('数据库服务不可用');
+    }
+    
     // 使用Prisma事务处理
-    await db.prisma.$transaction(async (prisma) => {
+    await database.prisma.$transaction(async (prisma) => {
       // 1. 再次检查订单状态，确保防止并发处理
       const currentOrder = await prisma.paymentOrder.findUnique({
         where: { orderNo: order.orderNo },
@@ -692,8 +827,18 @@ router.post('/sync-status/:orderNo', requireAuth, async (req, res) => {
 
     console.log(`🔄 用户 ${userId} 请求强制同步订单状态: ${orderNo}`);
 
+    // 获取数据库实例
+    const database = getDatabase(req);
+    if (!database || !database.prisma) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库服务不可用',
+        errorCode: 'DATABASE_UNAVAILABLE'
+      });
+    }
+
     // 验证订单归属
-    const order = await db.prisma.paymentOrder.findFirst({
+    const order = await database.prisma.paymentOrder.findFirst({
       where: {
         orderNo,
         userId
@@ -779,7 +924,7 @@ router.post('/sync-status/:orderNo', requireAuth, async (req, res) => {
       
       // 更新本地订单状态
       if (orderStatus !== order.paymentStatus) {
-        await db.prisma.paymentOrder.update({
+        await database.prisma.paymentOrder.update({
           where: { orderNo: order.orderNo },
           data: { paymentStatus: orderStatus }
         });

@@ -12,7 +12,8 @@ export interface RechargePackage {
   totalPoints: number;
   isRecommended: boolean;
   icon?: string;
-  tags?: string[];
+  label?: string;      // 套餐标签：hot_sale, best_value, limited_time
+  labelColor?: string; // 标签颜色：red, blue, green, orange
 }
 
 // 创建订单请求

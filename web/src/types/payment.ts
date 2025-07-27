@@ -6,9 +6,12 @@ export interface PaymentPackage {
   amount: number; // 价格（元）
   points: number; // 基础积分
   bonusPoints: number; // 赠送积分
+  totalPoints: number; // 总积分（计算字段）
   isActive: boolean;
   sortOrder: number;
-  tags?: string[];
+  icon?: string;
+  label?: string; // 套餐标签：hot_sale, best_value, limited_time
+  labelColor?: string; // 标签颜色：red, blue, green, orange
   isRecommended?: boolean;
   createdAt: string;
   updatedAt: string;

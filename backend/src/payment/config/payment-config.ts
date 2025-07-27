@@ -35,40 +35,36 @@ export const PAYMENT_CONFIG = {
   DEFAULT_PACKAGES: [
     {
       name: '基础套餐',
-      amount: 10,
+      amount: 9.90,
       points: 100,
-      bonusPoints: 0,
-      description: '适合轻度使用',
+      bonusPoints: 20,
+      description: '适合新手用户，满足日常AI答题需求',
       sortOrder: 1,
-      tags: '["新手推荐"]'
+      label: 'best_value',
+      labelColor: 'blue',
+      isRecommended: false
     },
     {
       name: '标准套餐',
-      amount: 30,
-      points: 300,
-      bonusPoints: 30,
-      description: '性价比之选',
+      amount: 19.90,
+      points: 220,
+      bonusPoints: 50,
+      description: '最受欢迎的选择，积分充足性价比高',
       sortOrder: 2,
-      tags: '["热门"]',
+      label: 'hot_sale',
+      labelColor: 'red',
       isRecommended: true
     },
     {
-      name: '高级套餐',
-      amount: 50,
+      name: '专业套餐',
+      amount: 39.90,
       points: 500,
-      bonusPoints: 100,
-      description: '适合重度使用',
+      bonusPoints: 120,
+      description: '高频使用用户首选，送积分最多',
       sortOrder: 3,
-      tags: '["超值"]'
-    },
-    {
-      name: '旗舰套餐',
-      amount: 100,
-      points: 1000,
-      bonusPoints: 300,
-      description: '最优惠的选择',
-      sortOrder: 4,
-      tags: '["最划算"]'
+      label: 'limited_time',
+      labelColor: 'orange',
+      isRecommended: false
     }
   ]
 };

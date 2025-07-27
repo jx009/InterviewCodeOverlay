@@ -139,7 +139,11 @@ router.post('/create-order',
 
       // 返回包含二维码URL的订单信息
       ResponseUtils.success(res, {
-        order: result.data,
+        orderNo: result.data.orderNo,
+        outTradeNo: result.data.outTradeNo,
+        amount: result.data.amount,
+        qrCodeUrl: result.data.codeUrl,
+        expireTime: result.data.expireTime,
         message: '订单创建成功，请扫码支付'
       });
 
@@ -178,10 +182,7 @@ router.get('/order/:orderNo',
 
       console.log('✅ 查询订单成功:', result.data);
 
-      ResponseUtils.success(res, {
-        order: result.data,
-        message: '查询订单成功'
-      });
+      ResponseUtils.success(res, result.data);
 
     } catch (error) {
       console.error('❌ 查询订单异常:', error);
@@ -190,20 +191,73 @@ router.get('/order/:orderNo',
   }
 );
 
-// 获取支付套餐
-router.get('/packages', getUserId, async (req: Request, res: Response) => {
+// 获取支付套餐 - 不需要认证，任何人都可以查看套餐
+router.get('/packages', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
-    if (!userId) {
-      return ResponseUtils.unauthorized(res, '用户ID无效');
+    console.log('📦 获取支付套餐列表请求');
+
+    let packages;
+    try {
+      // 尝试使用包含新字段的查询
+      packages = await prisma.paymentPackage.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          amount: true,
+          points: true,
+          bonusPoints: true,
+          isActive: true,
+          sortOrder: true,
+          icon: true,
+          label: true,
+          labelColor: true,
+          isRecommended: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: { sortOrder: 'asc' }
+      });
+    } catch (error) {
+      console.log('⚠️ 新字段查询失败，尝试兼容性查询:', error.message);
+      // 如果新字段不存在，使用旧字段查询
+      packages = await prisma.paymentPackage.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          amount: true,
+          points: true,
+          bonusPoints: true,
+          isActive: true,
+          sortOrder: true,
+          icon: true,
+          isRecommended: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: { sortOrder: 'asc' }
+      });
     }
 
-    const packages = await prisma.paymentPackage.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: 'asc' }
-    });
-
-    ResponseUtils.success(res, packages);
+    console.log(`✅ 获取到 ${packages.length} 个套餐`);
+    
+    // 为前端添加必要的字段
+    const formattedPackages = packages.map(pkg => ({
+      ...pkg,
+      status: pkg.isActive ? 'active' : 'inactive',
+      totalPoints: pkg.points + pkg.bonusPoints,
+      label: (pkg as any).label || (pkg.isRecommended ? 'hot_sale' : 
+                                        (Number(pkg.amount) <= 10 ? 'best_value' : 
+                                         Number(pkg.amount) <= 30 ? 'popular' : 'premium')),
+      labelColor: (pkg as any).labelColor || (pkg.isRecommended ? 'red' : 
+                                              (Number(pkg.amount) <= 10 ? 'blue' : 
+                                               Number(pkg.amount) <= 30 ? 'green' : 'orange'))
+    }));
+    
+    ResponseUtils.success(res, formattedPackages);
   } catch (error) {
     console.error('获取支付套餐失败:', error);
     ResponseUtils.internalError(res, '获取支付套餐失败');

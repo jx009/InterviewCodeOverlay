@@ -35,16 +35,22 @@ const RechargePackageCard: React.FC<RechargePackageCardProps> = ({
       )}
 
       {/* 标签 */}
-      {pkg.tags && pkg.tags.length > 0 && (
-        <div className="absolute top-3 right-3 flex flex-wrap gap-1">
-          {pkg.tags.map((tag, index) => (
-            <span
-              key={index}
-              className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full"
-            >
-              {tag}
-            </span>
-          ))}
+      {pkg.label && (
+        <div className="absolute top-3 right-3">
+          <span
+            className={`text-white text-xs px-2 py-1 rounded-full font-medium ${
+              pkg.labelColor === 'red' ? 'bg-red-500' :
+              pkg.labelColor === 'blue' ? 'bg-blue-500' :
+              pkg.labelColor === 'green' ? 'bg-green-500' :
+              pkg.labelColor === 'orange' ? 'bg-orange-500' :
+              'bg-gray-500'
+            }`}
+          >
+            {pkg.label === 'hot_sale' ? '热门推荐' :
+             pkg.label === 'best_value' ? '性价比之选' :
+             pkg.label === 'limited_time' ? '限时优惠' :
+             pkg.label}
+          </span>
         </div>
       )}
 
