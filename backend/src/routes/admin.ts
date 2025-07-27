@@ -634,4 +634,185 @@ router.put('/users/credits', sessionAuthMiddleware, adminMiddleware, async (req:
   }
 });
 
+/**
+ * 获取所有充值套餐
+ * GET /api/admin/payment-packages
+ */
+router.get('/payment-packages', async (req: Request, res: Response) => {
+  try {
+    const packages = await prisma.paymentPackage.findMany({
+      orderBy: [
+        { sortOrder: 'asc' },
+        { id: 'asc' }
+      ]
+    });
+
+    ResponseUtils.success(res, {
+      packages,
+      total: packages.length,
+      message: '获取充值套餐成功'
+    });
+  } catch (error) {
+    console.error('获取充值套餐失败:', error);
+    ResponseUtils.internalError(res, '获取充值套餐失败');
+  }
+});
+
+/**
+ * 创建充值套餐
+ * POST /api/admin/payment-packages
+ * Body: { name, description, amount, points, bonusPoints }
+ */
+router.post('/payment-packages', async (req: Request, res: Response) => {
+  try {
+    const { name, description, amount, points, bonusPoints } = req.body;
+
+    // 参数验证
+    if (!name || typeof name !== 'string') {
+      return ResponseUtils.error(res, '套餐名称不能为空');
+    }
+
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return ResponseUtils.error(res, '套餐价格必须是大于0的数字');
+    }
+
+    if (!points || isNaN(parseInt(points)) || parseInt(points) <= 0) {
+      return ResponseUtils.error(res, '积分数量必须是大于0的整数');
+    }
+
+    const bonusPointsValue = bonusPoints ? parseInt(bonusPoints) : 0;
+    if (bonusPointsValue < 0) {
+      return ResponseUtils.error(res, '奖励积分不能为负数');
+    }
+
+    // 创建套餐
+    const newPackage = await prisma.paymentPackage.create({
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        amount: parseFloat(amount),
+        points: parseInt(points),
+        bonusPoints: bonusPointsValue,
+        isActive: true,
+        sortOrder: 0
+      }
+    });
+
+    ResponseUtils.success(res, {
+      package: newPackage,
+      message: '创建充值套餐成功'
+    });
+  } catch (error) {
+    console.error('创建充值套餐失败:', error);
+    ResponseUtils.internalError(res, '创建充值套餐失败');
+  }
+});
+
+/**
+ * 更新充值套餐
+ * PUT /api/admin/payment-packages/:id
+ * Body: { name, description, amount, points, bonusPoints }
+ */
+router.put('/payment-packages/:id', async (req: Request, res: Response) => {
+  try {
+    const packageId = parseInt(req.params.id);
+    const { name, description, amount, points, bonusPoints } = req.body;
+
+    if (isNaN(packageId)) {
+      return ResponseUtils.error(res, '套餐ID无效');
+    }
+
+    // 参数验证
+    if (!name || typeof name !== 'string') {
+      return ResponseUtils.error(res, '套餐名称不能为空');
+    }
+
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      return ResponseUtils.error(res, '套餐价格必须是大于0的数字');
+    }
+
+    if (!points || isNaN(parseInt(points)) || parseInt(points) <= 0) {
+      return ResponseUtils.error(res, '积分数量必须是大于0的整数');
+    }
+
+    const bonusPointsValue = bonusPoints ? parseInt(bonusPoints) : 0;
+    if (bonusPointsValue < 0) {
+      return ResponseUtils.error(res, '奖励积分不能为负数');
+    }
+
+    // 检查套餐是否存在
+    const existingPackage = await prisma.paymentPackage.findUnique({
+      where: { id: packageId }
+    });
+
+    if (!existingPackage) {
+      return ResponseUtils.notFound(res, '套餐不存在');
+    }
+
+    // 更新套餐
+    const updatedPackage = await prisma.paymentPackage.update({
+      where: { id: packageId },
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        amount: parseFloat(amount),
+        points: parseInt(points),
+        bonusPoints: bonusPointsValue
+      }
+    });
+
+    ResponseUtils.success(res, {
+      package: updatedPackage,
+      message: '更新充值套餐成功'
+    });
+  } catch (error) {
+    console.error('更新充值套餐失败:', error);
+    ResponseUtils.internalError(res, '更新充值套餐失败');
+  }
+});
+
+/**
+ * 删除充值套餐
+ * DELETE /api/admin/payment-packages/:id
+ */
+router.delete('/payment-packages/:id', async (req: Request, res: Response) => {
+  try {
+    const packageId = parseInt(req.params.id);
+
+    if (isNaN(packageId)) {
+      return ResponseUtils.error(res, '套餐ID无效');
+    }
+
+    // 检查套餐是否存在
+    const existingPackage = await prisma.paymentPackage.findUnique({
+      where: { id: packageId }
+    });
+
+    if (!existingPackage) {
+      return ResponseUtils.notFound(res, '套餐不存在');
+    }
+
+    // 检查是否有关联的订单
+    const orderCount = await prisma.paymentOrder.count({
+      where: { packageId: packageId }
+    });
+
+    if (orderCount > 0) {
+      return ResponseUtils.error(res, '该套餐已有订单记录，无法删除');
+    }
+
+    // 删除套餐
+    await prisma.paymentPackage.delete({
+      where: { id: packageId }
+    });
+
+    ResponseUtils.success(res, {
+      message: '删除充值套餐成功'
+    });
+  } catch (error) {
+    console.error('删除充值套餐失败:', error);
+    ResponseUtils.internalError(res, '删除充值套餐失败');
+  }
+});
+
 export default router; 

@@ -21,6 +21,27 @@ interface EditingConfig {
   description: string;
 }
 
+interface PaymentPackage {
+  id: number;
+  name: string;
+  description?: string;
+  amount: number;
+  points: number;
+  bonusPoints: number;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface EditingPackage {
+  name: string;
+  description: string;
+  amount: number;
+  points: number;
+  bonusPoints: number;
+}
+
 interface InviteFilters {
   startDate: string;
   endDate: string;
@@ -63,7 +84,7 @@ export default function ManagerPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchEmail, setSearchEmail] = useState<string>('');
-  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites'>('configs');
+  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages'>('configs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -114,6 +135,18 @@ export default function ManagerPage() {
   const [creditDescription, setCreditDescription] = useState<string>('');
   const [showCreditForm, setShowCreditForm] = useState(false);
 
+  // 充值套餐管理相关状态
+  const [packages, setPackages] = useState<PaymentPackage[]>([]);
+  const [showPackageForm, setShowPackageForm] = useState(false);
+  const [editingPackage, setEditingPackage] = useState<EditingPackage>({
+    name: '',
+    description: '',
+    amount: 0,
+    points: 0,
+    bonusPoints: 0
+  });
+  const [editingPackageId, setEditingPackageId] = useState<number | null>(null);
+
   // 检查管理员权限
   const isAdmin = user?.role === 'ADMIN';
 
@@ -131,6 +164,8 @@ export default function ManagerPage() {
         loadCreditUsers();
       } else if (currentTab === 'invites') {
         loadInviteData();
+      } else if (currentTab === 'packages') {
+        loadPackages();
       }
     }
   }, [isAdmin, currentTab]);
@@ -184,6 +219,156 @@ export default function ManagerPage() {
   // 清除积分搜索
   const handleClearCreditSearch = () => {
     setCreditSearchEmail('');
+  };
+
+  // 加载充值套餐
+  const loadPackages = async () => {
+    try {
+      setLoading(true);
+      const sessionId = localStorage.getItem('sessionId');
+      
+      const response = await fetch('http://localhost:3003/api/admin/payment-packages', {
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('loadPackages - Error response:', errorText);
+        throw new Error(`Failed to load packages: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('loadPackages - Response data:', data);
+      setPackages(data.data.packages || []);
+      setMessage('充值套餐加载成功');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('加载充值套餐失败:', error);
+      setMessage(`加载充值套餐失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 保存充值套餐
+  const handleSavePackage = async () => {
+    try {
+      setSaving(true);
+
+      // 验证输入
+      if (!editingPackage.name.trim()) {
+        setMessage('套餐名称不能为空');
+        return;
+      }
+
+      if (editingPackage.amount <= 0) {
+        setMessage('套餐价格必须大于0');
+        return;
+      }
+
+      if (editingPackage.points <= 0) {
+        setMessage('积分数量必须大于0');
+        return;
+      }
+
+      if (editingPackage.bonusPoints < 0) {
+        setMessage('奖励积分不能为负数');
+        return;
+      }
+
+      const sessionId = localStorage.getItem('sessionId');
+      const url = editingPackageId 
+        ? `http://localhost:3003/api/admin/payment-packages/${editingPackageId}`
+        : 'http://localhost:3003/api/admin/payment-packages';
+      const method = editingPackageId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: editingPackage.name,
+          description: editingPackage.description,
+          amount: editingPackage.amount,
+          points: editingPackage.points,
+          bonusPoints: editingPackage.bonusPoints
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('保存套餐失败');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setMessage(editingPackageId ? '套餐更新成功' : '套餐创建成功');
+        setShowPackageForm(false);
+        setEditingPackageId(null);
+        setEditingPackage({
+          name: '',
+          description: '',
+          amount: 0,
+          points: 0,
+          bonusPoints: 0
+        });
+        await loadPackages();
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        throw new Error(data.message || '保存失败');
+      }
+    } catch (error) {
+      console.error('保存套餐失败:', error);
+      setMessage(`保存失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 编辑充值套餐
+  const handleEditPackage = (pkg: PaymentPackage) => {
+    setEditingPackage({
+      name: pkg.name,
+      description: pkg.description || '',
+      amount: pkg.amount,
+      points: pkg.points,
+      bonusPoints: pkg.bonusPoints
+    });
+    setEditingPackageId(pkg.id);
+    setShowPackageForm(true);
+  };
+
+  // 删除充值套餐
+  const handleDeletePackage = async (packageId: number) => {
+    if (!confirm('确定要删除这个充值套餐吗？')) {
+      return;
+    }
+
+    try {
+      const sessionId = localStorage.getItem('sessionId');
+      const response = await fetch(`http://localhost:3003/api/admin/payment-packages/${packageId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('删除套餐失败');
+      }
+
+      setMessage('套餐删除成功！');
+      await loadPackages();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('删除套餐失败:', error);
+      setMessage('删除套餐失败');
+    }
   };
 
   const loadConfigs = async () => {
@@ -762,6 +947,16 @@ export default function ManagerPage() {
                 }`}
               >
                 用户邀请管理
+              </button>
+              <button
+                onClick={() => setCurrentTab('packages')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
+                  currentTab === 'packages'
+                    ? 'border-yellow-500 text-yellow-400 bg-gradient-to-r from-yellow-600/20 to-orange-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-yellow-600/10 hover:to-orange-600/10'
+                }`}
+              >
+                充值管理
               </button>
             </nav>
           </div>
@@ -1771,6 +1966,260 @@ export default function ManagerPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* 充值管理标签页 */}
+        {currentTab === 'packages' && (
+          <>
+            {/* 添加/编辑表单 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">
+                  {showPackageForm ? (editingPackageId ? '编辑套餐' : '添加套餐') : '充值套餐管理'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowPackageForm(!showPackageForm);
+                    if (!showPackageForm) {
+                      setEditingPackageId(null);
+                      setEditingPackage({
+                        name: '',
+                        description: '',
+                        amount: 0,
+                        points: 0,
+                        bonusPoints: 0
+                      });
+                    }
+                  }}
+                  className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  {showPackageForm ? '取消' : '添加套餐'}
+                </button>
+              </div>
+
+              {showPackageForm && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">套餐名称</label>
+                    <input
+                      type="text"
+                      value={editingPackage.name}
+                      onChange={(e) => setEditingPackage({...editingPackage, name: e.target.value})}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                      placeholder="例如: 基础套餐"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">套餐价格 (元)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editingPackage.amount}
+                      onChange={(e) => setEditingPackage({...editingPackage, amount: parseFloat(e.target.value) || 0})}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                      placeholder="例如: 9.9"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">基础积分</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editingPackage.points}
+                      onChange={(e) => setEditingPackage({...editingPackage, points: parseInt(e.target.value) || 0})}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                      placeholder="例如: 100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">奖励积分</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editingPackage.bonusPoints}
+                      onChange={(e) => setEditingPackage({...editingPackage, bonusPoints: parseInt(e.target.value) || 0})}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                      placeholder="例如: 20"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-2">套餐描述</label>
+                    <input
+                      type="text"
+                      value={editingPackage.description}
+                      onChange={(e) => setEditingPackage({...editingPackage, description: e.target.value})}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                      placeholder="例如: 适合新手用户，满足日常AI答题需求"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <div className="bg-gray-700 rounded-lg p-3 text-sm text-gray-300 mb-4">
+                      <strong>总积分预览: </strong>
+                      {editingPackage.points + editingPackage.bonusPoints} 积分 
+                      (基础: {editingPackage.points} + 奖励: {editingPackage.bonusPoints})
+                    </div>
+                    <button
+                      onClick={handleSavePackage}
+                      disabled={saving}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-6 py-2 rounded-lg transition-colors"
+                    >
+                      {saving ? '保存中...' : (editingPackageId ? '更新套餐' : '创建套餐')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 套餐列表 */}
+            <div className="bg-gray-800 rounded-lg overflow-hidden">
+              <div className="p-6 border-b border-gray-700">
+                <h3 className="text-lg font-semibold">当前套餐 ({packages.length})</h3>
+                <p className="text-gray-400 text-sm mt-1">管理所有充值套餐，用户在充值页面会看到这些套餐选项</p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        ID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        套餐名称
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        价格
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        基础积分
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        奖励积分
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        总积分
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        状态
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        描述
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        创建时间
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        操作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {packages.map((pkg) => (
+                      <tr key={pkg.id} className="hover:bg-gray-700">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          {pkg.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          {pkg.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className="bg-green-600 text-green-100 px-2 py-1 rounded-full text-xs">
+                            ¥{pkg.amount}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className="bg-blue-600 text-blue-100 px-2 py-1 rounded-full text-xs">
+                            {pkg.points} 积分
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className="bg-purple-600 text-purple-100 px-2 py-1 rounded-full text-xs">
+                            {pkg.bonusPoints} 积分
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className="bg-orange-600 text-orange-100 px-2 py-1 rounded-full text-xs font-medium">
+                            {pkg.points + pkg.bonusPoints} 积分
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            pkg.isActive 
+                              ? 'bg-green-600 text-green-100' 
+                              : 'bg-red-600 text-red-100'
+                          }`}>
+                            {pkg.isActive ? '启用' : '禁用'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate">
+                          {pkg.description || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                          {new Date(pkg.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleEditPackage(pkg)}
+                              className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs transition-colors"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDeletePackage(pkg.id)}
+                              className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs transition-colors"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {packages.length === 0 && (
+                  <div className="text-center py-12 text-gray-400">
+                    <p>暂无充值套餐</p>
+                    <p className="text-sm mt-2">点击"添加套餐"开始创建充值套餐</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 套餐设置说明 */}
+            <div className="mt-8 bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4">💡 套餐设置说明</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div className="font-medium mb-2">字段说明:</div>
+                  <div className="text-gray-300">
+                    • <span className="font-medium text-blue-400">套餐名称</span>: 显示给用户的套餐标题<br />
+                    • <span className="font-medium text-green-400">套餐价格</span>: 用户需要支付的金额(元)<br />
+                    • <span className="font-medium text-blue-400">基础积分</span>: 支付后获得的基本积分<br />
+                    • <span className="font-medium text-purple-400">奖励积分</span>: 额外赠送的积分<br />
+                    • <span className="font-medium text-gray-400">套餐描述</span>: 套餐的详细说明
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="font-medium mb-2">注意事项:</div>
+                  <div className="text-gray-300">
+                    • 总积分 = 基础积分 + 奖励积分<br />
+                    • 套餐价格支持小数(如9.9元)<br />
+                    • 已有订单的套餐无法删除<br />
+                    • 用户在充值页面可以看到所有启用的套餐<br />
+                    • 建议合理设置奖励积分来吸引用户
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
