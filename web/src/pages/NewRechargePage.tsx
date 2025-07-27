@@ -146,8 +146,8 @@ const NewRechargePage: React.FC = () => {
 
   // 处理支付成功
   const handlePaymentSuccess = () => {
-    setCurrentStep('history');
-    updateSearchParams('history');
+    setCurrentStep('packages');
+    updateSearchParams('packages');
     setCurrentOrder(null);
   };
 
