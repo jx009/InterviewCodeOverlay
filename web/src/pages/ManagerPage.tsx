@@ -75,6 +75,30 @@ interface UsageFilters {
   transactionType: string;
 }
 
+interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  isActive: boolean;
+  priority: number;
+  showStyle: string;
+  startTime?: string;
+  endTime?: string;
+  createdBy?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface EditingAnnouncement {
+  title: string;
+  content: string;
+  isActive: boolean;
+  priority: number;
+  showStyle: string;
+  startTime: string;
+  endTime: string;
+}
+
 interface InviteFilters {
   startDate: string;
   endDate: string;
@@ -117,7 +141,7 @@ export default function ManagerPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchEmail, setSearchEmail] = useState<string>('');
-  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages' | 'usage-stats'>('configs');
+  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages' | 'usage-stats' | 'announcements'>('configs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -202,6 +226,20 @@ export default function ManagerPage() {
   const [usagePageSize, setUsagePageSize] = useState(10);
   const [usageTotal, setUsageTotal] = useState(0);
 
+  // 公告管理相关状态
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<EditingAnnouncement>({
+    title: '',
+    content: '',
+    isActive: true,
+    priority: 0,
+    showStyle: 'info',
+    startTime: '',
+    endTime: ''
+  });
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<number | null>(null);
+
   // 检查管理员权限
   const isAdmin = user?.role === 'ADMIN';
 
@@ -223,6 +261,8 @@ export default function ManagerPage() {
         loadPackages();
       } else if (currentTab === 'usage-stats') {
         loadUsageData();
+      } else if (currentTab === 'announcements') {
+        loadAnnouncements();
       }
     }
   }, [isAdmin, currentTab]);
@@ -521,6 +561,155 @@ export default function ManagerPage() {
       setMessage('加载交易明细失败');
     } finally {
       setUsageLoading(false);
+    }
+  };
+
+  // 加载公告列表
+  const loadAnnouncements = async () => {
+    try {
+      setLoading(true);
+      const sessionId = localStorage.getItem('sessionId');
+      
+      const response = await fetch('http://localhost:3003/api/admin/announcements', {
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('loadAnnouncements - Error response:', errorText);
+        throw new Error(`Failed to load announcements: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('loadAnnouncements - Response data:', data);
+      setAnnouncements(data.data.announcements || []);
+      setMessage('公告加载成功');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('加载公告失败:', error);
+      setMessage(`加载公告失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 保存公告
+  const handleSaveAnnouncement = async () => {
+    try {
+      setSaving(true);
+
+      // 验证输入
+      if (!editingAnnouncement.title.trim()) {
+        setMessage('公告标题不能为空');
+        return;
+      }
+
+      if (!editingAnnouncement.content.trim()) {
+        setMessage('公告内容不能为空');
+        return;
+      }
+
+      const sessionId = localStorage.getItem('sessionId');
+      const isEditing = editingAnnouncementId !== null;
+      
+      const url = isEditing 
+        ? `http://localhost:3003/api/admin/announcements/${editingAnnouncementId}` 
+        : 'http://localhost:3003/api/admin/announcements';
+      
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: editingAnnouncement.title,
+          content: editingAnnouncement.content,
+          isActive: editingAnnouncement.isActive,
+          priority: editingAnnouncement.priority,
+          showStyle: editingAnnouncement.showStyle,
+          startTime: editingAnnouncement.startTime || null,
+          endTime: editingAnnouncement.endTime || null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('保存公告失败');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setMessage(isEditing ? '公告更新成功' : '公告创建成功');
+        setShowAnnouncementForm(false);
+        setEditingAnnouncementId(null);
+        setEditingAnnouncement({
+          title: '',
+          content: '',
+          isActive: true,
+          priority: 0,
+          showStyle: 'info',
+          startTime: '',
+          endTime: ''
+        });
+        await loadAnnouncements();
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        throw new Error(data.message || '保存失败');
+      }
+    } catch (error) {
+      console.error('保存公告失败:', error);
+      setMessage(`保存失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 编辑公告
+  const handleEditAnnouncement = (announcement: Announcement) => {
+    setEditingAnnouncement({
+      title: announcement.title,
+      content: announcement.content,
+      isActive: announcement.isActive,
+      priority: announcement.priority,
+      showStyle: announcement.showStyle,
+      startTime: announcement.startTime ? announcement.startTime.split('T')[0] : '',
+      endTime: announcement.endTime ? announcement.endTime.split('T')[0] : ''
+    });
+    setEditingAnnouncementId(announcement.id);
+    setShowAnnouncementForm(true);
+  };
+
+  // 删除公告
+  const handleDeleteAnnouncement = async (announcementId: number) => {
+    if (!confirm('确定要删除这个公告吗？')) {
+      return;
+    }
+
+    try {
+      const sessionId = localStorage.getItem('sessionId');
+      const response = await fetch(`http://localhost:3003/api/admin/announcements/${announcementId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('删除公告失败');
+      }
+
+      setMessage('公告删除成功！');
+      await loadAnnouncements();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('删除公告失败:', error);
+      setMessage('删除公告失败');
     }
   };
 
@@ -1120,6 +1309,16 @@ export default function ManagerPage() {
                 }`}
               >
                 使用情况统计
+              </button>
+              <button
+                onClick={() => setCurrentTab('announcements')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
+                  currentTab === 'announcements'
+                    ? 'border-purple-500 text-purple-400 bg-gradient-to-r from-purple-600/20 to-pink-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-purple-600/10 hover:to-pink-600/10'
+                }`}
+              >
+                公告管理
               </button>
             </nav>
           </div>
@@ -2675,6 +2874,338 @@ export default function ManagerPage() {
                   )}
                 </div>
               )}
+            </div>
+          </>
+        )}
+
+        {/* 公告管理标签页 */}
+        {currentTab === 'announcements' && (
+          <>
+            {/* 添加/编辑表单 */}
+            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">
+                  {showAnnouncementForm ? (editingAnnouncementId ? '编辑公告' : '添加公告') : '公告管理'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAnnouncementForm(!showAnnouncementForm);
+                    if (!showAnnouncementForm) {
+                      setEditingAnnouncementId(null);
+                      setEditingAnnouncement({
+                        title: '',
+                        content: '',
+                        isActive: true,
+                        priority: 0,
+                        showStyle: 'info',
+                        startTime: '',
+                        endTime: ''
+                      });
+                    }
+                  }}
+                  className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  {showAnnouncementForm ? '取消' : '添加公告'}
+                </button>
+              </div>
+
+              {showAnnouncementForm && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* 左侧：HTML编辑器 */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">HTML 编辑器</h3>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-2">公告标题</label>
+                      <input
+                        type="text"
+                        value={editingAnnouncement.title}
+                        onChange={(e) => setEditingAnnouncement({...editingAnnouncement, title: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                        placeholder="输入公告标题（内部管理用）"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">HTML 内容</label>
+                      <textarea
+                        value={editingAnnouncement.content}
+                        onChange={(e) => setEditingAnnouncement({...editingAnnouncement, content: e.target.value})}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 font-mono text-sm"
+                        rows={12}
+                        placeholder="输入HTML内容..."
+                      />
+                      <div className="flex space-x-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingAnnouncement({
+                            ...editingAnnouncement, 
+                            content: `<div style="color: #1e40af; font-weight: bold;">🔥 最后一天优惠，7月26号以前开通会员特价 <span style="color: #dc2626; font-size: 18px;">89元</span> + 赠送全站笔试面试资料包，一次开通，永久有效，7月26号过后涨价预计29元+取消赠送资料包， <a href="#" style="color: #2563eb; text-decoration: underline;">点击前往</a></div>`
+                          })}
+                          className="text-xs bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded transition-colors"
+                        >
+                          使用模板1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAnnouncement({
+                            ...editingAnnouncement, 
+                            content: `<div style="display: flex; align-items: center; justify-content: center; color: #059669; font-weight: 500;"><span style="margin-right: 8px;">✅</span>系统维护完成，所有功能已恢复正常！</div>`
+                          })}
+                          className="text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded transition-colors"
+                        >
+                          使用模板2
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAnnouncement({
+                            ...editingAnnouncement, 
+                            content: `<div style="color: #b91c1c; font-weight: 600;">⚠️ 紧急通知：系统将于今晚22:00-24:00进行维护升级，期间服务暂时不可用，请合理安排使用时间。</div>`
+                          })}
+                          className="text-xs bg-red-600 hover:bg-red-700 px-3 py-1 rounded transition-colors"
+                        >
+                          使用模板3
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">优先级</label>
+                        <input
+                          type="number"
+                          value={editingAnnouncement.priority}
+                          onChange={(e) => setEditingAnnouncement({...editingAnnouncement, priority: parseInt(e.target.value) || 0})}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                          placeholder="数字越大优先级越高"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">显示样式</label>
+                        <select
+                          value={editingAnnouncement.showStyle}
+                          onChange={(e) => setEditingAnnouncement({...editingAnnouncement, showStyle: e.target.value})}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                        >
+                          <option value="info">信息（蓝色）</option>
+                          <option value="warning">警告（黄色）</option>
+                          <option value="success">成功（绿色）</option>
+                          <option value="error">错误（红色）</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">开始时间（可选）</label>
+                        <input
+                          type="datetime-local"
+                          value={editingAnnouncement.startTime}
+                          onChange={(e) => setEditingAnnouncement({...editingAnnouncement, startTime: e.target.value})}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-2">结束时间（可选）</label>
+                        <input
+                          type="datetime-local"
+                          value={editingAnnouncement.endTime}
+                          onChange={(e) => setEditingAnnouncement({...editingAnnouncement, endTime: e.target.value})}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="isActive"
+                        checked={editingAnnouncement.isActive}
+                        onChange={(e) => setEditingAnnouncement({...editingAnnouncement, isActive: e.target.checked})}
+                        className="mr-2"
+                      />
+                      <label htmlFor="isActive" className="text-sm">启用公告</label>
+                    </div>
+
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={handleSaveAnnouncement}
+                        disabled={saving}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-6 py-2 rounded-lg transition-colors"
+                      >
+                        {saving ? '保存中...' : (editingAnnouncementId ? '更新公告' : '创建公告')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 右侧：实时预览 */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">实时预览</h3>
+                    
+                    <div className="bg-gray-900 rounded-lg p-4 min-h-[400px]">
+                      <div className="text-sm text-gray-400 mb-4">
+                        预览效果（实际效果可能因页面样式有所差异）：
+                      </div>
+                      
+                      {editingAnnouncement.content ? (
+                        <div 
+                          className={`p-4 rounded-lg border ${
+                            editingAnnouncement.showStyle === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                            editingAnnouncement.showStyle === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                            editingAnnouncement.showStyle === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                            'bg-red-50 border-red-200 text-red-800'
+                          }`}
+                          dangerouslySetInnerHTML={{ __html: editingAnnouncement.content }}
+                        />
+                      ) : (
+                        <div className="text-gray-500 text-center py-12">
+                          请在左侧输入HTML内容查看预览
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-sm text-gray-400 space-y-2">
+                      <div><strong>HTML模板示例：</strong></div>
+                      <div className="bg-gray-900 p-3 rounded font-mono text-xs">
+{`<div style="color: #1e40af; font-weight: bold;">
+  🔥 重要通知：<span style="color: #dc2626;">限时优惠</span>
+  + 赠送资料包，
+  <a href="#" style="color: #2563eb; text-decoration: underline;">
+    点击前往
+  </a>
+</div>`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 公告列表 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4">公告列表</h3>
+              
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-4 text-gray-400">加载中...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full table-auto">
+                    <thead>
+                      <tr className="bg-gray-700">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          标题
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          状态
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          优先级
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          样式
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          创建时间
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                          操作
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {announcements.map((announcement) => (
+                        <tr key={announcement.id} className="hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {announcement.title}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              announcement.isActive 
+                                ? 'bg-green-600 text-green-100' 
+                                : 'bg-red-600 text-red-100'
+                            }`}>
+                              {announcement.isActive ? '启用' : '禁用'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {announcement.priority}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              announcement.showStyle === 'info' ? 'bg-blue-600 text-blue-100' :
+                              announcement.showStyle === 'warning' ? 'bg-yellow-600 text-yellow-100' :
+                              announcement.showStyle === 'success' ? 'bg-green-600 text-green-100' :
+                              'bg-red-600 text-red-100'
+                            }`}>
+                              {announcement.showStyle === 'info' ? '信息' :
+                               announcement.showStyle === 'warning' ? '警告' :
+                               announcement.showStyle === 'success' ? '成功' : '错误'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                            {new Date(announcement.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleEditAnnouncement(announcement)}
+                                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs transition-colors"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAnnouncement(announcement.id)}
+                                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs transition-colors"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {announcements.length === 0 && (
+                    <div className="text-center py-12 text-gray-400">
+                      <p>暂无公告</p>
+                      <p className="text-sm mt-2">点击"添加公告"开始创建公告</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 使用说明 */}
+            <div className="mt-8 bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4">💡 使用说明</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div className="font-medium mb-2">功能说明:</div>
+                  <div className="text-gray-300">
+                    • <span className="font-medium text-blue-400">左侧编辑器</span>: 支持原生HTML代码编辑<br />
+                    • <span className="font-medium text-green-400">右侧预览</span>: 实时预览公告显示效果<br />
+                    • <span className="font-medium text-purple-400">优先级</span>: 数字越大显示优先级越高<br />
+                    • <span className="font-medium text-yellow-400">时间控制</span>: 可设置公告显示的时间范围<br />
+                    • <span className="font-medium text-red-400">样式选择</span>: 支持多种颜色主题
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="font-medium mb-2">注意事项:</div>
+                  <div className="text-gray-300">
+                    • 支持HTML标签和内联样式<br />
+                    • 公告将显示在网站首页顶部<br />
+                    • 只有启用状态的公告才会显示<br />
+                    • 优先级高的公告会优先显示<br />
+                    • 可设置公告的生效和失效时间
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         )}

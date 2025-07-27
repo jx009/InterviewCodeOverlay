@@ -372,4 +372,27 @@ model InviteReward {
   @@index([rewardType])
   @@index([status])
   @@map("invite_rewards")
+}
+
+// 🔔 公告系统相关表
+
+// 公告表
+model Announcement {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(200) // 公告标题（内部管理用）
+  content     String   @db.Text // 公告HTML内容
+  isActive    Boolean  @default(true) @map("is_active") // 是否启用
+  priority    Int      @default(0) // 优先级，数字越大优先级越高
+  showStyle   String   @default("info") @db.VarChar(20) @map("show_style") // 显示样式：info, warning, success, error
+  startTime   DateTime? @map("start_time") // 开始显示时间
+  endTime     DateTime? @map("end_time") // 结束显示时间
+  createdBy   Int?     @map("created_by") // 创建者ID
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@index([priority])
+  @@index([startTime])
+  @@index([endTime])
+  @@map("announcements")
 } 
