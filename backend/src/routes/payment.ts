@@ -208,7 +208,6 @@ router.get('/packages', async (req: Request, res: Response) => {
         isActive: true,
         sortOrder: true,
         icon: true,
-        isRecommended: true,
         createdAt: true,
         updatedAt: true
       },

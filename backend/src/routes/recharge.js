@@ -222,12 +222,10 @@ router.get('/packages', async (req, res) => {
         isActive: true,
         sortOrder: true,
         icon: true,
-        isRecommended: true,
         createdAt: true,
         updatedAt: true
       },
       orderBy: [
-        { isRecommended: 'desc' }, // 推荐套餐排在前面
         { sortOrder: 'asc' },      // 按排序权重排序
         { id: 'asc' }              // 最后按ID排序
       ]
@@ -243,7 +241,6 @@ router.get('/packages', async (req, res) => {
       points: pkg.points,
       bonusPoints: pkg.bonusPoints,
       totalPoints: pkg.points + pkg.bonusPoints,
-      isRecommended: pkg.isRecommended,
       icon: pkg.icon
     }));
     
