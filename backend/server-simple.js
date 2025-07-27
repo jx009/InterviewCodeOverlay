@@ -934,7 +934,7 @@ app.get('/api/config/models', authenticateSession, (req, res) => {
 app.get('/api/config/languages', authenticateSession, (req, res) => {
   const languages = [
     'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 
-    'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin', 'Dart', 'Other'
+    'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin', 'Dart', 'MySQL'
   ];
   res.json(languages);
 });
