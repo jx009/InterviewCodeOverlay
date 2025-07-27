@@ -4,8 +4,8 @@ import { SessionProtection } from '../utils/sessionProtection';
 
 // 更新BASE_URL以确保正确连接到后端服务器
 const BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'http://quiz.playoffer.cn/api' // 生产环境使用服务器地址
-  : 'http://quiz.playoffer.cn/api'; // 开发环境也使用服务器地址
+  ? 'https://quiz.playoffer.cn/api' // 生产环境使用HTTPS服务器地址
+  : 'https://quiz.playoffer.cn/api'; // 开发环境也使用HTTPS服务器地址
 
 // Removed unused interfaces
 

@@ -56,6 +56,7 @@ async function startServer() {
     // CORS配置
     const corsOptions = {
       origin: process.env.CORS_ORIGIN?.split(',') || [
+        'https://quiz.playoffer.cn',
         'http://localhost:3000', 
         'http://localhost:54321',
         `http://localhost:${WEB_PORT}`
