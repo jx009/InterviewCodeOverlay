@@ -1,6 +1,29 @@
 // 加载环境变量
 require('dotenv').config();
 
+// 🔧 日期处理工具函数
+function buildDateRange(startDate, endDate) {
+  const dateWhere = {};
+  
+  if (startDate) {
+    // 开始日期设置为当天的00:00:00
+    const startDateTime = new Date(startDate);
+    startDateTime.setHours(0, 0, 0, 0);
+    dateWhere.gte = startDateTime;
+    console.log('🔍 日期处理 - 开始日期:', startDateTime.toISOString());
+  }
+  
+  if (endDate) {
+    // 结束日期设置为当天的23:59:59.999
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(23, 59, 59, 999);
+    dateWhere.lte = endDateTime;
+    console.log('🔍 日期处理 - 结束日期:', endDateTime.toISOString());
+  }
+  
+  return Object.keys(dateWhere).length > 0 ? dateWhere : null;
+}
+
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -3825,18 +3848,51 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
     const where = {};
 
     if (transactionType && transactionType !== 'all') {
-      where.transactionType = transactionType;
-    }
-
-    if (startDate) {
-      where.createdAt = { gte: new Date(startDate) };
-    }
-
-    if (endDate) {
-      where.createdAt = {
-        ...where.createdAt,
-        lte: new Date(endDate)
+      console.log('🔍 调试信息 - 原始交易类型:', transactionType, '类型:', typeof transactionType);
+      
+      // 将前端传递的字符串转换为数据库枚举值（小写）
+      const transactionTypeMap = {
+        'consume': 'consume',
+        'recharge': 'recharge', 
+        'refund': 'refund',
+        'reward': 'reward',
+        'CONSUME': 'consume',
+        'RECHARGE': 'recharge', 
+        'REFUND': 'refund',
+        'REWARD': 'reward'
       };
+      
+      const mappedType = transactionTypeMap[transactionType];
+      console.log('🔍 调试信息 - 映射后的类型:', mappedType);
+      
+      // 尝试不同的枚举值格式
+      const possibleValues = ['consume', 'CONSUME', 'Consume'];
+      console.log('🔍 调试信息 - 尝试的枚举值:', possibleValues);
+      
+      // 尝试不同格式的枚举值
+      const possibleFormats = [
+        mappedType,           // 'consume'
+        mappedType.toUpperCase(), // 'CONSUME'
+        mappedType.charAt(0).toUpperCase() + mappedType.slice(1) // 'Consume'
+      ];
+      
+      console.log('🔍 调试信息 - 尝试的格式:', possibleFormats);
+      
+      // 先尝试大写格式（基于其他代码中的用法）
+      where.transactionType = mappedType.toUpperCase();
+      console.log('🔍 调试信息 - 最终where条件:', JSON.stringify(where, null, 2));
+      
+      // 如果映射失败，记录日志并跳过筛选
+      if (!where.transactionType) {
+        console.log('⚠️ 未知的交易类型:', transactionType);
+        delete where.transactionType;
+      }
+    }
+
+    // 使用统一的日期处理函数
+    const dateRange = buildDateRange(startDate, endDate);
+    if (dateRange) {
+      where.createdAt = dateRange;
     }
 
     // 如果有用户邮箱筛选，需要通过用户表关联查询
@@ -3848,6 +3904,27 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
     }
 
     console.log('🔍 查询交易记录，条件:', { where, userWhere, skip, take });
+
+    // 添加调试：检查Prisma客户端的枚举
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const testClient = new PrismaClient();
+      console.log('🔍 调试信息 - 尝试访问不同的枚举路径...');
+      console.log('🔍 调试信息 - testClient.transactionType:', testClient.transactionType);
+      console.log('🔍 调试信息 - testClient.$enums:', testClient.$enums);
+      
+      // 尝试直接导入枚举
+      const { TransactionType } = require('@prisma/client');
+      console.log('🔍 调试信息 - 直接导入的TransactionType:', TransactionType);
+      
+      // 查看所有可用的枚举
+      if (testClient.$enums) {
+        console.log('🔍 调试信息 - 所有枚举:', Object.keys(testClient.$enums));
+        console.log('🔍 调试信息 - TransactionType枚举值:', testClient.$enums.TransactionType);
+      }
+    } catch (e) {
+      console.log('🔍 调试信息 - 枚举访问失败:', e.message);
+    }
 
     const transactions = await db.prisma.pointTransaction.findMany({
       skip,
@@ -3947,14 +4024,9 @@ app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
 
     // 构建时间范围条件
     const dateWhere = {};
-    if (startDate) {
-      dateWhere.createdAt = { gte: new Date(startDate) };
-    }
-    if (endDate) {
-      dateWhere.createdAt = {
-        ...dateWhere.createdAt,
-        lte: new Date(endDate)
-      };
+    const dateRange = buildDateRange(startDate, endDate);
+    if (dateRange) {
+      dateWhere.createdAt = dateRange;
     }
 
     // 用户筛选条件
