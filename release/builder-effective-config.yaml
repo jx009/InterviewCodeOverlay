@@ -2,7 +2,7 @@ directories:
   output: release
   buildResources: assets
 appId: com.chunginlee.quizcoze
-productName: QuizCoze
+productName: QuizCoze 2025.7.29
 files:
   - filter:
       - dist/**/*
@@ -55,4 +55,4 @@ publish:
     releaseType: release
 extraMetadata:
   main: dist-electron/main.js
-electronVersion: 37.2.3
+electronVersion: 37.2.1
