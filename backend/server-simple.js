@@ -27,7 +27,7 @@ db.getPaymentPackages = async function() {
         { id: 'asc' }              // 最后按ID排序
       ]
     });
-    
+
     return packages.map(pkg => ({
       id: pkg.id,
       name: pkg.name,
@@ -84,17 +84,17 @@ function loadConfig() {
 async function initRedis() {
   console.log('🔄 开始初始化Redis连接...');
   const config = loadConfig();
-  
+
   if (!config) {
     console.log('⚠️ 配置文件加载失败，使用内存存储');
     return;
   }
-  
+
   if (!config.redis) {
     console.log('⚠️ Redis配置不存在，使用内存存储');
     return;
   }
-  
+
   console.log('📋 Redis配置:', {
     host: config.redis.host,
     port: config.redis.port,
@@ -117,7 +117,7 @@ async function initRedis() {
     // 测试连接
     await redisClient.ping();
     console.log('✅ Redis连接成功');
-    
+
     // 替换内存存储
     sessionStore = {
       get: async (key) => {
@@ -148,7 +148,7 @@ async function initRedis() {
         }
       }
     };
-    
+
   } catch (error) {
     console.error('❌ Redis连接失败:', error.message);
     console.log('⚠️ 使用内存存储作为fallback');
@@ -164,7 +164,7 @@ const SessionStore = {
       return sessionStore.get(key);
     }
   },
-  
+
   async set(key, value, ttl = 3600) {
     if (typeof sessionStore.set === 'function' && sessionStore.set.constructor.name === 'AsyncFunction') {
       return await sessionStore.set(key, value, ttl);
@@ -172,7 +172,7 @@ const SessionStore = {
       return sessionStore.set(key, value);
     }
   },
-  
+
   async delete(key) {
     if (typeof sessionStore.delete === 'function' && sessionStore.delete.constructor.name === 'AsyncFunction') {
       return await sessionStore.delete(key);
@@ -283,7 +283,7 @@ app.get('/auth/success', (req, res) => {
 });
 
 app.get('/auth/error', (req, res) => {
-  res.status(400).json({ 
+  res.status(400).json({
     error: '认证失败',
     message: '登录过程中发生错误，请重试'
   });
@@ -293,34 +293,34 @@ app.get('/auth/error', (req, res) => {
 const authenticateSession = async (req, res, next) => {
   try {
     console.log(`🔐 认证中间件检查 ${req.method} ${req.path}`);
-    
+
     // 支持从Cookie或请求头获取sessionId
     const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
     console.log('📋 请求中的sessionId:', sessionId ? sessionId.substring(0, 10) + '...' : '无');
-    
+
     if (!sessionId) {
       console.log('❌ 未找到sessionId');
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: '未登录' 
+        message: '未登录'
       });
     }
-    
+
     const sessionData = await SessionStore.get(`session:${sessionId}`);
     console.log('🗄️ 从存储中获取会话数据:', sessionData ? '存在' : '不存在');
-    
+
     if (!sessionData) {
       console.log('❌ 会话数据不存在或已过期');
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: '会话已过期' 
+        message: '会话已过期'
       });
     }
-    
+
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
     await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
-    
+
     // 将用户信息和sessionId添加到请求对象
     req.user = {
       userId: sessionData.userId,
@@ -328,14 +328,14 @@ const authenticateSession = async (req, res, next) => {
       email: sessionData.email
     };
     req.sessionId = sessionId; // 🆕 添加sessionId到请求对象
-    
+
     console.log(`✅ 认证成功: ${sessionData.username} (${sessionData.email})`);
     next();
   } catch (error) {
     console.error('❌ 认证中间件错误:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: '认证服务异常' 
+      message: '认证服务异常'
     });
   }
 };
@@ -397,14 +397,14 @@ app.get('/api/health', (req, res) => {
 app.post('/api/mail_verify', async (req, res) => {
   try {
     const { email, username } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({
         success: false,
         message: '邮箱地址不能为空'
       });
     }
-    
+
     // 验证邮箱格式
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -413,7 +413,7 @@ app.post('/api/mail_verify', async (req, res) => {
         message: '邮箱格式不正确'
       });
     }
-    
+
     // 检查邮箱是否已注册
     const existingUser = await db.getUserByEmail(email);
     if (existingUser) {
@@ -422,18 +422,18 @@ app.post('/api/mail_verify', async (req, res) => {
         message: '该邮箱已注册，请直接登录'
       });
     }
-    
+
     if (!transporter) {
       return res.status(500).json({
         success: false,
         message: 'SMTP服务未配置，无法发送验证码'
       });
     }
-    
+
     // 生成验证码和token
     const code = generateVerificationCode();
     const token = generateToken();
-    
+
     // 存储验证token和邮箱、验证码的关系（5分钟有效期）
     const verificationData = {
       email,
@@ -443,29 +443,29 @@ app.post('/api/mail_verify', async (req, res) => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       attempts: 0
     };
-    
+
     await SessionStore.set(`verify_token:${token}`, verificationData, 300); // 5分钟TTL
     await SessionStore.set(`verify_email:${email}`, { token, code }, 300);
-    
+
     // 5分钟后自动清理（Redis TTL会自动处理，这里保留作为fallback）
     setTimeout(async () => {
       await SessionStore.delete(`verify_token:${token}`);
       await SessionStore.delete(`verify_email:${email}`);
     }, 5 * 60 * 1000);
-    
+
     // 发送邮件
     const mailOptions = createVerificationEmail(code, email);
     await transporter.sendMail(mailOptions);
-    
+
     console.log(`✅ 验证码已发送到 ${email}: ${code}, token: ${token.substring(0, 10)}...`);
-    
+
     res.json({
       success: true,
       message: '验证码已发送，请查收邮件',
       token, // 返回token用于后续验证步骤
       expiresIn: 300 // 5分钟，单位秒
     });
-    
+
   } catch (error) {
     console.error('发送验证码失败:', error);
     res.status(500).json({
@@ -480,71 +480,71 @@ app.post('/api/mail_verify', async (req, res) => {
 app.post('/api/verify_code', async (req, res) => {
   try {
     const { token, verify_code } = req.body;
-    
+
     if (!token || !verify_code) {
       return res.status(400).json({
         success: false,
         message: '验证令牌和验证码不能为空'
       });
     }
-    
+
     // 从内存中获取验证数据
     const verificationData = await SessionStore.get(`verify_token:${token}`);
-    
+
     if (!verificationData) {
       return res.status(400).json({
         success: false,
         message: '验证令牌无效或已过期'
       });
     }
-    
+
     // 检查验证码是否正确
     if (verificationData.code !== verify_code) {
       // 增加尝试次数
       verificationData.attempts += 1;
-      
+
       if (verificationData.attempts >= 3) {
         // 达到最大尝试次数，删除验证数据
         await SessionStore.delete(`verify_token:${token}`);
         await SessionStore.delete(`verify_email:${verificationData.email}`);
-        
+
         return res.status(400).json({
           success: false,
           message: '验证码错误次数过多，请重新发送验证码'
         });
       }
-      
+
       // 更新尝试次数
       await SessionStore.set(`verify_token:${token}`, verificationData, 300);
-      
+
       return res.status(400).json({
         success: false,
         message: `验证码错误，还可尝试 ${3 - verificationData.attempts} 次`
       });
     }
-    
+
     // 检查是否过期
     const now = new Date();
     const expiresAt = new Date(verificationData.expiresAt);
     if (now > expiresAt) {
       await SessionStore.delete(`verify_token:${token}`);
       await SessionStore.delete(`verify_email:${verificationData.email}`);
-      
+
       return res.status(400).json({
         success: false,
         message: '验证码已过期，请重新发送'
       });
     }
-    
+
     console.log(`✅ 邮箱验证成功: ${verificationData.email}`);
-    
+
     res.json({
       success: true,
       message: '邮箱验证成功',
       email: verificationData.email,
       username: verificationData.username
     });
-    
+
   } catch (error) {
     console.error('验证码验证失败:', error);
     res.status(500).json({
@@ -559,14 +559,14 @@ app.post('/api/verify_code', async (req, res) => {
 app.post('/api/user_register', async (req, res) => {
   try {
     const { token, verify_code, email, password, username } = req.body;
-    
+
     if (!token || !verify_code || !email || !password || !username) {
       return res.status(400).json({
         success: false,
         message: '所有字段都不能为空'
       });
     }
-    
+
     // 验证密码强度
     if (password.length < 6) {
       return res.status(400).json({
@@ -574,7 +574,7 @@ app.post('/api/user_register', async (req, res) => {
         message: '密码长度至少6位'
       });
     }
-    
+
     // 验证用户名
     if (username.length < 2) {
       return res.status(400).json({
@@ -582,17 +582,17 @@ app.post('/api/user_register', async (req, res) => {
         message: '用户名长度至少2位'
       });
     }
-    
+
     // 从内存中获取验证数据
     const verificationData = await SessionStore.get(`verify_token:${token}`);
-    
+
     if (!verificationData) {
       return res.status(400).json({
         success: false,
         message: '验证令牌无效或已过期'
       });
     }
-    
+
     // 验证验证码
     if (verificationData.code !== verify_code) {
       return res.status(400).json({
@@ -600,7 +600,7 @@ app.post('/api/user_register', async (req, res) => {
         message: '验证码错误'
       });
     }
-    
+
     // 验证邮箱一致性
     if (verificationData.email !== email) {
       return res.status(400).json({
@@ -608,7 +608,7 @@ app.post('/api/user_register', async (req, res) => {
         message: '邮箱不一致'
       });
     }
-    
+
     // 检查邮箱是否已被注册（双重检查）
     const existingUser = await db.getUserByEmail(email);
     if (existingUser) {
@@ -617,7 +617,7 @@ app.post('/api/user_register', async (req, res) => {
         message: '该邮箱已注册'
       });
     }
-    
+
     // 创建用户
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await db.createUser({
@@ -625,9 +625,9 @@ app.post('/api/user_register', async (req, res) => {
       email,
       password: hashedPassword
     });
-    
+
     console.log(`✅ 用户注册成功: ${username} (${email}), ID: ${newUser.id}`);
-    
+
     // 清理内存中的验证数据（失败不影响注册结果）
     try {
       await SessionStore.delete(`verify_token:${token}`);
@@ -636,7 +636,7 @@ app.post('/api/user_register', async (req, res) => {
     } catch (memoryError) {
       console.warn(`⚠️ 内存清理失败，但不影响注册结果:`, memoryError.message);
     }
-    
+
     res.json({
       success: true,
       message: '注册成功',
@@ -646,7 +646,7 @@ app.post('/api/user_register', async (req, res) => {
         email
       }
     });
-    
+
   } catch (error) {
     console.error('用户注册失败:', error);
     res.status(500).json({
@@ -661,24 +661,24 @@ app.post('/api/user_register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: '邮箱和密码不能为空'
       });
     }
-    
+
     // 从数据库验证用户
     const user = await db.getUserByEmail(email);
-    
+
     if (!user) {
       return res.status(400).json({
         success: false,
         message: '用户不存在'
       });
     }
-    
+
     // 验证密码
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -687,10 +687,10 @@ app.post('/api/login', async (req, res) => {
         message: '密码错误'
       });
     }
-    
+
     // 生成30位随机session_id
     const sessionId = generateSessionId();
-    
+
     // 在内存中保存session和用户信息的关系
     const sessionData = {
       userId: user.id,
@@ -700,12 +700,12 @@ app.post('/api/login', async (req, res) => {
       loginTime: new Date().toISOString(),
       lastActivity: new Date().toISOString()
     };
-    
+
     // 设置会话数据（7天有效期）
     await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
-    
+
     console.log(`✅ 用户登录成功: ${user.username} (${email}), Session: ${sessionId}`);
-    
+
     res.json({
       success: true,
       message: '登录成功',
@@ -717,7 +717,7 @@ app.post('/api/login', async (req, res) => {
         role: user.role
       }
     });
-    
+
   } catch (error) {
     console.error('用户登录失败:', error);
     res.status(500).json({
@@ -733,23 +733,23 @@ app.post('/api/logout', async (req, res) => {
   try {
     // 🆕 支持从Cookie或请求头获取sessionId
     const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
-    
+
     if (!sessionId) {
       return res.json({
         success: true,
         message: '已登出'
       });
     }
-    
+
     const sessionData = await SessionStore.get(`session:${sessionId}`);
-    
+
     if (sessionData) {
       // 删除会话数据
       await SessionStore.delete(`session:${sessionId}`);
-      
+
       console.log(`✅ 用户登出: ${sessionData.username}, Session: ${sessionId}`);
     }
-    
+
     // 🔧 修复：删除共享会话文件
     try {
       const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
@@ -760,12 +760,12 @@ app.post('/api/logout', async (req, res) => {
     } catch (error) {
       console.warn('⚠️ 删除共享会话文件失败:', error);
     }
-    
+
     res.json({
       success: true,
       message: '登出成功'
     });
-    
+
   } catch (error) {
     console.error('用户登出失败:', error);
     res.status(500).json({
@@ -781,10 +781,10 @@ app.get('/api/session_status', async (req, res) => {
   try {
     console.log('🔍 检查会话状态，请求头:', req.headers['x-session-id'] ? 'x-session-id存在' : 'x-session-id不存在');
     console.log('🔍 检查会话状态，Cookie:', req.cookies?.session_id ? 'session_id存在' : 'session_id不存在');
-    
+
     // 🆕 支持从Cookie或请求头获取sessionId
     const sessionId = req.cookies?.session_id || req.headers['x-session-id'];
-    
+
     if (!sessionId) {
       console.log('❌ 未找到sessionId');
       return res.status(401).json({
@@ -792,11 +792,11 @@ app.get('/api/session_status', async (req, res) => {
         message: '未登录'
       });
     }
-    
+
     console.log('📋 使用sessionId:', sessionId.substring(0, 10) + '...');
-    
+
     const sessionData = await SessionStore.get(`session:${sessionId}`);
-    
+
     if (!sessionData) {
       console.log('❌ 会话数据不存在或已过期');
       return res.status(401).json({
@@ -804,9 +804,9 @@ app.get('/api/session_status', async (req, res) => {
         message: '会话已过期'
       });
     }
-    
+
     console.log('✅ 找到会话数据:', sessionData.username);
-    
+
     // 如果session中没有role信息，从数据库获取
     if (!sessionData.role) {
       try {
@@ -819,10 +819,10 @@ app.get('/api/session_status', async (req, res) => {
         console.error('获取用户角色失败:', error);
       }
     }
-    
+
     // 🆕 生成JWT token用于支付API认证
     const jwtToken = generateToken();
-    
+
     // 🆕 将token和用户信息存储到会话存储中，供verifyToken中间件使用
     const tokenSessionData = {
       user: {
@@ -835,15 +835,15 @@ app.get('/api/session_status', async (req, res) => {
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24小时
     };
-    
+
     await SessionStore.set(jwtToken, tokenSessionData, 86400); // 24小时TTL
-    
+
     console.log(`🔐 为用户 ${sessionData.username} 生成JWT token: ${jwtToken.substring(0, 10)}...`);
-    
+
     // 更新最后活动时间
     sessionData.lastActivity = new Date().toISOString();
     await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL (2周)
-    
+
     res.json({
       success: true,
       message: '会话有效',
@@ -857,7 +857,7 @@ app.get('/api/session_status', async (req, res) => {
       loginTime: sessionData.loginTime,
       lastActivity: sessionData.lastActivity
     });
-    
+
   } catch (error) {
     console.error('检查会话状态失败:', error);
     res.status(500).json({
@@ -875,9 +875,9 @@ app.post('/api/create-shared-session', authenticateSession, async (req, res) => 
     const username = req.user.username;
     const email = req.user.email;
     const sessionId = req.sessionId; // 🆕 获取当前会话ID
-    
+
     console.log(`🔄 创建增强认证共享会话，用户: ${username}, 会话ID: ${sessionId}`);
-    
+
     // 🆕 创建共享会话数据，包含sessionId
     const sharedSessionData = {
       sessionId, // 🆕 添加sessionId字段供Electron客户端使用
@@ -893,24 +893,24 @@ app.post('/api/create-shared-session', authenticateSession, async (req, res) => 
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() // 14天 (2周)
     };
-    
+
     // 写入共享文件
     const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json');
     fs.writeFileSync(sharedSessionPath, JSON.stringify(sharedSessionData, null, 2));
-    
+
     console.log(`✅ 增强认证共享会话已创建: ${sharedSessionPath}`);
     console.log(`📋 共享会话数据:`, {
       sessionId: sessionId.substring(0, 10) + '...',
       username,
       email
     });
-    
+
     res.json({
       success: true,
       message: '共享会话已创建',
       expiresAt: sharedSessionData.expiresAt
     });
-    
+
   } catch (error) {
     console.error('创建增强认证共享会话失败:', error);
     res.status(500).json({
@@ -933,7 +933,7 @@ app.get('/api/config/models', authenticateSession, (req, res) => {
 // 获取编程语言列表
 app.get('/api/config/languages', authenticateSession, (req, res) => {
   const languages = [
-    'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 
+    'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#',
     'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin', 'Dart', 'MySQL'
   ];
   res.json(languages);
@@ -944,14 +944,14 @@ app.get('/api/config', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId;
     const config = await db.getUserConfig(userId);
-    
+
     console.log(`📋 获取用户 ${userId} 的配置:`, {
       aiModel: config.aiModel,
       programmingModel: config.programmingModel,
       multipleChoiceModel: config.multipleChoiceModel,
       language: config.language
     });
-    
+
     res.json(config);
   } catch (error) {
     console.error('❌ 获取配置失败:', error);
@@ -963,18 +963,18 @@ app.get('/api/config', authenticateSession, async (req, res) => {
 app.put('/api/config', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId;
-    
+
     console.log(`🔄 用户 ${userId} 请求更新配置:`, req.body);
-    
+
     const updatedConfig = await db.updateUserConfig(userId, req.body);
-    
+
     console.log(`✅ 用户 ${userId} 配置已更新:`, {
       aiModel: updatedConfig.aiModel,
       programmingModel: updatedConfig.programmingModel,
       multipleChoiceModel: updatedConfig.multipleChoiceModel,
       language: updatedConfig.language
     });
-    
+
     res.json(updatedConfig);
   } catch (error) {
     console.error('❌ 更新配置失败:', error);
@@ -1029,14 +1029,14 @@ function createPasswordResetEmail(code, email) {
 app.post('/api/send_reset_code', async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({
         success: false,
         message: '邮箱地址不能为空'
       });
     }
-    
+
     // 验证邮箱格式
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -1045,7 +1045,7 @@ app.post('/api/send_reset_code', async (req, res) => {
         message: '邮箱格式不正确'
       });
     }
-    
+
     // 检查邮箱是否已注册（重置密码必须是已注册用户）
     const user = await db.getUserByEmail(email);
     if (!user) {
@@ -1054,18 +1054,18 @@ app.post('/api/send_reset_code', async (req, res) => {
         message: '该邮箱尚未注册，请先注册账户'
       });
     }
-    
+
     if (!transporter) {
       return res.status(500).json({
         success: false,
         message: 'SMTP服务未配置，无法发送验证码'
       });
     }
-    
+
     // 生成验证码和token
     const code = generateVerificationCode();
     const token = generateToken();
-    
+
     // 存储重置token和邮箱、验证码的关系（5分钟有效期）
     const resetData = {
       email,
@@ -1076,29 +1076,29 @@ app.post('/api/send_reset_code', async (req, res) => {
       attempts: 0,
       purpose: 'password_reset'
     };
-    
+
     await SessionStore.set(`reset_token:${token}`, resetData, 300); // 5分钟TTL
     await SessionStore.set(`reset_email:${email}`, { token, code }, 300);
-    
+
     // 5分钟后自动清理（Redis TTL会自动处理，这里保留作为fallback）
     setTimeout(async () => {
       await SessionStore.delete(`reset_token:${token}`);
       await SessionStore.delete(`reset_email:${email}`);
     }, 5 * 60 * 1000);
-    
+
     // 发送邮件
     const mailOptions = createPasswordResetEmail(code, email);
     await transporter.sendMail(mailOptions);
-    
+
     console.log(`✅ 密码重置验证码已发送到 ${email}: ${code}, token: ${token.substring(0, 10)}...`);
-    
+
     res.json({
       success: true,
       message: '密码重置验证码已发送，请查收邮件',
       token, // 返回token用于后续重置步骤
       expiresIn: 300 // 5分钟，单位秒
     });
-    
+
   } catch (error) {
     console.error('发送密码重置验证码失败:', error);
     res.status(500).json({
@@ -1113,14 +1113,14 @@ app.post('/api/send_reset_code', async (req, res) => {
 app.post('/api/verify_reset_code', async (req, res) => {
   try {
     const { token, verify_code } = req.body;
-    
+
     if (!token || !verify_code) {
       return res.status(400).json({
         success: false,
         message: 'token和验证码不能为空'
       });
     }
-    
+
     // 验证token获取重置数据
     const resetData = await SessionStore.get(`reset_token:${token}`);
     if (!resetData) {
@@ -1129,7 +1129,7 @@ app.post('/api/verify_reset_code', async (req, res) => {
         message: '重置令牌无效或已过期'
       });
     }
-    
+
     // 检查过期时间
     if (new Date() > new Date(resetData.expiresAt)) {
       await SessionStore.delete(`reset_token:${token}`);
@@ -1139,7 +1139,7 @@ app.post('/api/verify_reset_code', async (req, res) => {
         message: '验证码已过期，请重新获取'
       });
     }
-    
+
     // 验证验证码
     if (resetData.code !== verify_code) {
       resetData.attempts++;
@@ -1151,14 +1151,14 @@ app.post('/api/verify_reset_code', async (req, res) => {
           message: '验证码错误次数过多，请重新获取'
         });
       }
-      
+
       await SessionStore.set(`reset_token:${token}`, resetData, 300);
       return res.status(400).json({
         success: false,
         message: `验证码错误，还剩 ${5 - resetData.attempts} 次机会`
       });
     }
-    
+
     // 生成用于密码重置的特殊token
     const resetPasswordToken = generateToken();
     const resetPasswordData = {
@@ -1169,21 +1169,21 @@ app.post('/api/verify_reset_code', async (req, res) => {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10分钟有效期
       purpose: 'password_reset_verified'
     };
-    
+
     await SessionStore.set(`reset_password:${resetPasswordToken}`, resetPasswordData, 600); // 10分钟TTL
-    
+
     // 清理验证码数据
     await SessionStore.delete(`reset_token:${token}`);
     await SessionStore.delete(`reset_email:${resetData.email}`);
-    
+
     console.log(`✅ 密码重置验证码验证成功: ${resetData.email}`);
-    
+
     res.json({
       success: true,
       message: '验证码验证成功，可以重置密码',
       resetToken: resetPasswordToken
     });
-    
+
   } catch (error) {
     console.error('验证密码重置验证码失败:', error);
     res.status(500).json({
@@ -1197,21 +1197,21 @@ app.post('/api/verify_reset_code', async (req, res) => {
 app.post('/api/reset_password', async (req, res) => {
   try {
     const { token, password } = req.body;
-    
+
     if (!token || !password) {
       return res.status(400).json({
         success: false,
         message: '重置令牌和新密码不能为空'
       });
     }
-    
+
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
         message: '密码长度至少6位'
       });
     }
-    
+
     // 验证重置token
     const resetPasswordData = await SessionStore.get(`reset_password:${token}`);
     if (!resetPasswordData) {
@@ -1220,7 +1220,7 @@ app.post('/api/reset_password', async (req, res) => {
         message: '重置令牌无效或已过期'
       });
     }
-    
+
     // 检查过期时间
     if (new Date() > new Date(resetPasswordData.expiresAt)) {
       await SessionStore.delete(`reset_password:${token}`);
@@ -1229,7 +1229,7 @@ app.post('/api/reset_password', async (req, res) => {
         message: '重置令牌已过期，请重新开始密码重置流程'
       });
     }
-    
+
     // 检查是否已验证
     if (!resetPasswordData.verified) {
       return res.status(400).json({
@@ -1237,23 +1237,23 @@ app.post('/api/reset_password', async (req, res) => {
         message: '请先完成验证码验证'
       });
     }
-    
+
     // 密码加密
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // 更新用户密码
     await db.updateUserPassword(resetPasswordData.userId, hashedPassword);
-    
+
     // 清理重置数据
     await SessionStore.delete(`reset_password:${token}`);
-    
+
     console.log(`✅ 密码重置成功: ${resetPasswordData.email}, 用户ID: ${resetPasswordData.userId}`);
-    
+
     res.json({
       success: true,
       message: '密码重置成功，请使用新密码登录'
     });
-    
+
   } catch (error) {
     console.error('密码重置失败:', error);
     res.status(500).json({
@@ -1272,7 +1272,7 @@ app.post('/api/reset_password', async (req, res) => {
 const adminAuthMiddleware = async (req, res, next) => {
   try {
     const sessionId = req.headers['x-session-id'];
-    
+
     if (!sessionId) {
       return res.status(401).json({
         success: false,
@@ -1281,7 +1281,7 @@ const adminAuthMiddleware = async (req, res, next) => {
     }
 
     const sessionData = await SessionStore.get(`session:${sessionId}`);
-    
+
     if (!sessionData) {
       return res.status(401).json({
         success: false,
@@ -1292,7 +1292,7 @@ const adminAuthMiddleware = async (req, res, next) => {
     // 查询用户角色来检查是否为管理员
     try {
       const user = await db.getUserById(sessionData.userId);
-      
+
       if (!user || user.role !== 'ADMIN') {
         return res.status(403).json({
           success: false,
@@ -1325,7 +1325,7 @@ const adminAuthMiddleware = async (req, res, next) => {
 app.get('/api/admin/model-configs', adminAuthMiddleware, async (req, res) => {
   try {
     const configs = await db.getAllModelPointConfigs();
-    
+
     // 转换数据格式以匹配前端期望的格式
     const formattedConfigs = configs.map(config => ({
       id: config.id,
@@ -1337,7 +1337,7 @@ app.get('/api/admin/model-configs', adminAuthMiddleware, async (req, res) => {
       createdAt: config.createdAt.toISOString(),
       updatedAt: config.updatedAt.toISOString()
     }));
-    
+
     res.json({
       success: true,
       data: {
@@ -1466,7 +1466,7 @@ app.delete('/api/admin/model-configs', adminAuthMiddleware, async (req, res) => 
         message: '配置不存在'
       });
     }
-    
+
     console.error('删除模型配置失败:', error);
     res.status(500).json({
       success: false,
@@ -1535,9 +1535,9 @@ app.post('/api/admin/model-configs/batch', adminAuthMiddleware, async (req, res)
           updatedAt: savedConfig.updatedAt.toISOString()
         };
 
-        results.push({ 
-          action: 'upserted', 
-          config: formattedConfig 
+        results.push({
+          action: 'upserted',
+          config: formattedConfig
         });
       } catch (error) {
         errors.push(`配置 ${i + 1}: ${error.message}`);
@@ -1569,23 +1569,23 @@ app.get('/api/client/credits', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId
     console.log('🔍 获取积分余额 - 用户ID:', userId)
-    
+
     const user = await db.getUserById(userId)
     console.log('👤 用户数据:', user ? { id: user.id, username: user.username, points: user.points } : 'null')
-    
+
     if (!user) {
       console.log('❌ 用户不存在')
       return res.status(404).json({ error: '用户不存在' })
     }
-    
-    const response = { 
+
+    const response = {
       success: true,
       data: {
         credits: user.points || 0
       },
       message: '获取积分余额成功'
     }
-    
+
     console.log('📤 API响应:', response)
     res.json(response)
   } catch (error) {
@@ -1599,28 +1599,28 @@ app.post('/api/client/credits/check', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId
     const { modelName, questionType } = req.body
-    
+
     if (!modelName || !questionType) {
       return res.status(400).json({ error: '缺少必需参数' })
     }
-    
+
     // 获取用户当前积分
     const user = await db.getUserById(userId)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }
-    
+
     // 获取积分配置
     const dbQuestionType = questionType.toUpperCase()
     const config = await db.getModelPointConfig(modelName, dbQuestionType)
     if (!config) {
       return res.status(404).json({ error: '未找到积分配置' })
     }
-    
+
     const currentCredits = user.points || 0
     const requiredCredits = config.cost
     const sufficient = currentCredits >= requiredCredits
-    
+
     res.json({
       sufficient,
       currentCredits,
@@ -1640,40 +1640,40 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
   try {
     const userId = req.user.userId
     const { modelName, questionType, operationId } = req.body
-    
+
     if (!modelName || !questionType) {
       return res.status(400).json({ error: '缺少必需参数' })
     }
-    
+
     // 获取用户当前积分
     const user = await db.getUserById(userId)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }
-    
+
     // 获取积分配置
     const dbQuestionType = questionType.toUpperCase()
     const config = await db.getModelPointConfig(modelName, dbQuestionType)
     if (!config) {
       return res.status(404).json({ error: '未找到积分配置' })
     }
-    
+
     const currentCredits = user.points || 0
     const requiredCredits = config.cost
-    
+
     // 检查积分是否足够
     if (currentCredits < requiredCredits) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: '积分不足',
         currentCredits,
         requiredCredits
       })
     }
-    
+
     // 扣除积分
     const newCredits = currentCredits - requiredCredits
     await db.updateUserCredits(userId, newCredits)
-    
+
     // 记录积分交易（如果有相关表的话）
     const transactionData = {
       userId,
@@ -1684,9 +1684,9 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
       operationId: operationId || `ai_call_${Date.now()}`,
       createdAt: new Date()
     }
-    
+
     console.log('✅ 积分扣除成功:', transactionData)
-    
+
     res.json({
       success: true,
       previousCredits: currentCredits,
@@ -1705,22 +1705,22 @@ app.post('/api/client/credits/refund', authenticateSession, async (req, res) => 
   try {
     const userId = req.user.userId
     const { operationId, amount, reason } = req.body
-    
+
     if (!operationId || !amount) {
       return res.status(400).json({ error: '缺少必需参数' })
     }
-    
+
     // 获取用户当前积分
     const user = await db.getUserById(userId)
     if (!user) {
       return res.status(404).json({ error: '用户不存在' })
     }
-    
+
     // 退还积分
     const currentCredits = user.points || 0
     const newCredits = currentCredits + amount
     await db.updateUserCredits(userId, newCredits)
-    
+
     // 🆕 记录退款交易到数据库
     try {
       const description = `积分退款 [${operationId}]: ${reason || 'AI调用失败'}`
@@ -1736,14 +1736,14 @@ app.post('/api/client/credits/refund', authenticateSession, async (req, res) => 
       console.error('❌ 记录退款交易失败:', recordError)
       // 不中断主流程，只记录错误
     }
-    
+
     console.log('✅ 积分退还成功:', {
       userId,
       amount,
       newBalance: newCredits,
       operationId
     })
-    
+
     res.json({
       success: true,
       previousCredits: currentCredits,
@@ -1762,41 +1762,41 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
   try {
     const userId = req.user.userId
     const { modelName, questionType, operationId } = req.body
-    
+
     if (!modelName || !questionType || !operationId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: '缺少必需参数: modelName, questionType, operationId' 
+        error: '缺少必需参数: modelName, questionType, operationId'
       })
     }
-    
+
     console.time('credits-check-and-deduct')
-    
+
     // 获取用户当前积分
     const user = await db.getUserById(userId)
     if (!user) {
       console.timeEnd('credits-check-and-deduct')
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: '用户不存在' 
+        error: '用户不存在'
       })
     }
-    
+
     // 获取积分配置
     const dbQuestionType = questionType.toUpperCase()
     const config = await db.getModelPointConfig(modelName, dbQuestionType)
     if (!config) {
       console.timeEnd('credits-check-and-deduct')
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: `未找到模型 ${modelName} 的 ${questionType} 类型配置` 
+        error: `未找到模型 ${modelName} 的 ${questionType} 类型配置`
       })
     }
-    
+
     const currentCredits = user.points || 0
     const requiredCredits = config.cost
     const sufficient = currentCredits >= requiredCredits
-    
+
     // 检查积分是否充足
     if (!sufficient) {
       console.timeEnd('credits-check-and-deduct')
@@ -1808,11 +1808,11 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
         message: `积分不足。本次操作需要 ${requiredCredits} 积分，您当前拥有 ${currentCredits} 积分。`
       })
     }
-    
+
     // 扣除积分
     const newCredits = currentCredits - requiredCredits
     await db.updateUserCredits(userId, newCredits)
-    
+
     // 🆕 记录积分交易到数据库
     try {
       const description = `搜题操作 [${operationId}]: 使用${modelName}模型处理${questionType === 'multiple_choice' ? '选择题' : '编程题'}`
@@ -1830,7 +1830,7 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
       console.error('❌ 记录积分交易失败:', recordError)
       // 不中断主流程，只记录错误
     }
-    
+
     console.log('✅ 积分检查和扣除成功:', {
       userId,
       amount: -requiredCredits,
@@ -1838,7 +1838,7 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
       operationId
     })
     console.timeEnd('credits-check-and-deduct')
-    
+
     res.json({
       success: true,
       sufficient: true,
@@ -1851,9 +1851,9 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
   } catch (error) {
     console.error('检查并扣除积分失败:', error)
     console.timeEnd('credits-check-and-deduct')
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: '服务器错误' 
+      error: '服务器错误'
     })
   }
 })
@@ -1864,9 +1864,9 @@ app.get('/api/client/credits/transactions', authenticateSession, async (req, res
     const userId = req.user.userId
     const limit = Math.min(parseInt(req.query.limit) || 50, 100) // 最多100条
     const offset = parseInt(req.query.offset) || 0
-    
+
     const result = await db.getUserPointTransactions(userId, limit, offset)
-    
+
     // 格式化交易记录，便于前端显示
     const formattedTransactions = result.transactions.map(transaction => ({
       id: transaction.id,
@@ -1880,11 +1880,11 @@ app.get('/api/client/credits/transactions', authenticateSession, async (req, res
       // 添加格式化的显示文本
       displayText: formatTransactionDisplay(transaction)
     }))
-    
+
     // 计算分页信息
     const totalPages = Math.ceil(result.total / limit)
     const currentPage = Math.floor(offset / limit) + 1
-    
+
     res.json({
       success: true,
       data: {
@@ -1902,9 +1902,9 @@ app.get('/api/client/credits/transactions', authenticateSession, async (req, res
     })
   } catch (error) {
     console.error('获取积分交易记录失败:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: '获取交易记录失败' 
+      error: '获取交易记录失败'
     })
   }
 })
@@ -1914,7 +1914,7 @@ app.get('/api/client/credits/stats', authenticateSession, async (req, res) => {
   try {
     const userId = req.user.userId
     const stats = await db.getPointTransactionStats(userId)
-    
+
     // 格式化统计数据
     const formattedStats = {
       totalConsumed: 0,
@@ -1924,7 +1924,7 @@ app.get('/api/client/credits/stats', authenticateSession, async (req, res) => {
       rechargeCount: 0,
       refundCount: 0
     }
-    
+
     stats.forEach(stat => {
       switch (stat.transactionType) {
         case 'CONSUME':
@@ -1941,7 +1941,7 @@ app.get('/api/client/credits/stats', authenticateSession, async (req, res) => {
           break
       }
     })
-    
+
     res.json({
       success: true,
       data: formattedStats,
@@ -1949,9 +1949,9 @@ app.get('/api/client/credits/stats', authenticateSession, async (req, res) => {
     })
   } catch (error) {
     console.error('获取积分统计失败:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: '获取积分统计失败' 
+      error: '获取积分统计失败'
     })
   }
 })
@@ -1961,7 +1961,7 @@ function formatTransactionDisplay(transaction) {
   const time = new Date(transaction.createdAt).toLocaleString('zh-CN')
   const amount = transaction.amount
   const absAmount = Math.abs(amount)
-  
+
   switch (transaction.transactionType) {
     case 'CONSUME':
       const questionTypeText = transaction.questionType === 'MULTIPLE_CHOICE' ? '选择题' : '编程题'
@@ -1982,29 +1982,29 @@ app.post('/api/client/credits/recharge', authenticateSession, async (req, res) =
   try {
     const userId = req.user.userId
     const { amount, description } = req.body
-    
+
     if (!amount || amount <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: '充值金额必须大于0' 
+        error: '充值金额必须大于0'
       })
     }
-    
+
     // 获取用户当前积分
     const user = await db.getUserById(userId)
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        error: '用户不存在' 
+        error: '用户不存在'
       })
     }
-    
+
     const currentCredits = user.points || 0
     const newCredits = currentCredits + parseInt(amount)
-    
+
     // 更新用户积分
     await db.updateUserCredits(userId, newCredits)
-    
+
     // 🆕 记录充值交易到数据库
     try {
       const rechargeDescription = description || `手动充值 +${amount}积分`
@@ -2020,13 +2020,13 @@ app.post('/api/client/credits/recharge', authenticateSession, async (req, res) =
       console.error('❌ 记录充值交易失败:', recordError)
       // 不中断主流程，只记录错误
     }
-    
+
     console.log('✅ 积分充值成功:', {
       userId,
       amount: parseInt(amount),
       newBalance: newCredits
     })
-    
+
     res.json({
       success: true,
       previousCredits: currentCredits,
@@ -2036,9 +2036,9 @@ app.post('/api/client/credits/recharge', authenticateSession, async (req, res) =
     })
   } catch (error) {
     console.error('充值积分失败:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: '充值积分失败' 
+      error: '充值积分失败'
     })
   }
 })
@@ -2049,11 +2049,11 @@ app.get('/api/payment/packages', optionalVerifyToken, async (req, res) => {
     console.log('🔍 前端请求 /api/payment/packages');
     // 获取支付套餐列表
     const packages = await db.getPaymentPackages();
-    
+
     console.log('📦 返回套餐数据:', packages);
-    
+
     res.json({
-      success: true, 
+      success: true,
       data: packages,
       message: '获取套餐列表成功'
     });
@@ -2070,32 +2070,32 @@ app.get('/api/payment/packages', optionalVerifyToken, async (req, res) => {
 app.post('/api/payment/orders', verifyToken, (req, res) => {
   try {
     const { packageId, paymentMethod = 'WECHAT_PAY' } = req.body;
-    
+
     if (!packageId) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: '缺少必要参数: packageId'
       });
     }
-    
+
     // 查找套餐
     const packages = db.getPaymentPackages();
     const packageData = packages.find(pkg => pkg.id === packageId);
-    
+
     if (!packageData) {
-      return res.status(404).json({ 
-        success: false, 
+      return res.status(404).json({
+        success: false,
         message: '找不到指定的套餐'
       });
     }
-    
+
     // 生成订单编号
     const orderNo = 'PAY' + Date.now() + Math.floor(Math.random() * 1000);
     const outTradeNo = 'OUT' + Date.now() + Math.floor(Math.random() * 1000);
-    
+
     // 生成支付二维码URL (模拟)
     const codeUrl = `https://example.com/pay/${orderNo}`;
-    
+
     // 返回订单信息
     res.json({
       success: true,
@@ -2110,7 +2110,7 @@ app.post('/api/payment/orders', verifyToken, (req, res) => {
       },
       message: '创建订单成功'
     });
-    
+
   } catch (error) {
     console.error('创建订单失败:', error);
     res.status(500).json({
@@ -2124,14 +2124,14 @@ app.post('/api/payment/orders', verifyToken, (req, res) => {
 app.get('/api/payment/orders/:orderNo', verifyToken, (req, res) => {
   try {
     const { orderNo } = req.params;
-    
+
     if (!orderNo) {
       return res.status(400).json({
         success: false,
         message: '缺少订单编号'
       });
     }
-    
+
     // 模拟订单数据
     const order = {
       id: 1,
@@ -2148,7 +2148,7 @@ app.get('/api/payment/orders/:orderNo', verifyToken, (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    
+
     res.json({
       success: true,
       data: {
@@ -2158,7 +2158,7 @@ app.get('/api/payment/orders/:orderNo', verifyToken, (req, res) => {
       },
       message: '查询订单状态成功'
     });
-    
+
   } catch (error) {
     console.error('查询订单状态失败:', error);
     res.status(500).json({
@@ -2174,7 +2174,7 @@ app.get('/api/payment/orders', verifyToken, (req, res) => {
     // 获取分页参数
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    
+
     // 模拟订单列表
     const orders = [
       {
@@ -2208,7 +2208,7 @@ app.get('/api/payment/orders', verifyToken, (req, res) => {
         updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
       }
     ];
-    
+
     res.json({
       success: true,
       data: orders,
@@ -2220,7 +2220,7 @@ app.get('/api/payment/orders', verifyToken, (req, res) => {
       },
       message: '获取订单列表成功'
     });
-    
+
   } catch (error) {
     console.error('获取订单列表失败:', error);
     res.status(500).json({
@@ -2260,14 +2260,14 @@ app.get('/api/invite/registrations', getUserId, async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     const email = req.query.email;
-    
+
     console.log('🎯 获取邀请注册记录:', { userId, page, limit, startDate, endDate, email });
 
     // 构建查询条件
     const whereCondition = {
       inviterId: userId // 查找被当前用户邀请的用户
     };
-    
+
     // 日期范围筛选
     if (startDate || endDate) {
       whereCondition.createdAt = {};
@@ -2281,14 +2281,14 @@ app.get('/api/invite/registrations', getUserId, async (req, res) => {
         whereCondition.createdAt.lt = endDateTime;
       }
     }
-    
+
     // 邮箱搜索
     if (email) {
       whereCondition.email = {
         contains: email
       };
     }
-    
+
     // 直接查询数据库：查找被该用户邀请的用户
     const invitedUsers = await db.prisma.user.findMany({
       where: whereCondition,
@@ -2304,16 +2304,16 @@ app.get('/api/invite/registrations', getUserId, async (req, res) => {
       skip: offset,
       take: limit
     });
-    
+
     // 获取总数
     const total = await db.prisma.user.count({
       where: whereCondition
     });
-    
+
     const totalPages = Math.ceil(total / limit);
-    
+
     console.log('✅ 邀请注册记录获取成功:', { total, page, records: invitedUsers.length });
-    
+
     res.json({
       success: true,
       data: {
@@ -2347,21 +2347,21 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     const email = req.query.email;
-    
+
     console.log('🎯 获取邀请用户充值记录:', { userId, page, limit, startDate, endDate, email });
-    
+
     // 构建用户筛选条件
     const userWhereCondition = {
       inviterId: userId
     };
-    
+
     // 如果有邮箱搜索，添加到用户查询条件
     if (email) {
       userWhereCondition.email = {
         contains: email
       };
     }
-    
+
     // 查找被该用户邀请的用户列表
     const invitedUserIds = await db.prisma.user.findMany({
       where: userWhereCondition,
@@ -2369,9 +2369,9 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
         id: true
       }
     });
-    
+
     const invitedIds = invitedUserIds.map(u => u.id);
-    
+
     // 如果没有找到符合条件的用户，返回空结果
     if (invitedIds.length === 0) {
       return res.json({
@@ -2386,7 +2386,7 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
         message: '获取邀请用户充值记录成功'
       });
     }
-    
+
     // 构建充值记录查询条件
     const rechargeWhereCondition = {
       userId: {
@@ -2394,7 +2394,7 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
       },
       paymentStatus: 'PAID' // 只查询已支付的订单
     };
-    
+
     // 日期范围筛选
     if (startDate || endDate) {
       rechargeWhereCondition.createdAt = {};
@@ -2408,7 +2408,7 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
         rechargeWhereCondition.createdAt.lt = endDateTime;
       }
     }
-    
+
     // 查找这些用户的充值记录
     const rechargeRecords = await db.prisma.paymentOrder.findMany({
       where: rechargeWhereCondition,
@@ -2426,16 +2426,16 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
       skip: offset,
       take: limit
     });
-    
+
     // 获取总数
     const total = await db.prisma.paymentOrder.count({
       where: rechargeWhereCondition
     });
-    
+
     const totalPages = Math.ceil(total / limit);
-    
+
     console.log('✅ 邀请用户充值记录获取成功:', { total, page, records: rechargeRecords.length });
-    
+
     res.json({
       success: true,
       data: {
@@ -2465,14 +2465,14 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
     const userId = req.userId;
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
-    
+
     console.log('🎯 获取邀请统计数据:', { userId, startDate, endDate });
-    
+
     // 构建用户查询条件
     const userWhereCondition = {
       inviterId: userId
     };
-    
+
     // 日期范围筛选 - 针对用户注册时间
     if (startDate || endDate) {
       userWhereCondition.createdAt = {};
@@ -2486,12 +2486,12 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
         userWhereCondition.createdAt.lt = endDateTime;
       }
     }
-    
+
     // 1. 统计邀请注册人数
     const totalInvitedUsers = await db.prisma.user.count({
       where: userWhereCondition
     });
-    
+
     // 2. 获取被邀请用户的ID列表
     const invitedUserIds = await db.prisma.user.findMany({
       where: userWhereCondition,
@@ -2499,9 +2499,9 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
         id: true
       }
     });
-    
+
     const invitedIds = invitedUserIds.map(u => u.id);
-    
+
     // 构建充值记录查询条件
     const rechargeWhereCondition = {
       userId: {
@@ -2509,7 +2509,7 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
       },
       paymentStatus: 'PAID'
     };
-    
+
     // 日期范围筛选 - 针对充值时间
     if (startDate || endDate) {
       rechargeWhereCondition.createdAt = {};
@@ -2523,13 +2523,13 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
         rechargeWhereCondition.createdAt.lt = endDateTime;
       }
     }
-    
+
     // 3. 统计充值用户数量
     const totalRechargeUsers = await db.prisma.paymentOrder.groupBy({
       by: ['userId'],
       where: rechargeWhereCondition
     });
-    
+
     // 4. 统计累计充值金额
     const totalRechargeAmount = await db.prisma.paymentOrder.aggregate({
       where: rechargeWhereCondition,
@@ -2537,21 +2537,21 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
         amount: true
       }
     });
-    
+
     // 5. 统计充值次数
     const totalRechargeCount = await db.prisma.paymentOrder.count({
       where: rechargeWhereCondition
     });
-    
+
     const stats = {
       totalInvitedUsers,
       totalRechargeUsers: totalRechargeUsers.length,
       totalRechargeAmount: Number(totalRechargeAmount._sum.amount) || 0,
       totalRechargeCount
     };
-    
+
     console.log('✅ 邀请统计数据获取成功:', stats);
-    
+
     res.json({
       success: true,
       data: stats,
@@ -2574,7 +2574,7 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
 app.get('/api/admin/users', adminAuthMiddleware, async (req, res) => {
   try {
     console.log('🔍 获取用户列表...');
-    
+
     // 查询所有用户
     const users = await db.prisma.user.findMany({
       orderBy: [
@@ -2821,16 +2821,16 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    
+
     console.log('🎯 管理员获取所有邀请注册记录:', { startDate, endDate, inviterEmail, inviteeEmail, page, limit });
-    
+
     // 构建查询条件
     const whereCondition = {
       inviterId: {
         not: null // 确保有邀请人
       }
     };
-    
+
     // 日期范围筛选
     if (startDate || endDate) {
       whereCondition.createdAt = {};
@@ -2843,14 +2843,14 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
         whereCondition.createdAt.lt = endDateTime;
       }
     }
-    
+
     // 被邀请人邮箱筛选
     if (inviteeEmail) {
       whereCondition.email = {
         contains: inviteeEmail
       };
     }
-    
+
     // 如果有邀请人邮箱筛选，先获取符合条件的邀请人ID
     let allowedInviterIds = null;
     if (inviterEmail) {
@@ -2865,7 +2865,7 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
         }
       });
       allowedInviterIds = inviters.map(u => u.id);
-      
+
       if (allowedInviterIds.length === 0) {
         return res.json({
           success: true,
@@ -2879,7 +2879,7 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
           message: '获取邀请注册记录成功'
         });
       }
-      
+
       // 添加到查询条件中
       whereCondition.inviterId = {
         in: allowedInviterIds
@@ -2907,7 +2907,7 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
       skip: offset,
       take: limit
     });
-    
+
     // 获取邀请人信息
     const inviterIds = [...new Set(invitedUsers.map(u => u.inviterId))];
     const inviters = await db.prisma.user.findMany({
@@ -2922,12 +2922,12 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
         username: true
       }
     });
-    
+
     const inviterMap = inviters.reduce((acc, inviter) => {
       acc[inviter.id] = inviter;
       return acc;
     }, {});
-    
+
     // 格式化数据
     const registrations = invitedUsers.map(user => ({
       id: user.id,
@@ -2937,11 +2937,11 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
       inviteeUsername: user.username,
       createdAt: user.createdAt
     }));
-    
+
     const totalPages = Math.ceil(total / limit);
-    
+
     console.log('✅ 管理员邀请注册记录获取成功:', { total, page, totalPages, registrations: registrations.length });
-    
+
     res.json({
       success: true,
       data: {
@@ -2975,9 +2975,9 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    
+
     console.log('🎯 管理员获取所有邀请充值记录:', { startDate, endDate, inviterEmail, inviteeEmail, page, limit });
-    
+
     // 构建充值记录查询条件（使用嵌套查询）
     const rechargeWhereCondition = {
       paymentStatus: 'PAID',
@@ -2987,14 +2987,14 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
         }
       }
     };
-    
+
     // 被邀请人邮箱筛选
     if (inviteeEmail) {
       rechargeWhereCondition.user.email = {
         contains: inviteeEmail
       };
     }
-    
+
     // 邀请人邮箱筛选
     if (inviterEmail) {
       // 先获取符合条件的邀请人ID
@@ -3008,7 +3008,7 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
           id: true
         }
       });
-      
+
       const allowedInviterIds = inviters.map(u => u.id);
       if (allowedInviterIds.length === 0) {
         return res.json({
@@ -3023,12 +3023,12 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
           message: '获取邀请充值记录成功'
         });
       }
-      
+
       rechargeWhereCondition.user.inviterId = {
         in: allowedInviterIds
       };
     }
-    
+
     // 日期范围筛选
     if (startDate || endDate) {
       rechargeWhereCondition.createdAt = {};
@@ -3066,7 +3066,7 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
       skip: offset,
       take: limit
     });
-    
+
     // 获取所有邀请人信息
     const inviterIds = [...new Set(rechargeRecords.map(r => r.user.inviterId))];
     const inviters = await db.prisma.user.findMany({
@@ -3081,12 +3081,12 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
         username: true
       }
     });
-    
+
     const inviterMap = inviters.reduce((acc, inviter) => {
       acc[inviter.id] = inviter;
       return acc;
     }, {});
-    
+
     // 格式化数据
     const recharges = rechargeRecords.map(record => ({
       id: record.id,
@@ -3097,11 +3097,11 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
       amount: parseFloat(record.amount),
       createdAt: record.createdAt
     }));
-    
+
     const totalPages = Math.ceil(total / limit);
-    
+
     console.log('✅ 管理员邀请充值记录获取成功:', { total, page, totalPages, recharges: recharges.length });
-    
+
     res.json({
       success: true,
       data: {
@@ -3131,19 +3131,19 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     const inviterEmail = req.query.inviterEmail;
-    
+
     console.log('🎯 管理员获取所有邀请汇总统计:', { startDate, endDate, inviterEmail });
-    
+
     // 构建邀请人查询条件
     const inviterWhereCondition = {};
-    
+
     // 邀请人邮箱筛选
     if (inviterEmail) {
       inviterWhereCondition.email = {
         contains: inviterEmail
       };
     }
-    
+
     // 先获取所有被邀请的用户，找出他们的邀请人ID
     const invitedUsers = await db.prisma.user.findMany({
       where: {
@@ -3156,9 +3156,9 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
       },
       distinct: ['inviterId']
     });
-    
+
     const inviterIds = [...new Set(invitedUsers.map(u => u.inviterId).filter(id => id !== null))];
-    
+
     // 然后根据邮箱筛选条件查询邀请人信息
     const inviterFinalWhereCondition = {
       id: {
@@ -3166,7 +3166,7 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
       },
       ...inviterWhereCondition
     };
-    
+
     const inviters = await db.prisma.user.findMany({
       where: inviterFinalWhereCondition,
       select: {
@@ -3175,16 +3175,16 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
         username: true
       }
     });
-    
+
     console.log('📊 找到邀请人数量:', inviters.length);
-    
+
     // 为每个邀请人计算统计数据
     const summaryPromises = inviters.map(async (inviter) => {
       // 构建被邀请用户查询条件
       const invitedUserWhereCondition = {
         inviterId: inviter.id
       };
-      
+
       // 日期范围筛选 - 针对用户注册时间
       if (startDate || endDate) {
         invitedUserWhereCondition.createdAt = {};
@@ -3197,12 +3197,12 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
           invitedUserWhereCondition.createdAt.lt = endDateTime;
         }
       }
-      
+
       // 1. 统计邀请注册人数
       const totalInvitedUsers = await db.prisma.user.count({
         where: invitedUserWhereCondition
       });
-      
+
       // 2. 获取被邀请用户ID列表
       const invitedUserIds = await db.prisma.user.findMany({
         where: invitedUserWhereCondition,
@@ -3210,9 +3210,9 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
           id: true
         }
       });
-      
+
       const invitedIds = invitedUserIds.map(u => u.id);
-      
+
       if (invitedIds.length === 0) {
         return {
           inviterId: inviter.id,
@@ -3224,7 +3224,7 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
           totalRechargeCount: 0
         };
       }
-      
+
       // 构建充值记录查询条件
       const rechargeWhereCondition = {
         userId: {
@@ -3232,7 +3232,7 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
         },
         paymentStatus: 'PAID'
       };
-      
+
       // 日期范围筛选 - 针对充值时间
       if (startDate || endDate) {
         rechargeWhereCondition.createdAt = {};
@@ -3245,13 +3245,13 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
           rechargeWhereCondition.createdAt.lt = endDateTime;
         }
       }
-      
+
       // 3. 统计充值用户数量
       const totalRechargeUsers = await db.prisma.paymentOrder.groupBy({
         by: ['userId'],
         where: rechargeWhereCondition
       });
-      
+
       // 4. 统计累计充值金额
       const totalRechargeAmount = await db.prisma.paymentOrder.aggregate({
         where: rechargeWhereCondition,
@@ -3259,12 +3259,12 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
           amount: true
         }
       });
-      
+
       // 5. 统计充值次数
       const totalRechargeCount = await db.prisma.paymentOrder.count({
         where: rechargeWhereCondition
       });
-      
+
       return {
         inviterId: inviter.id,
         inviterEmail: inviter.email,
@@ -3275,14 +3275,14 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
         totalRechargeCount
       };
     });
-    
+
     const summary = await Promise.all(summaryPromises);
-    
+
     // 按邀请注册人数降序排列
     summary.sort((a, b) => b.totalInvitedUsers - a.totalInvitedUsers);
-    
+
     console.log('✅ 管理员邀请汇总统计获取成功:', { total: summary.length });
-    
+
     res.json({
       success: true,
       data: {
@@ -3320,10 +3320,10 @@ const verifySessionId = async (req, res, next) => {
   try {
     console.log('🔐 verifySessionId中间件 - 开始验证');
     console.log('请求路径:', req.path);
-    
+
     const sessionId = req.headers['x-session-id'];
     console.log('会话ID:', sessionId);
-    
+
     if (!sessionId) {
       console.log('❌ 未提供会话ID');
       return res.status(401).json({ success: false, message: '未提供会话ID' });
@@ -3333,7 +3333,7 @@ const verifySessionId = async (req, res, next) => {
     console.log('🔍 查询会话数据...');
     const sessionData = await SessionStore.get(`session:${sessionId}`);
     console.log('会话数据:', sessionData);
-    
+
     if (!sessionData) {
       console.log('❌ 会话已过期或无效');
       return res.status(401).json({ success: false, message: '会话已过期或无效' });
@@ -3350,9 +3350,9 @@ const verifySessionId = async (req, res, next) => {
     console.log('🔄 更新会话活动时间...');
     sessionData.lastActivity = new Date().toISOString();
     await SessionStore.set(`session:${sessionId}`, sessionData, 1209600); // 14天TTL
-    
+
     console.log('✅ 会话验证成功，用户信息:', { userId: sessionData.userId, username: sessionData.username });
-    
+
     // 将用户信息添加到请求对象（使用与现有代码相同的格式）
     req.user = {
       userId: sessionData.userId,
@@ -3401,9 +3401,9 @@ app.get('/api/admin/payment-packages-bypass', async (req, res) => {
         { id: 'asc' }
       ]
     });
-    
+
     console.log(`✅ 查询成功，找到 ${packages.length} 个套餐`);
-    
+
     res.json({
       success: true,
       packages,
@@ -3426,18 +3426,18 @@ app.get('/api/admin/payment-packages', verifySessionId, async (req, res) => {
     console.log('🔍 管理员请求充值套餐列表');
     console.log('请求头:', req.headers);
     console.log('用户信息:', req.user);
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     console.log('用户ID:', userId);
-    
+
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true, username: true }
     });
-    
+
     console.log('查询到的用户:', user);
-    
+
     if (!user || user.role !== 'ADMIN') {
       console.log('❌ 权限检查失败:', { user: user?.username, role: user?.role });
       return res.status(403).json({
@@ -3445,9 +3445,9 @@ app.get('/api/admin/payment-packages', verifySessionId, async (req, res) => {
         message: '需要管理员权限'
       });
     }
-    
+
     console.log('✅ 管理员权限验证通过:', user.username);
-    
+
     console.log('🔍 开始查询数据库...');
     const packages = await db.prisma.paymentPackage.findMany({
       select: {
@@ -3468,10 +3468,10 @@ app.get('/api/admin/payment-packages', verifySessionId, async (req, res) => {
         { id: 'asc' }
       ]
     });
-    
+
     console.log(`✅ 数据库查询成功，找到 ${packages.length} 个套餐`);
     console.log('套餐数据:', packages);
-    
+
     res.json({
       success: true,
       packages,
@@ -3496,23 +3496,23 @@ app.get('/api/admin/payment-packages', verifySessionId, async (req, res) => {
 app.post('/api/admin/payment-packages', verifySessionId, async (req, res) => {
   try {
     console.log('🆕 管理员创建充值套餐');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const { name, description, amount, points, bonusPoints } = req.body;
-    
+
     // 参数验证
     if (!name || typeof name !== 'string') {
       return res.status(400).json({
@@ -3520,21 +3520,21 @@ app.post('/api/admin/payment-packages', verifySessionId, async (req, res) => {
         message: '套餐名称不能为空'
       });
     }
-    
+
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       return res.status(400).json({
         success: false,
         message: '套餐价格必须是大于0的数字'
       });
     }
-    
+
     if (!points || isNaN(parseInt(points)) || parseInt(points) <= 0) {
       return res.status(400).json({
         success: false,
         message: '积分数量必须是大于0的整数'
       });
     }
-    
+
     const bonusPointsValue = bonusPoints ? parseInt(bonusPoints) : 0;
     if (bonusPointsValue < 0) {
       return res.status(400).json({
@@ -3542,7 +3542,7 @@ app.post('/api/admin/payment-packages', verifySessionId, async (req, res) => {
         message: '奖励积分不能为负数'
       });
     }
-    
+
     // 创建套餐
     const newPackage = await db.prisma.paymentPackage.create({
       data: {
@@ -3553,9 +3553,23 @@ app.post('/api/admin/payment-packages', verifySessionId, async (req, res) => {
         bonusPoints: bonusPointsValue,
         isActive: true,
         sortOrder: 0
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        amount: true,
+        points: true,
+        bonusPoints: true,
+        isActive: true,
+        sortOrder: true,
+        icon: true,
+        isRecommended: true,
+        createdAt: true,
+        updatedAt: true
       }
     });
-    
+
     res.json({
       success: true,
       package: newPackage,
@@ -3574,31 +3588,31 @@ app.post('/api/admin/payment-packages', verifySessionId, async (req, res) => {
 app.put('/api/admin/payment-packages/:id', verifySessionId, async (req, res) => {
   try {
     console.log('✏️ 管理员更新充值套餐');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const packageId = parseInt(req.params.id);
     const { name, description, amount, points, bonusPoints } = req.body;
-    
+
     if (isNaN(packageId)) {
       return res.status(400).json({
         success: false,
         message: '套餐ID无效'
       });
     }
-    
+
     // 参数验证
     if (!name || typeof name !== 'string') {
       return res.status(400).json({
@@ -3606,21 +3620,21 @@ app.put('/api/admin/payment-packages/:id', verifySessionId, async (req, res) => 
         message: '套餐名称不能为空'
       });
     }
-    
+
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       return res.status(400).json({
         success: false,
         message: '套餐价格必须是大于0的数字'
       });
     }
-    
+
     if (!points || isNaN(parseInt(points)) || parseInt(points) <= 0) {
       return res.status(400).json({
         success: false,
         message: '积分数量必须是大于0的整数'
       });
     }
-    
+
     const bonusPointsValue = bonusPoints ? parseInt(bonusPoints) : 0;
     if (bonusPointsValue < 0) {
       return res.status(400).json({
@@ -3628,19 +3642,32 @@ app.put('/api/admin/payment-packages/:id', verifySessionId, async (req, res) => 
         message: '奖励积分不能为负数'
       });
     }
-    
+
     // 检查套餐是否存在
     const existingPackage = await db.prisma.paymentPackage.findUnique({
-      where: { id: packageId }
+      where: { id: packageId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        amount: true,
+        points: true,
+        bonusPoints: true,
+        isActive: true,
+        sortOrder: true,
+        icon: true,
+        createdAt: true,
+        updatedAt: true
+      }
     });
-    
+
     if (!existingPackage) {
       return res.status(404).json({
         success: false,
         message: '套餐不存在'
       });
     }
-    
+
     // 更新套餐
     const updatedPackage = await db.prisma.paymentPackage.update({
       where: { id: packageId },
@@ -3650,9 +3677,23 @@ app.put('/api/admin/payment-packages/:id', verifySessionId, async (req, res) => 
         amount: parseFloat(amount),
         points: parseInt(points),
         bonusPoints: bonusPointsValue
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        amount: true,
+        points: true,
+        bonusPoints: true,
+        isActive: true,
+        sortOrder: true,
+        icon: true,
+        isRecommended: true,
+        createdAt: true,
+        updatedAt: true
       }
     });
-    
+
     res.json({
       success: true,
       package: updatedPackage,
@@ -3671,59 +3712,72 @@ app.put('/api/admin/payment-packages/:id', verifySessionId, async (req, res) => 
 app.delete('/api/admin/payment-packages/:id', verifySessionId, async (req, res) => {
   try {
     console.log('🗑️ 管理员删除充值套餐');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const packageId = parseInt(req.params.id);
-    
+
     if (isNaN(packageId)) {
       return res.status(400).json({
         success: false,
         message: '套餐ID无效'
       });
     }
-    
+
     // 检查套餐是否存在
     const existingPackage = await db.prisma.paymentPackage.findUnique({
-      where: { id: packageId }
+      where: { id: packageId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        amount: true,
+        points: true,
+        bonusPoints: true,
+        isActive: true,
+        sortOrder: true,
+        icon: true,
+        createdAt: true,
+        updatedAt: true
+      }
     });
-    
+
     if (!existingPackage) {
       return res.status(404).json({
         success: false,
         message: '套餐不存在'
       });
     }
-    
+
     // 检查是否有关联的订单
     const orderCount = await db.prisma.paymentOrder.count({
       where: { packageId: packageId }
     });
-    
+
     if (orderCount > 0) {
       return res.status(400).json({
         success: false,
         message: '该套餐已有订单记录，无法删除'
       });
     }
-    
+
     // 删除套餐
     await db.prisma.paymentPackage.delete({
       where: { id: packageId }
     });
-    
+
     res.json({
       success: true,
       message: '删除充值套餐成功'
@@ -3747,41 +3801,41 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
   try {
     console.log('📊 管理员请求交易记录');
     console.log('查询参数:', req.query);
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const { page = 1, limit = 20, transactionType, userEmail, startDate, endDate } = req.query;
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
     // 构建查询条件
     const where = {};
-    
+
     if (transactionType && transactionType !== 'all') {
       where.transactionType = transactionType;
     }
-    
+
     if (startDate) {
       where.createdAt = { gte: new Date(startDate) };
     }
-    
+
     if (endDate) {
-      where.createdAt = { 
+      where.createdAt = {
         ...where.createdAt,
-        lte: new Date(endDate) 
+        lte: new Date(endDate)
       };
     }
 
@@ -3794,7 +3848,7 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
     }
 
     console.log('🔍 查询交易记录，条件:', { where, userWhere, skip, take });
-    
+
     const transactions = await db.prisma.pointTransaction.findMany({
       skip,
       take,
@@ -3813,7 +3867,7 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
       },
       orderBy: { createdAt: 'desc' }
     });
-    
+
     console.log(`✅ 查询到 ${transactions.length} 条交易记录`);
     console.log('交易记录样本:', transactions[0]);
 
@@ -3823,7 +3877,7 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
         ...(userEmail ? { user: userWhere } : {})
       }
     });
-    
+
     // 转换字段名为前端期望的格式
     const formattedTransactions = transactions.map(tx => ({
       id: tx.id,
@@ -3839,15 +3893,15 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
       username: tx.user?.username || '',
       email: tx.user?.email || '',
       operationType: tx.transactionType === 'CONSUME' && tx.questionType === 'PROGRAMMING' ? '编程题' :
-                   tx.transactionType === 'CONSUME' && tx.questionType === 'MULTIPLE_CHOICE' ? '选择题' :
-                   tx.transactionType === 'CONSUME' ? '消费' :
-                   tx.transactionType === 'RECHARGE' ? '充值' : 
-                   tx.transactionType === 'REWARD' ? '奖励' : 
-                   tx.transactionType === 'REFUND' ? '退款' : tx.transactionType
+          tx.transactionType === 'CONSUME' && tx.questionType === 'MULTIPLE_CHOICE' ? '选择题' :
+              tx.transactionType === 'CONSUME' ? '消费' :
+                  tx.transactionType === 'RECHARGE' ? '充值' :
+                      tx.transactionType === 'REWARD' ? '奖励' :
+                          tx.transactionType === 'REFUND' ? '退款' : tx.transactionType
     }));
-    
+
     console.log('格式化后的交易记录样本:', formattedTransactions[0]);
-    
+
     res.json({
       success: true,
       data: {
@@ -3874,32 +3928,32 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
 app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
   try {
     console.log('📈 管理员请求使用统计摘要');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const { startDate, endDate, userEmail } = req.query;
-    
+
     // 构建时间范围条件
     const dateWhere = {};
     if (startDate) {
       dateWhere.createdAt = { gte: new Date(startDate) };
     }
     if (endDate) {
-      dateWhere.createdAt = { 
+      dateWhere.createdAt = {
         ...dateWhere.createdAt,
-        lte: new Date(endDate) 
+        lte: new Date(endDate)
       };
     }
 
@@ -3968,7 +4022,7 @@ app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
     const userDetailedSummary = {};
     allUserTransactions.forEach(tx => {
       const userKey = `${tx.user.username} (${tx.user.email})`;
-      
+
       if (!userDetailedSummary[userKey]) {
         userDetailedSummary[userKey] = {
           userId: tx.userId,
@@ -3983,10 +4037,10 @@ app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
           operations: {}        // 保留原有的操作详情
         };
       }
-      
+
       const user = userDetailedSummary[userKey];
       const amount = Math.abs(tx.amount);
-      
+
       // 统计不同类型的操作
       if (tx.transactionType === 'CONSUME') {
         user.totalConsumed += amount;
@@ -4001,7 +4055,7 @@ app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
       } else if (tx.transactionType === 'REWARD') {
         user.totalRewarded += amount;
       }
-      
+
       // 保留原有的操作详情格式
       const operationType = tx.transactionType;
       if (!user.operations[operationType]) {
@@ -4013,11 +4067,11 @@ app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
       user.operations[operationType].count += 1;
       user.operations[operationType].totalAmount += amount;
     });
-    
+
     // 转换为数组格式，按总消费排序
     const userSpendingArray = Object.values(userDetailedSummary)
-      .sort((a, b) => b.totalConsumed - a.totalConsumed);
-    
+        .sort((a, b) => b.totalConsumed - a.totalConsumed);
+
     res.json({
       success: true,
       data: {
@@ -4053,32 +4107,32 @@ app.get('/api/admin/usage-stats/summary', verifySessionId, async (req, res) => {
 app.get('/api/admin/announcements', verifySessionId, async (req, res) => {
   try {
     console.log('📢 管理员请求公告列表');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     console.log('🔍 开始查询公告数据...');
-    
+
     let announcements;
-    
+
     // 检查 announcement 模型是否存在，如果不存在则使用原始SQL查询
     if (!db.prisma.announcement) {
       console.log('⚠️ Announcement模型不存在，使用原始SQL查询');
-      
+
       // 使用原始SQL查询作为临时解决方案
       announcements = await db.prisma.$queryRaw`
-        SELECT 
+        SELECT
           id,
           title,
           content,
@@ -4090,10 +4144,10 @@ app.get('/api/admin/announcements', verifySessionId, async (req, res) => {
           created_by as createdBy,
           created_at as createdAt,
           updated_at as updatedAt
-        FROM announcements 
+        FROM announcements
         ORDER BY created_at DESC
       `;
-      
+
       console.log(`✅ 通过原始SQL查询到 ${announcements.length} 条公告记录`);
     } else {
       console.log('✅ 使用Prisma模型查询');
@@ -4102,7 +4156,7 @@ app.get('/api/admin/announcements', verifySessionId, async (req, res) => {
       });
       console.log(`✅ 成功查询到 ${announcements.length} 条公告记录`);
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -4124,21 +4178,21 @@ app.get('/api/admin/announcements', verifySessionId, async (req, res) => {
 app.post('/api/admin/announcements', verifySessionId, async (req, res) => {
   try {
     console.log('🆕 管理员创建公告');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const { title, content, showStyle = 'info', isActive = true, priority = 0, startTime, endTime } = req.body;
 
     if (!title || !content) {
@@ -4149,29 +4203,29 @@ app.post('/api/admin/announcements', verifySessionId, async (req, res) => {
     }
 
     let announcement;
-    
+
     if (!db.prisma.announcement) {
       console.log('⚠️ 使用原始SQL创建公告');
-      
+
       // 使用原始SQL插入
       const result = await db.prisma.$executeRaw`
         INSERT INTO announcements (title, content, show_style, is_active, priority, start_time, end_time, created_at, updated_at)
-        VALUES (${title}, ${content}, ${showStyle}, ${isActive}, ${parseInt(priority) || 0}, 
-                ${startTime ? new Date(startTime) : null}, ${endTime ? new Date(endTime) : null}, 
+        VALUES (${title}, ${content}, ${showStyle}, ${isActive}, ${parseInt(priority) || 0},
+                ${startTime ? new Date(startTime) : null}, ${endTime ? new Date(endTime) : null},
                 NOW(), NOW())
       `;
-      
+
       // 获取插入的记录
       const [newAnnouncement] = await db.prisma.$queryRaw`
-        SELECT 
+        SELECT
           id, title, content, is_active as isActive, priority, show_style as showStyle,
           start_time as startTime, end_time as endTime, created_by as createdBy,
           created_at as createdAt, updated_at as updatedAt
-        FROM announcements 
-        ORDER BY id DESC 
-        LIMIT 1
+        FROM announcements
+        ORDER BY id DESC
+          LIMIT 1
       `;
-      
+
       announcement = newAnnouncement;
     } else {
       announcement = await db.prisma.announcement.create({
@@ -4207,21 +4261,21 @@ app.post('/api/admin/announcements', verifySessionId, async (req, res) => {
 app.put('/api/admin/announcements/:id', verifySessionId, async (req, res) => {
   try {
     console.log('✏️ 管理员更新公告');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const announcementId = parseInt(req.params.id);
     const { title, content, showStyle, isActive, priority, startTime, endTime } = req.body;
 
@@ -4241,45 +4295,45 @@ app.put('/api/admin/announcements/:id', verifySessionId, async (req, res) => {
 
     let existingAnnouncement;
     let announcement;
-    
+
     if (!db.prisma.announcement) {
       console.log('⚠️ 使用原始SQL查询和更新公告');
-      
+
       // 检查公告是否存在
       const [existing] = await db.prisma.$queryRaw`
         SELECT id FROM announcements WHERE id = ${announcementId}
       `;
-      
+
       existingAnnouncement = existing;
-      
+
       if (!existingAnnouncement) {
         return res.status(404).json({
           success: false,
           message: '公告不存在'
         });
       }
-      
+
       // 更新公告
       await db.prisma.$executeRaw`
-        UPDATE announcements 
-        SET title = ${title}, content = ${content}, show_style = ${showStyle}, 
+        UPDATE announcements
+        SET title = ${title}, content = ${content}, show_style = ${showStyle},
             is_active = ${isActive}, priority = ${priority !== undefined ? parseInt(priority) : 0},
-            start_time = ${startTime ? new Date(startTime) : null}, 
+            start_time = ${startTime ? new Date(startTime) : null},
             end_time = ${endTime ? new Date(endTime) : null},
             updated_at = NOW()
         WHERE id = ${announcementId}
       `;
-      
+
       // 获取更新后的记录
       const [updated] = await db.prisma.$queryRaw`
-        SELECT 
+        SELECT
           id, title, content, is_active as isActive, priority, show_style as showStyle,
           start_time as startTime, end_time as endTime, created_by as createdBy,
           created_at as createdAt, updated_at as updatedAt
-        FROM announcements 
+        FROM announcements
         WHERE id = ${announcementId}
       `;
-      
+
       announcement = updated;
     } else {
       // 检查公告是否存在
@@ -4328,21 +4382,21 @@ app.put('/api/admin/announcements/:id', verifySessionId, async (req, res) => {
 app.delete('/api/admin/announcements/:id', verifySessionId, async (req, res) => {
   try {
     console.log('🗑️ 管理员删除公告');
-    
+
     // 检查管理员权限
     const userId = req.user.userId;
     const user = await db.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true }
     });
-    
+
     if (!user || user.role !== 'ADMIN') {
       return res.status(403).json({
         success: false,
         message: '需要管理员权限'
       });
     }
-    
+
     const announcementId = parseInt(req.params.id);
 
     if (isNaN(announcementId)) {
@@ -4353,24 +4407,24 @@ app.delete('/api/admin/announcements/:id', verifySessionId, async (req, res) => 
     }
 
     let existingAnnouncement;
-    
+
     if (!db.prisma.announcement) {
       console.log('⚠️ 使用原始SQL查询和删除公告');
-      
+
       // 检查公告是否存在
       const [existing] = await db.prisma.$queryRaw`
         SELECT id FROM announcements WHERE id = ${announcementId}
       `;
-      
+
       existingAnnouncement = existing;
-      
+
       if (!existingAnnouncement) {
         return res.status(404).json({
           success: false,
           message: '公告不存在'
         });
       }
-      
+
       // 删除公告
       await db.prisma.$executeRaw`
         DELETE FROM announcements WHERE id = ${announcementId}
@@ -4410,16 +4464,16 @@ app.delete('/api/admin/announcements/:id', verifySessionId, async (req, res) => 
 app.get('/api/announcements/current', async (req, res) => {
   try {
     console.log('📢 获取当前有效公告');
-    
+
     const now = new Date();
     let announcement = null;
-    
+
     if (!db.prisma.announcement) {
       console.log('⚠️ 使用原始SQL查询当前公告');
-      
+
       // 使用原始SQL查询当前有效的公告
       const [currentAnnouncement] = await db.prisma.$queryRaw`
-        SELECT 
+        SELECT
           id,
           title,
           content,
@@ -4431,14 +4485,14 @@ app.get('/api/announcements/current', async (req, res) => {
           created_by as createdBy,
           created_at as createdAt,
           updated_at as updatedAt
-        FROM announcements 
+        FROM announcements
         WHERE is_active = true
           AND (start_time IS NULL OR start_time <= ${now})
           AND (end_time IS NULL OR end_time >= ${now})
         ORDER BY priority DESC, created_at DESC
-        LIMIT 1
+          LIMIT 1
       `;
-      
+
       announcement = currentAnnouncement;
     } else {
       // 使用Prisma模型查询
@@ -4464,9 +4518,9 @@ app.get('/api/announcements/current', async (req, res) => {
         ]
       });
     }
-    
+
     console.log(`📋 找到当前公告: ${announcement ? announcement.title : '无'}`);
-    
+
     res.json({
       success: true,
       data: {

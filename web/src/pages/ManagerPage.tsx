@@ -4,8 +4,8 @@ import { User } from '../types';
 import { Pagination } from '../components/shared/Pagination';
 
 // 使用与其他模块一致的API基础URL
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://quiz.playoffer.cn/api' 
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://quiz.playoffer.cn/api'
   : 'https://quiz.playoffer.cn/api';
 
 interface ModelPointConfig {
@@ -170,7 +170,7 @@ export default function ManagerPage() {
     const now = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(now.getMonth() - 1);
-    
+
     return {
       startDate: oneMonthAgo.toISOString().split('T')[0],
       endDate: now.toISOString().split('T')[0],
@@ -221,7 +221,7 @@ export default function ManagerPage() {
     const now = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(now.getMonth() - 1);
-    
+
     return {
       startDate: oneMonthAgo.toISOString().split('T')[0],
       endDate: now.toISOString().split('T')[0],
@@ -258,7 +258,7 @@ export default function ManagerPage() {
     console.log('ManagerPage - 用户信息:', user);
     console.log('ManagerPage - 是否为管理员:', isAdmin);
     console.log('ManagerPage - SessionId:', localStorage.getItem('sessionId'));
-    
+
     if (isAdmin) {
       if (currentTab === 'configs') {
         loadConfigs();
@@ -297,7 +297,7 @@ export default function ManagerPage() {
     if (searchEmail.trim() === '') {
       setFilteredUsers(users);
     } else {
-      const filtered = users.filter(u => 
+      const filtered = users.filter(u =>
         u.email.toLowerCase().includes(searchEmail.toLowerCase())
       );
       setFilteredUsers(filtered);
@@ -309,7 +309,7 @@ export default function ManagerPage() {
     if (creditSearchEmail.trim() === '') {
       setFilteredCreditUsers(creditUsers);
     } else {
-      const filtered = creditUsers.filter(u => 
+      const filtered = creditUsers.filter(u =>
         u.email.toLowerCase().includes(creditSearchEmail.toLowerCase())
       );
       setFilteredCreditUsers(filtered);
@@ -341,7 +341,7 @@ export default function ManagerPage() {
     try {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
-      
+
       const response = await fetch('/api/admin/payment-packages', {
         headers: {
           'X-Session-Id': sessionId || '',
@@ -373,9 +373,7 @@ export default function ManagerPage() {
     try {
       setSaving(true);
 
-      // 临时提示：管理功能需要后端部署
-      setMessage('充值套餐管理功能需要后端更新，请联系技术人员部署最新代码');
-      return;
+
 
       // 验证输入
       if (!editingPackage.name.trim()) {
@@ -399,7 +397,7 @@ export default function ManagerPage() {
       }
 
       const sessionId = localStorage.getItem('sessionId');
-      const url = editingPackageId 
+      const url = editingPackageId
         ? `/api/admin/payment-packages/${editingPackageId}`
         : `/api/admin/payment-packages`;
       const method = editingPackageId ? 'PUT' : 'POST';
@@ -512,15 +510,15 @@ export default function ManagerPage() {
   const loadUsageTransactions = async (page: number = 1) => {
     const sessionId = localStorage.getItem('sessionId');
     const queryParams = new URLSearchParams();
-    
+
     queryParams.append('page', page.toString());
     queryParams.append('limit', usagePageSize.toString());
-    
+
     if (usageFilters.startDate) queryParams.append('startDate', usageFilters.startDate);
     if (usageFilters.endDate) queryParams.append('endDate', usageFilters.endDate);
     if (usageFilters.userEmail) queryParams.append('userEmail', usageFilters.userEmail);
     if (usageFilters.transactionType) queryParams.append('transactionType', usageFilters.transactionType);
-    
+
     const response = await fetch(`/api/admin/usage-stats/transactions?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
@@ -531,7 +529,7 @@ export default function ManagerPage() {
     if (!response.ok) {
       throw new Error('获取交易明细失败');
     }
-    
+
 
     const data = await response.json();
     setUsageTransactions(data.data.transactions || []);
@@ -544,12 +542,12 @@ export default function ManagerPage() {
   const loadUsageSummary = async () => {
     const sessionId = localStorage.getItem('sessionId');
     const queryParams = new URLSearchParams();
-    
+
     queryParams.append('groupBy', 'user');
     if (usageFilters.startDate) queryParams.append('startDate', usageFilters.startDate);
     if (usageFilters.endDate) queryParams.append('endDate', usageFilters.endDate);
     if (usageFilters.userEmail) queryParams.append('userEmail', usageFilters.userEmail);
-    
+
     const response = await fetch(`/api/admin/usage-stats/summary?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
@@ -585,7 +583,7 @@ export default function ManagerPage() {
     try {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
-      
+
       const response = await fetch('/api/admin/announcements', {
         headers: {
           'X-Session-Id': sessionId || '',
@@ -630,11 +628,11 @@ export default function ManagerPage() {
 
       const sessionId = localStorage.getItem('sessionId');
       const isEditing = editingAnnouncementId !== null;
-      
-      const url = isEditing 
+
+      const url = isEditing
         ? `/api/admin/announcements/${editingAnnouncementId}`
         : '/api/admin/announcements';
-      
+
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -734,7 +732,7 @@ export default function ManagerPage() {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
       console.log('loadConfigs - SessionId:', sessionId);
-      
+
       const response = await fetch('/api/admin/model-configs', {
         headers: {
           'X-Session-Id': sessionId || '',
@@ -768,7 +766,7 @@ export default function ManagerPage() {
     try {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
-      
+
       const response = await fetch('/api/admin/users', {
         headers: {
           'X-Session-Id': sessionId || '',
@@ -801,7 +799,7 @@ export default function ManagerPage() {
     try {
       setLoading(true);
       const sessionId = localStorage.getItem('sessionId');
-      
+
       const response = await fetch('/api/admin/users', {
         headers: {
           'X-Session-Id': sessionId || '',
@@ -853,11 +851,11 @@ export default function ManagerPage() {
   const loadInviteSummary = async () => {
     const sessionId = localStorage.getItem('sessionId');
     const queryParams = new URLSearchParams();
-    
+
     if (inviteFilters.startDate) queryParams.append('startDate', inviteFilters.startDate);
     if (inviteFilters.endDate) queryParams.append('endDate', inviteFilters.endDate);
     if (inviteFilters.inviterEmail) queryParams.append('inviterEmail', inviteFilters.inviterEmail);
-    
+
     const response = await fetch(`/api/admin/invites/summary?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
@@ -876,16 +874,16 @@ export default function ManagerPage() {
   const loadInviteRegistrations = async (page: number = 1) => {
     const sessionId = localStorage.getItem('sessionId');
     const queryParams = new URLSearchParams();
-    
+
     // 添加分页参数
     queryParams.append('page', page.toString());
     queryParams.append('limit', registrationsPageSize.toString());
-    
+
     if (inviteFilters.startDate) queryParams.append('startDate', inviteFilters.startDate);
     if (inviteFilters.endDate) queryParams.append('endDate', inviteFilters.endDate);
     if (inviteFilters.inviterEmail) queryParams.append('inviterEmail', inviteFilters.inviterEmail);
     if (inviteFilters.inviteeEmail) queryParams.append('inviteeEmail', inviteFilters.inviteeEmail);
-    
+
     const response = await fetch(`/api/admin/invites/registrations?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
@@ -907,16 +905,16 @@ export default function ManagerPage() {
   const loadInviteRecharges = async (page: number = 1) => {
     const sessionId = localStorage.getItem('sessionId');
     const queryParams = new URLSearchParams();
-    
+
     // 添加分页参数
     queryParams.append('page', page.toString());
     queryParams.append('limit', rechargesPageSize.toString());
-    
+
     if (inviteFilters.startDate) queryParams.append('startDate', inviteFilters.startDate);
     if (inviteFilters.endDate) queryParams.append('endDate', inviteFilters.endDate);
     if (inviteFilters.inviterEmail) queryParams.append('inviterEmail', inviteFilters.inviterEmail);
     if (inviteFilters.inviteeEmail) queryParams.append('inviteeEmail', inviteFilters.inviteeEmail);
-    
+
     const response = await fetch(`/api/admin/invites/recharges?${queryParams.toString()}`, {
       headers: {
         'X-Session-Id': sessionId || '',
@@ -968,7 +966,7 @@ export default function ManagerPage() {
   const handleUpdateUserRole = async (userId: string, newRole: 'USER' | 'ADMIN') => {
     try {
       const sessionId = localStorage.getItem('sessionId');
-      
+
       const response = await fetch('/api/admin/users/role', {
         method: 'PUT',
         headers: {
@@ -1005,7 +1003,7 @@ export default function ManagerPage() {
     try {
       setSaving(true);
       const sessionId = localStorage.getItem('sessionId');
-      
+
       const response = await fetch('/api/admin/users/credits', {
         method: 'PUT',
         headers: {
@@ -1035,7 +1033,7 @@ export default function ManagerPage() {
 
       const data = await response.json();
       console.log('📥 积分更新响应:', data);
-      
+
       if (data.success) {
         setMessage(`用户积分更新成功`);
         setShowCreditForm(false);
@@ -1172,18 +1170,18 @@ export default function ManagerPage() {
       try {
         const sessionId = localStorage.getItem('sessionId');
         console.log('手动检查session，sessionId:', sessionId);
-        
+
         const response = await fetch('/api/session_status', {
           headers: {
             'X-Session-Id': sessionId || '',
             'Content-Type': 'application/json'
           }
         });
-        
+
         console.log('Session检查响应状态:', response.status);
         const data = await response.json();
         console.log('Session检查响应数据:', data);
-        
+
         if (data.success && data.user) {
           alert(`Session有效！用户: ${data.user.username} (${data.user.email})`);
           // 手动设置用户信息并刷新页面
@@ -1570,7 +1568,7 @@ export default function ManagerPage() {
             <div className="p-6 border-b border-gray-700">
               <h3 className="text-lg font-semibold">用户角色管理 ({filteredUsers.length})</h3>
               <p className="text-gray-400 text-sm mt-1">管理用户的角色权限，只有管理员可以访问管理功能</p>
-              
+
               {/* 搜索框 */}
               <div className="mt-4 flex">
                 <div className="relative flex-1 max-w-md">
@@ -1582,7 +1580,7 @@ export default function ManagerPage() {
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
                   />
                   {searchEmail && (
-                    <button 
+                    <button
                       onClick={handleClearSearch}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                     >
@@ -1689,7 +1687,7 @@ export default function ManagerPage() {
                   <p className="text-sm mt-2">用户数据加载中...</p>
                 </div>
               )}
-              
+
               {users.length > 0 && filteredUsers.length === 0 && (
                 <div className="text-center py-12 text-gray-400">
                   <p>没有找到匹配的用户</p>
@@ -1716,7 +1714,7 @@ export default function ManagerPage() {
             <div className="p-6 border-b border-gray-700">
               <h3 className="text-lg font-semibold">用户积分管理 ({filteredCreditUsers.length})</h3>
               <p className="text-gray-400 text-sm mt-1">查看和修改用户的积分余额</p>
-              
+
               {/* 搜索框 */}
               <div className="mt-4 flex">
                 <div className="relative flex-1 max-w-md">
@@ -1728,7 +1726,7 @@ export default function ManagerPage() {
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
                   />
                   {creditSearchEmail && (
-                    <button 
+                    <button
                       onClick={handleClearCreditSearch}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                     >
@@ -1822,7 +1820,7 @@ export default function ManagerPage() {
                   <p className="text-sm mt-2">用户数据加载中...</p>
                 </div>
               )}
-              
+
               {creditUsers.length > 0 && filteredCreditUsers.length === 0 && (
                 <div className="text-center py-12 text-gray-400">
                   <p>没有找到匹配的用户</p>
@@ -1848,7 +1846,7 @@ export default function ManagerPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
               <h3 className="text-lg font-semibold mb-4">修改用户积分</h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">用户信息</label>
@@ -1942,7 +1940,7 @@ export default function ManagerPage() {
                  管理所有用户的邀请记录，包括注册和充值详情
                  {inviteTab === 'summary' && <span className="block mt-1 text-xs">💡 汇总统计基于时间范围和邀请人筛选，显示每个邀请人的整体表现</span>}
                </p>
-              
+
                              {/* 筛选条件 */}
                <div className={`mt-4 grid grid-cols-1 md:grid-cols-2 ${inviteTab === 'summary' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
                  <div>
@@ -1986,7 +1984,7 @@ export default function ManagerPage() {
                    </div>
                  )}
                </div>
-              
+
               {/* 筛选按钮 */}
               <div className="mt-4 flex gap-2">
                 <button
@@ -2001,7 +1999,7 @@ export default function ManagerPage() {
                     const now = new Date();
                     const oneMonthAgo = new Date();
                     oneMonthAgo.setMonth(now.getMonth() - 1);
-                    
+
                     setInviteFilters({
                       startDate: oneMonthAgo.toISOString().split('T')[0],
                       endDate: now.toISOString().split('T')[0],
@@ -2127,7 +2125,7 @@ export default function ManagerPage() {
                     </tbody>
                   </table>
                 )}
-                
+
                 {!inviteLoading && inviteSummary.length === 0 && (
                   <div className="text-center py-12 text-gray-400">
                     <p>暂无汇总数据</p>
@@ -2439,7 +2437,7 @@ export default function ManagerPage() {
                   <div className="md:col-span-2 lg:col-span-3">
                     <div className="bg-gray-700 rounded-lg p-3 text-sm text-gray-300 mb-4">
                       <strong>总积分预览: </strong>
-                      {editingPackage.points + editingPackage.bonusPoints} 积分 
+                      {editingPackage.points + editingPackage.bonusPoints} 积分
                       (基础: {editingPackage.points} + 奖励: {editingPackage.bonusPoints})
                     </div>
                     <button
@@ -2942,7 +2940,7 @@ export default function ManagerPage() {
                   {/* 左侧：HTML编辑器 */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium">HTML 编辑器</h3>
-                    
+
                     <div>
                       <label className="block text-sm font-medium mb-2">公告标题</label>
                       <input
@@ -2967,7 +2965,7 @@ export default function ManagerPage() {
                         <button
                           type="button"
                           onClick={() => setEditingAnnouncement({
-                            ...editingAnnouncement, 
+                            ...editingAnnouncement,
                             content: `<div style="color: #1e40af; font-weight: bold;">🔥 最后一天优惠，7月26号以前开通会员特价 <span style="color: #dc2626; font-size: 18px;">89元</span> + 赠送全站笔试面试资料包，一次开通，永久有效，7月26号过后涨价预计29元+取消赠送资料包， <a href="#" style="color: #2563eb; text-decoration: underline;">点击前往</a></div>`
                           })}
                           className="text-xs bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded transition-colors"
@@ -2977,7 +2975,7 @@ export default function ManagerPage() {
                         <button
                           type="button"
                           onClick={() => setEditingAnnouncement({
-                            ...editingAnnouncement, 
+                            ...editingAnnouncement,
                             content: `<div style="display: flex; align-items: center; justify-content: center; color: #059669; font-weight: 500;"><span style="margin-right: 8px;">✅</span>系统维护完成，所有功能已恢复正常！</div>`
                           })}
                           className="text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded transition-colors"
@@ -2987,7 +2985,7 @@ export default function ManagerPage() {
                         <button
                           type="button"
                           onClick={() => setEditingAnnouncement({
-                            ...editingAnnouncement, 
+                            ...editingAnnouncement,
                             content: `<div style="color: #b91c1c; font-weight: 600;">⚠️ 紧急通知：系统将于今晚22:00-24:00进行维护升级，期间服务暂时不可用，请合理安排使用时间。</div>`
                           })}
                           className="text-xs bg-red-600 hover:bg-red-700 px-3 py-1 rounded transition-colors"
@@ -3071,14 +3069,14 @@ export default function ManagerPage() {
                   {/* 右侧：实时预览 */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium">实时预览</h3>
-                    
+
                     <div className="bg-gray-900 rounded-lg p-4 min-h-[400px]">
                       <div className="text-sm text-gray-400 mb-4">
                         预览效果（实际效果可能因页面样式有所差异）：
                       </div>
-                      
+
                       {editingAnnouncement.content ? (
-                        <div 
+                        <div
                           className={`p-4 rounded-lg border ${
                             editingAnnouncement.showStyle === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' :
                             editingAnnouncement.showStyle === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
@@ -3114,7 +3112,7 @@ export default function ManagerPage() {
             {/* 公告列表 */}
             <div className="bg-gray-800 rounded-lg p-6">
               <h3 className="text-lg font-semibold mb-4">公告列表</h3>
-              
+
               {loading ? (
                 <div className="text-center py-12">
                   <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>

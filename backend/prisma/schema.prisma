@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-1.1.x"]
@@ -11,388 +8,309 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique @db.VarChar(50)
-  email     String?  @unique @db.VarChar(100)
-  password  String   @db.VarChar(255)
-  role      UserRole @default(USER) // 用户角色，默认为普通用户
-  isActive  Boolean  @default(true)
-  points    Int      @default(100) // 用户积分余额，新用户默认100积分
-  
-  // 邀请系统字段
-  inviteCode String?  @unique @db.VarChar(20) @map("invite_code") // 邀请码
-  inviterId  Int?     @map("inviter_id") // 邀请人ID
-  invitedAt  DateTime? @map("invited_at") // 被邀请时间
-  
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  config       UserConfig?
-  usage        UsageRecord[]
-  sessions     UserSession[]
-  transactions PointTransaction[] // 积分交易记录
-  paymentOrders PaymentOrder[]    // 支付订单记录
-  
-  // 邀请系统关系
-  inviteRecords InviteRecord[] @relation("InviterRecords") // 作为邀请人的记录
-  invitedRecords InviteRecord[] @relation("InviteeRecords") // 作为被邀请人的记录
-  inviteRewards InviteReward[] @relation("InviterRewards") // 作为邀请人的奖励
-  invitedRewards InviteReward[] @relation("InviteeRewards") // 作为被邀请人的奖励
-
-  @@map("users")
+model ai_models {
+  id         Int      @id @default(autoincrement())
+  model_id   String   @unique @db.VarChar(100)
+  name       String   @db.VarChar(100)
+  provider   String   @db.VarChar(50)
+  category   String   @db.VarChar(50)
+  is_active  Boolean  @default(true)
+  priority   Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime
 }
 
-model UserConfig {
-  id               Int      @id @default(autoincrement())
-  userId           Int      @unique @map("user_id")
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // 分离的AI模型设置
-  programmingModel     String   @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("programming_model")
-  multipleChoiceModel  String   @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("multiple_choice_model")
-  
-  // 简化的AI模型设置（保持向后兼容）
-  aiModel          String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("ai_model")
-  
-  // 原有的AI Model Settings（保持兼容性）
-  selectedProvider String   @default("claude") @db.VarChar(50) @map("selected_provider")
-  extractionModel  String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("extraction_model")
-  solutionModel    String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("solution_model")
-  debuggingModel   String?  @default("claude-sonnet-4-20250514") @db.VarChar(100) @map("debugging_model")
-  
-  // Language Settings
-  language         String   @default("python") @db.VarChar(50)
-  
-  // UI Settings
-  theme            String   @default("system") @db.VarChar(20) // light, dark, system
-  opacity          Float    @default(1.0)
-  showCopyButton   Boolean  @default(true) @map("show_copy_button")
-  
-  // 快捷键设置（JSON字符串）
-  shortcuts        String?  @db.Text
-  
-  // 显示设置（JSON字符串）
-  display          String?  @db.Text
-  
-  // 处理设置（JSON字符串）
-  processing       String?  @db.Text
-  
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+model announcements {
+  id         Int       @id @default(autoincrement())
+  title      String    @db.VarChar(200)
+  content    String    @db.Text
+  is_active  Boolean   @default(true)
+  priority   Int       @default(0)
+  show_style String    @default("info") @db.VarChar(20)
+  start_time DateTime?
+  end_time   DateTime?
+  created_by Int?
+  created_at DateTime  @default(now())
+  updated_at DateTime
 
-  @@map("user_configs")
-}
-
-model UserSession {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @map("user_id")
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token        String   @unique @db.VarChar(255)
-  refreshToken String   @unique @db.VarChar(255) @map("refresh_token")
-  expiresAt    DateTime @map("expires_at")
-  createdAt    DateTime @default(now()) @map("created_at")
-  isActive     Boolean  @default(true) @map("is_active")
-
-  @@map("user_sessions")
-}
-
-model UsageRecord {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @map("user_id")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  action      String   @db.VarChar(50) // "extraction", "solution", "debugging"
-  model       String   @db.VarChar(100) // 使用的具体模型
-  provider    String   @db.VarChar(50) // AI提供商
-  tokensUsed  Int?     @map("tokens_used") // 使用的token数量
-  success     Boolean  @default(true)
-  errorMsg    String?  @db.Text @map("error_msg")
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@map("usage_records")
-}
-
-// AI模型定义表 - 用于管理支持的模型
-model AIModel {
-  id          Int      @id @default(autoincrement())
-  modelId     String   @unique @db.VarChar(100) @map("model_id") // claude-3-7-sonnet-20250219
-  name        String   @db.VarChar(100) // Claude 3.7 Sonnet
-  provider    String   @db.VarChar(50) // claude, gemini, openai
-  category    String   @db.VarChar(50) // extraction, solution, debugging, general
-  isActive    Boolean  @default(true) @map("is_active")
-  priority    Int      @default(0) // 排序优先级
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("ai_models")
-}
-
-// 邮箱验证码表 - 用于注册验证
-model EmailVerificationCode {
-  id          Int      @id @default(autoincrement())
-  email       String   @db.VarChar(100)
-  code        String   @db.VarChar(10) // 验证码
-  token       String   @unique @db.VarChar(255) // 验证令牌
-  expiresAt   DateTime @map("expires_at")
-  isUsed      Boolean  @default(false) @map("is_used")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@map("email_verification_codes")
-}
-
-// Redis会话存储备份表（可选）
-model RedisSession {
-  id          Int      @id @default(autoincrement())
-  sessionId   String   @unique @db.VarChar(100) @map("session_id")
-  userId      Int?     @map("user_id")
-  data        String   @db.Text // JSON字符串
-  expiresAt   DateTime @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@map("redis_sessions")
-}
-
-// 🔥 积分系统相关表
-
-// 模型积分配置表
-model ModelPointConfig {
-  id           Int      @id @default(autoincrement())
-  modelName    String   @db.VarChar(100) @map("model_name") // AI模型名称
-  questionType QuestionType @map("question_type") // 题目类型
-  cost         Int      // 积分消耗
-  isActive     Boolean  @default(true) @map("is_active") // 是否启用
-  description  String?  @db.Text // 配置描述
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  @@unique([modelName, questionType], name: "unique_model_question_type")
-  @@map("model_point_configs")
-}
-
-// 积分交易记录表
-model PointTransaction {
-  id              Int             @id @default(autoincrement())
-  userId          Int             @map("user_id")
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactionType TransactionType @map("transaction_type") // 交易类型
-  amount          Int             // 积分数量(消费为负数，充值为正数)
-  balanceAfter    Int             @map("balance_after") // 操作后余额
-  modelName       String?         @db.VarChar(100) @map("model_name") // 相关模型名称
-  questionType    QuestionType?   @map("question_type") // 题目类型
-  description     String?         @db.Text // 交易描述
-  metadata        String?         @db.Text // 额外元数据(JSON格式)
-  createdAt       DateTime        @default(now()) @map("created_at")
-
-  @@map("point_transactions")
-}
-
-// 题目类型枚举
-enum QuestionType {
-  MULTIPLE_CHOICE @map("multiple_choice") // 选择题
-  PROGRAMMING     @map("programming")     // 编程题
-
-  @@map("question_types")
-}
-
-// 交易类型枚举
-enum TransactionType {
-  CONSUME  @map("consume")  // 消费
-  RECHARGE @map("recharge") // 充值
-  REFUND   @map("refund")   // 退款
-  REWARD   @map("reward")   // 奖励
-
-  @@map("transaction_types")
-}
-
-// 💰 支付系统相关表
-
-// 支付订单表
-model PaymentOrder {
-  id            Int           @id @default(autoincrement())
-  orderNo       String        @unique @db.VarChar(64) @map("order_no") // 系统订单号
-  outTradeNo    String        @unique @db.VarChar(64) @map("out_trade_no") // 商户订单号
-  userId        Int           @map("user_id")
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount        Decimal       @db.Decimal(10,2) // 支付金额(元)
-  points        Int           // 充值积分数量
-  bonusPoints   Int           @default(0) @map("bonus_points") // 赠送积分
-  paymentMethod PaymentMethod @map("payment_method") // 支付方式
-  paymentStatus PaymentStatus @default(PENDING) @map("payment_status") // 支付状态
-  transactionId String?       @db.VarChar(64) @map("transaction_id") // 第三方交易ID
-  paymentTime   DateTime?     @map("payment_time") // 支付完成时间
-  notifyTime    DateTime?     @map("notify_time") // 回调通知时间
-  expireTime    DateTime      @map("expire_time") // 订单过期时间
-  packageId     Int?          @map("package_id") // 关联的套餐ID
-  package       PaymentPackage? @relation(fields: [packageId], references: [id])
-  metadata      String?       @db.Text // 订单元数据(JSON格式)
-  failReason    String?       @db.Text @map("fail_reason") // 失败原因
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-
-  @@index([userId])
-  @@index([orderNo])
-  @@index([paymentStatus])
-  @@index([createdAt])
-  @@map("payment_orders")
-}
-
-// 支付充值套餐表
-model PaymentPackage {
-  id          Int      @id @default(autoincrement())
-  name        String   @db.VarChar(100) // 套餐名称
-  description String?  @db.Text // 套餐描述
-  amount      Decimal  @db.Decimal(10,2) // 价格(元)
-  points      Int      // 获得积分
-  bonusPoints Int      @default(0) @map("bonus_points") // 赠送积分
-  isActive    Boolean  @default(true) @map("is_active") // 是否启用
-  sortOrder   Int      @default(0) @map("sort_order") // 排序权重
-  icon        String?  @db.VarChar(255) // 套餐图标
-  
-  // 标签系统
-  label       String?  @db.VarChar(50) // 套餐标签：hot_sale(热门推荐), best_value(性价比之选), limited_time(限时优惠)
-  labelColor  String?  @db.VarChar(20) @map("label_color") // 标签颜色：red, blue, green, orange
-  isRecommended Boolean @default(false) @map("is_recommended") // 是否推荐
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  orders      PaymentOrder[]
-
-  @@index([isActive])
-  @@index([sortOrder])
-  @@index([isRecommended])
-  @@map("payment_packages")
-}
-
-// 支付回调日志表
-model PaymentNotifyLog {
-  id            Int           @id @default(autoincrement())
-  orderNo       String        @db.VarChar(64) @map("order_no") // 订单号
-  paymentMethod PaymentMethod @map("payment_method") // 支付方式
-  notifyType    String        @db.VarChar(50) @map("notify_type") // 通知类型
-  requestBody   String        @db.Text @map("request_body") // 回调请求体
-  requestHeaders String?      @db.Text @map("request_headers") // 请求头(JSON格式)
-  responseStatus Int          @default(200) @map("response_status") // 响应状态码
-  processStatus NotifyStatus  @default(PENDING) @map("process_status") // 处理状态
-  errorMessage  String?       @db.Text @map("error_message") // 错误信息
-  processTime   DateTime?     @map("process_time") // 处理时间
-  retryCount    Int           @default(0) @map("retry_count") // 重试次数
-  createdAt     DateTime      @default(now()) @map("created_at")
-
-  @@index([orderNo])
-  @@index([processStatus])
-  @@index([createdAt])
-  @@map("payment_notify_logs")
-}
-
-// 支付方式枚举
-enum PaymentMethod {
-  WECHAT_PAY @map("wechat_pay") // 微信支付
-  ALIPAY     @map("alipay")     // 支付宝
-  
-  @@map("payment_methods")
-}
-
-// 支付状态枚举
-enum PaymentStatus {
-  PENDING   @map("pending")   // 待支付
-  PAID      @map("paid")      // 已支付
-  FAILED    @map("failed")    // 支付失败
-  CANCELLED @map("cancelled") // 已取消
-  REFUNDED  @map("refunded")  // 已退款
-  EXPIRED   @map("expired")   // 已过期
-  
-  @@map("payment_statuses")
-}
-
-// 通知处理状态枚举
-enum NotifyStatus {
-  PENDING @map("pending") // 待处理
-  SUCCESS @map("success") // 处理成功
-  FAILED  @map("failed")  // 处理失败
-  
-  @@map("notify_statuses")
-}
-
-// 用户角色枚举
-enum UserRole {
-  USER  @map("user")  // 普通用户
-  ADMIN @map("admin") // 管理员
-  
-  @@map("user_roles")
-}
-
-// 🎯 邀请系统相关表
-
-// 邀请记录表
-model InviteRecord {
-  id                  Int      @id @default(autoincrement())
-  inviterId           Int      @map("inviter_id") // 邀请人ID
-  inviteeId           Int      @map("invitee_id") // 被邀请人ID
-  inviteCode          String   @db.VarChar(20) @map("invite_code") // 邀请码
-  status              String   @default("REGISTERED") @db.VarChar(20) // 状态：REGISTERED, ACTIVATED
-  firstRechargeAmount Decimal  @default(0) @db.Decimal(10,2) @map("first_recharge_amount") // 首次充值金额
-  commissionAmount    Decimal  @default(0) @db.Decimal(10,2) @map("commission_amount") // 佣金金额
-  commissionStatus    String   @default("PENDING") @db.VarChar(20) @map("commission_status") // 佣金状态
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  inviter User @relation("InviterRecords", fields: [inviterId], references: [id], onDelete: Cascade)
-  invitee User @relation("InviteeRecords", fields: [inviteeId], references: [id], onDelete: Cascade)
-
-  @@unique([inviteeId]) // 每个用户只能被邀请一次
-  @@index([inviterId])
-  @@index([status])
-  @@map("invite_records")
-}
-
-// 邀请奖励记录表
-model InviteReward {
-  id           Int      @id @default(autoincrement())
-  inviterId    Int      @map("inviter_id") // 邀请人ID
-  inviteeId    Int      @map("invitee_id") // 被邀请人ID
-  rewardType   String   @db.VarChar(20) @map("reward_type") // 奖励类型：REGISTER, FIRST_RECHARGE, COMMISSION
-  rewardAmount Int      @map("reward_amount") // 奖励积分数量
-  description  String?  @db.Text // 奖励描述
-  status       String   @default("GRANTED") @db.VarChar(20) // 状态：PENDING, GRANTED, FAILED
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  inviter User @relation("InviterRewards", fields: [inviterId], references: [id], onDelete: Cascade)
-  invitee User @relation("InviteeRewards", fields: [inviteeId], references: [id], onDelete: Cascade)
-
-  @@index([inviterId])
-  @@index([rewardType])
-  @@index([status])
-  @@map("invite_rewards")
-}
-
-// 🔔 公告系统相关表
-
-// 公告表
-model Announcement {
-  id          Int      @id @default(autoincrement())
-  title       String   @db.VarChar(200) // 公告标题（内部管理用）
-  content     String   @db.Text // 公告HTML内容
-  isActive    Boolean  @default(true) @map("is_active") // 是否启用
-  priority    Int      @default(0) // 优先级，数字越大优先级越高
-  showStyle   String   @default("info") @db.VarChar(20) @map("show_style") // 显示样式：info, warning, success, error
-  startTime   DateTime? @map("start_time") // 开始显示时间
-  endTime     DateTime? @map("end_time") // 结束显示时间
-  createdBy   Int?     @map("created_by") // 创建者ID
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@index([isActive])
+  @@index([end_time])
+  @@index([is_active])
   @@index([priority])
-  @@index([startTime])
-  @@index([endTime])
-  @@map("announcements")
-} 
+  @@index([start_time])
+}
+
+model email_verification_codes {
+  id         Int      @id @default(autoincrement())
+  email      String   @db.VarChar(100)
+  code       String   @db.VarChar(10)
+  token      String   @unique @db.VarChar(255)
+  expires_at DateTime
+  is_used    Boolean  @default(false)
+  created_at DateTime @default(now())
+}
+
+model invite_records {
+  id                                     Int      @id @default(autoincrement())
+  inviter_id                             Int
+  invitee_id                             Int      @unique
+  invite_code                            String   @db.VarChar(20)
+  status                                 String   @default("REGISTERED") @db.VarChar(20)
+  first_recharge_amount                  Decimal  @default(0.00) @db.Decimal(10, 2)
+  commission_amount                      Decimal  @default(0.00) @db.Decimal(10, 2)
+  commission_status                      String   @default("PENDING") @db.VarChar(20)
+  created_at                             DateTime @default(now())
+  updated_at                             DateTime
+  users_invite_records_invitee_idTousers users    @relation("invite_records_invitee_idTousers", fields: [invitee_id], references: [id], onDelete: Cascade)
+  users_invite_records_inviter_idTousers users    @relation("invite_records_inviter_idTousers", fields: [inviter_id], references: [id], onDelete: Cascade)
+
+  @@index([inviter_id])
+  @@index([status])
+}
+
+model invite_rewards {
+  id                                     Int      @id @default(autoincrement())
+  inviter_id                             Int
+  invitee_id                             Int
+  reward_type                            String   @db.VarChar(20)
+  reward_amount                          Int
+  description                            String?  @db.Text
+  status                                 String   @default("GRANTED") @db.VarChar(20)
+  created_at                             DateTime @default(now())
+  updated_at                             DateTime
+  users_invite_rewards_invitee_idTousers users    @relation("invite_rewards_invitee_idTousers", fields: [invitee_id], references: [id], onDelete: Cascade)
+  users_invite_rewards_inviter_idTousers users    @relation("invite_rewards_inviter_idTousers", fields: [inviter_id], references: [id], onDelete: Cascade)
+
+  @@index([invitee_id], map: "invite_rewards_invitee_id_fkey")
+  @@index([inviter_id])
+  @@index([reward_type])
+  @@index([status])
+}
+
+model model_point_configs {
+  id            Int                               @id @default(autoincrement())
+  model_name    String                            @db.VarChar(100)
+  question_type model_point_configs_question_type
+  cost          Int
+  is_active     Boolean                           @default(true)
+  description   String?                           @db.Text
+  created_at    DateTime                          @default(now())
+  updated_at    DateTime
+
+  @@unique([model_name, question_type])
+}
+
+model payment_notify_logs {
+  id              Int                                @id @default(autoincrement())
+  order_no        String                             @db.VarChar(64)
+  payment_method  payment_notify_logs_payment_method
+  notify_type     String                             @db.VarChar(50)
+  request_body    String                             @db.Text
+  request_headers String?                            @db.Text
+  response_status Int                                @default(200)
+  process_status  payment_notify_logs_process_status @default(pending)
+  error_message   String?                            @db.Text
+  process_time    DateTime?
+  retry_count     Int                                @default(0)
+  created_at      DateTime                           @default(now())
+
+  @@index([created_at])
+  @@index([order_no])
+  @@index([process_status])
+}
+
+model payment_orders {
+  id               Int                           @id @default(autoincrement())
+  order_no         String                        @unique @db.VarChar(64)
+  out_trade_no     String                        @unique @db.VarChar(64)
+  user_id          Int
+  amount           Decimal                       @db.Decimal(10, 2)
+  points           Int
+  bonus_points     Int                           @default(0)
+  payment_method   payment_orders_payment_method
+  payment_status   payment_orders_payment_status @default(pending)
+  transaction_id   String?                       @db.VarChar(64)
+  payment_time     DateTime?
+  notify_time      DateTime?
+  expire_time      DateTime
+  package_id       Int?
+  metadata         String?                       @db.Text
+  fail_reason      String?                       @db.Text
+  created_at       DateTime                      @default(now())
+  updated_at       DateTime
+  payment_packages payment_packages?             @relation(fields: [package_id], references: [id])
+  users            users                         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([created_at])
+  @@index([order_no])
+  @@index([package_id], map: "payment_orders_package_id_fkey")
+  @@index([payment_status])
+  @@index([user_id])
+}
+
+model payment_packages {
+  id             Int              @id @default(autoincrement())
+  name           String           @db.VarChar(100)
+  description    String?          @db.Text
+  amount         Decimal          @db.Decimal(10, 2)
+  points         Int
+  bonus_points   Int              @default(0)
+  is_active      Boolean          @default(true)
+  sort_order     Int              @default(0)
+  icon           String?          @db.VarChar(255)
+  is_recommended Boolean          @default(false)
+  created_at     DateTime         @default(now())
+  updated_at     DateTime
+  label          String?          @db.VarChar(50)
+  label_color    String?          @db.VarChar(20)
+  payment_orders payment_orders[]
+
+  @@index([is_active])
+  @@index([is_recommended])
+  @@index([sort_order])
+}
+
+model point_transactions {
+  id               Int                                 @id @default(autoincrement())
+  user_id          Int
+  transaction_type point_transactions_transaction_type
+  amount           Int
+  balance_after    Int
+  model_name       String?                             @db.VarChar(100)
+  question_type    point_transactions_question_type?
+  description      String?                             @db.Text
+  metadata         String?                             @db.Text
+  created_at       DateTime                            @default(now())
+  users            users                               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "point_transactions_user_id_fkey")
+}
+
+model redis_sessions {
+  id         Int      @id @default(autoincrement())
+  session_id String   @unique @db.VarChar(100)
+  user_id    Int?
+  data       String   @db.Text
+  expires_at DateTime
+  created_at DateTime @default(now())
+}
+
+model usage_records {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  action      String   @db.VarChar(50)
+  model       String   @db.VarChar(100)
+  provider    String   @db.VarChar(50)
+  tokens_used Int?
+  success     Boolean  @default(true)
+  error_msg   String?  @db.Text
+  created_at  DateTime @default(now())
+  users       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "usage_records_user_id_fkey")
+}
+
+model user_configs {
+  id                    Int      @id @default(autoincrement())
+  user_id               Int      @unique
+  programming_model     String   @default("claude-sonnet-4-20250514") @db.VarChar(100)
+  multiple_choice_model String   @default("claude-sonnet-4-20250514") @db.VarChar(100)
+  ai_model              String?  @default("claude-sonnet-4-20250514") @db.VarChar(100)
+  selected_provider     String   @default("claude") @db.VarChar(50)
+  extraction_model      String?  @default("claude-sonnet-4-20250514") @db.VarChar(100)
+  solution_model        String?  @default("claude-sonnet-4-20250514") @db.VarChar(100)
+  debugging_model       String?  @default("claude-sonnet-4-20250514") @db.VarChar(100)
+  language              String   @default("python") @db.VarChar(50)
+  theme                 String   @default("system") @db.VarChar(20)
+  opacity               Float    @default(1)
+  show_copy_button      Boolean  @default(true)
+  shortcuts             String?  @db.Text
+  display               String?  @db.Text
+  processing            String?  @db.Text
+  created_at            DateTime @default(now())
+  updated_at            DateTime
+  users                 users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model user_sessions {
+  id            Int      @id @default(autoincrement())
+  user_id       Int
+  token         String   @unique @db.VarChar(255)
+  refresh_token String   @unique @db.VarChar(255)
+  expires_at    DateTime
+  created_at    DateTime @default(now())
+  is_active     Boolean  @default(true)
+  users         users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], map: "user_sessions_user_id_fkey")
+}
+
+model users {
+  id                                              Int                  @id @default(autoincrement())
+  username                                        String               @unique @db.VarChar(50)
+  email                                           String?              @unique @db.VarChar(100)
+  password                                        String               @db.VarChar(255)
+  role                                            users_role           @default(user)
+  isActive                                        Boolean              @default(true)
+  points                                          Int                  @default(100)
+  invite_code                                     String?              @unique @db.VarChar(20)
+  inviter_id                                      Int?
+  invited_at                                      DateTime?
+  created_at                                      DateTime             @default(now())
+  updated_at                                      DateTime
+  invite_records_invite_records_invitee_idTousers invite_records?      @relation("invite_records_invitee_idTousers")
+  invite_records_invite_records_inviter_idTousers invite_records[]     @relation("invite_records_inviter_idTousers")
+  invite_rewards_invite_rewards_invitee_idTousers invite_rewards[]     @relation("invite_rewards_invitee_idTousers")
+  invite_rewards_invite_rewards_inviter_idTousers invite_rewards[]     @relation("invite_rewards_inviter_idTousers")
+  payment_orders                                  payment_orders[]
+  point_transactions                              point_transactions[]
+  usage_records                                   usage_records[]
+  user_configs                                    user_configs?
+  user_sessions                                   user_sessions[]
+}
+
+enum model_point_configs_question_type {
+  multiple_choice
+  programming
+}
+
+enum payment_notify_logs_payment_method {
+  wechat_pay
+  alipay
+}
+
+enum point_transactions_transaction_type {
+  consume
+  recharge
+  refund
+  reward
+}
+
+enum users_role {
+  user
+  admin
+}
+
+enum point_transactions_question_type {
+  multiple_choice
+  programming
+}
+
+enum payment_notify_logs_process_status {
+  pending
+  success
+  failed
+}
+
+enum payment_orders_payment_method {
+  wechat_pay
+  alipay
+}
+
+enum payment_orders_payment_status {
+  pending
+  paid
+  failed
+  cancelled
+  refunded
+  expired
+}
