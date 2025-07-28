@@ -162,7 +162,7 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "^37.2.1",
+    "electron": "37.2.1",
     "electron-builder": "^24.13.3",
     "electron-is-dev": "^3.0.1",
     "eslint": "^8.57.1",

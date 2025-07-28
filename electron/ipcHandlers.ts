@@ -46,7 +46,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://quiz.playoffer.cn/api/client/credits', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits', {
         method: 'GET',
         headers: {
           'X-Session-Id': sessionId,
@@ -78,7 +78,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://quiz.playoffer.cn/api/client/credits/check', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/check', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -112,7 +112,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://quiz.playoffer.cn/api/client/credits/deduct', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/deduct', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -151,7 +151,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://quiz.playoffer.cn/api/client/credits/refund', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/refund', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -613,7 +613,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 // 积分管理 (独立导出，在main.ts中单独注册)
 export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
   console.log('Initializing credits IPC handlers')
-  const BASE_URL = 'http://quiz.playoffer.cn'
+  const BASE_URL = 'https://quiz.playoffer.cn'
 
   const makeAuthenticatedRequest = async (endpoint: string, options: any = {}) => {
     const token = simpleAuthManager.getToken()

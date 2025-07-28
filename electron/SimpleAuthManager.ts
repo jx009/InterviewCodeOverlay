@@ -60,7 +60,7 @@ export class SimpleAuthManager extends EventEmitter {
   private apiClient: AxiosInstance
   private configCacheExpiry: number = 0 // 配置缓存过期时间
 
-  constructor(apiBaseUrl: string = 'http://quiz.playoffer.cn') {
+  constructor(apiBaseUrl: string = 'https://quiz.playoffer.cn') {
     super()
     this.apiBaseUrl = apiBaseUrl
 

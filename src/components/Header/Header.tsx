@@ -83,7 +83,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
     
     // Save language preference to web-side configuration
     try {
-      const response = await fetch('http://quiz.playoffer.cn/api/config', {
+      const response = await fetch('https://quiz.playoffer.cn/api/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

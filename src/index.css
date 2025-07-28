@@ -2,38 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 强制使用深色主题，覆盖系统浅色模式 */
-* {
-  color-scheme: dark !important;
-}
-
-/* 根元素强制深色背景 */
-html, body {
-  background-color: #0a0a0a !important;
-  color: #ffffff !important;
-}
-
-/* 强制所有元素使用深色主题 */
-:root {
-  --background: 10 10 10;
-  --foreground: 250 250 250;
-  --card: 10 10 10;
-  --card-foreground: 250 250 250;
-  --popover: 10 10 10;
-  --popover-foreground: 250 250 250;
-  --primary: 250 250 250;
-  --primary-foreground: 10 10 10;
-  --secondary: 39 39 42;
-  --secondary-foreground: 250 250 250;
-  --muted: 39 39 42;
-  --muted-foreground: 161 161 170;
-  --accent: 39 39 42;
-  --accent-foreground: 250 250 250;
-  --destructive: 239 68 68;
-  --destructive-foreground: 250 250 250;
-  --border: 39 39 42;
-  --input: 39 39 42;
-  --ring: 142 142 142;
+/* 根元素透明背景 */
+html, body, #root {
+  background: transparent !important;
 }
 
 /* Custom animations for UI elements */
@@ -49,51 +20,17 @@ html, body {
   will-change: opacity, transform;
 }
 
-/* Custom styling for dropdowns - 确保深色主题 */
+/* Custom styling for dropdowns */
 select {
   appearance: menulist;
   background-color: #000000 !important;
   color: white !important;
-  border: 1px solid #404040 !important;
 }
 
 option {
   background-color: #1a1a1a !important;
   color: white !important;
   padding: 8px !important;
-}
-
-/* 强制所有输入框使用深色主题，但不影响按钮颜色 */
-input, textarea {
-  background-color: #1a1a1a !important;
-  color: white !important;
-  border-color: #404040 !important;
-}
-
-input::placeholder, textarea::placeholder {
-  color: #888 !important;
-}
-
-/* 强制所有卡片和容器使用深色主题 */
-div, section, article, aside, header, footer, nav, main {
-  background-color: inherit !important;
-  color: inherit !important;
-}
-
-/* 确保白色背景被覆盖 */
-.bg-white, .bg-gray-100, .bg-gray-50 {
-  background-color: #1a1a1a !important;
-  color: white !important;
-}
-
-/* 确保浅色文本被覆盖 */
-.text-black, .text-gray-900, .text-gray-800 {
-  color: white !important;
-}
-
-/* 确保边框颜色一致 */
-.border-gray-200, .border-gray-300 {
-  border-color: #404040 !important;
 }
 
 .frosted-glass {

@@ -317,7 +317,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <ToastContext.Provider value={{ showToast }}>
-          <div className="relative dark bg-black text-white">
+          <div className="relative">
             {isInitialized ? (
               // 🆕 修改逻辑：只有在已认证时才显示主应用
               authenticated ? (

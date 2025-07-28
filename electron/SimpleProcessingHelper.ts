@@ -413,7 +413,7 @@ export class SimpleProcessingHelper {
           };
         }
         
-        const BASE_URL = 'http://quiz.playoffer.cn';
+        const BASE_URL = 'https://quiz.playoffer.cn';
         
         // 1. 检查积分
         const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
@@ -1751,7 +1751,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
   private async refundCredits(operationId: string, amount: number, reason: string) {
     const token = simpleAuthManager.getToken();
     if (!token) return; // 如果没有token，无法退款
-    const BASE_URL = 'http://quiz.playoffer.cn';
+    const BASE_URL = 'https://quiz.playoffer.cn';
     await fetch(`${BASE_URL}/api/client/credits/refund`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
@@ -1782,7 +1782,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const token = simpleAuthManager.getToken()
       if (!token) return null
 
-      const BASE_URL = 'http://quiz.playoffer.cn'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       const response = await fetch(`${BASE_URL}/api/client/credits`, {
         method: 'GET',
         headers: {
@@ -1828,7 +1828,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
 
       console.time('credits-check-and-deduct-api')
-      const BASE_URL = 'http://quiz.playoffer.cn'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       const response = await fetch(`${BASE_URL}/api/client/credits/check-and-deduct`, {
         method: 'POST',
         headers: {
