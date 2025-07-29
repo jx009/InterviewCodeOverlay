@@ -76,8 +76,10 @@ class Database {
           username,
           email,
           password,
+          updated_at: new Date(),
           user_configs: {
             create: {
+              updated_at: new Date()
               // 创建默认配置
             }
           }
@@ -287,7 +289,8 @@ class Database {
     try {
       return await this.prisma.user_configs.create({
         data: {
-          user_id: parseInt(userId)
+          user_id: parseInt(userId),
+          updated_at: new Date()
         }
       });
     } catch (error) {
