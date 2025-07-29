@@ -36,7 +36,7 @@ async function checkAllModels() {
            '1': 'chatgpt-4o-latest',
            '2': 'claude-3-opus',
            '3': 'claude-3-sonnet', 
-           '4': 'claude-3-5-sonnet-20241022',
+           '4': 'claude-sonnet-4-20250514',
            '5': 'gemini-2.5-pro-preview-06-05',
            '6': 'gemini-2.5-flash-preview-04-17',
            '7': 'gemini-2.5-flash-preview-04-17',

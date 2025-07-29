@@ -384,7 +384,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     try {
       // 简化版：返回固定的AI模型列表
       const models = [
-        'claude-3-5-sonnet-20241022',
+        'claude-sonnet-4-20250514',
         'gpt-4o',
         'gemini-2.0-flash'
       ]

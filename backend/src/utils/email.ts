@@ -253,7 +253,7 @@ export class EmailTemplates {
   
   // 验证码邮件模板
   static getVerificationCodeTemplate(code: string, email: string): { subject: string; html: string; text: string } {
-    const subject = '【InterviewCodeOverlay】邮箱验证码';
+    const subject = '【QuizCoze】邮箱验证码';
     
     const html = `
     <!DOCTYPE html>
@@ -333,7 +333,7 @@ export class EmailTemplates {
         <div class="container">
             <div class="header">
                 <h1>📧 邮箱验证</h1>
-                <p>InterviewCodeOverlay 验证码服务</p>
+                <p>QuizCoze 验证码服务</p>
             </div>
             
             <div class="content">
@@ -363,7 +363,7 @@ export class EmailTemplates {
             </div>
             
             <div class="footer">
-                <p>此邮件由 InterviewCodeOverlay 系统自动发送，请勿回复。</p>
+                <p>此邮件由 QuizCoze 系统自动发送，请勿回复。</p>
                 <p>发送时间：${new Date().toLocaleString('zh-CN', { 
                     timeZone: 'Asia/Shanghai',
                     year: 'numeric',
@@ -379,7 +379,7 @@ export class EmailTemplates {
     </html>`;
     
     const text = `
-【InterviewCodeOverlay】邮箱验证码
+【QuizCoze】邮箱验证码
 
 您好！
 
@@ -396,7 +396,7 @@ export class EmailTemplates {
 
 ⚠️ 为了您的账户安全，请勿将验证码告诉任何人！
 
-此邮件由 InterviewCodeOverlay 系统自动发送，请勿回复。
+此邮件由 QuizCoze 系统自动发送，请勿回复。
 发送时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
     `;
 
@@ -405,7 +405,7 @@ export class EmailTemplates {
 
   // 注册成功欢迎邮件
   static getWelcomeTemplate(username: string): { subject: string; html: string; text: string } {
-    const subject = '🎉 欢迎加入 InterviewCodeOverlay！';
+    const subject = '🎉 欢迎加入 QuizCoze！';
     
     const html = `
     <!DOCTYPE html>
@@ -451,12 +451,12 @@ export class EmailTemplates {
         <div class="container">
             <div class="header">
                 <h1>🎉 注册成功！</h1>
-                <p>欢迎加入 InterviewCodeOverlay</p>
+                <p>欢迎加入 QuizCoze</p>
             </div>
             
             <div class="content">
                 <p>亲爱的 <strong>${username}</strong>，</p>
-                <p>恭喜您成功注册 InterviewCodeOverlay 账户！现在您可以享受以下功能：</p>
+                <p>恭喜您成功注册 QuizCoze 账户！现在您可以享受以下功能：</p>
                 
                 <div class="feature">
                     <h3>🚀 AI智能分析</h3>
@@ -481,7 +481,7 @@ export class EmailTemplates {
     </body>
     </html>`;
     
-    const text = `欢迎加入 InterviewCodeOverlay！
+    const text = `欢迎加入 QuizCoze！
 
 亲爱的 ${username}，
 
@@ -504,7 +504,7 @@ export class EmailService {
       
       const mailOptions = {
         from: {
-          name: 'InterviewCodeOverlay',
+          name: 'QuizCoze',
           address: process.env.EMAIL_FROM || process.env.SMTP_USER || '',
         },
         to: email,
@@ -531,7 +531,7 @@ export class EmailService {
       
       const mailOptions = {
         from: {
-          name: 'InterviewCodeOverlay',
+          name: 'QuizCoze',
           address: process.env.EMAIL_FROM || process.env.SMTP_USER || '',
         },
         to: email,
@@ -557,7 +557,7 @@ export class EmailService {
       
       const mailOptions = {
         from: {
-          name: 'InterviewCodeOverlay Test',
+          name: 'QuizCoze Test',
           address: process.env.EMAIL_FROM || process.env.SMTP_USER || '',
         },
         to: testEmail,
