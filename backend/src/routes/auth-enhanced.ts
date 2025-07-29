@@ -254,10 +254,16 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
     await prisma.userConfig.create({
       data: {
         userId: user.id,
+        programmingModel: 'claude-sonnet-4-20250514',
+        multipleChoiceModel: 'claude-sonnet-4-20250514',
         aiModel: 'claude-sonnet-4-20250514',
+        selectedProvider: 'claude',
+        extractionModel: 'claude-sonnet-4-20250514',
+        solutionModel: 'claude-sonnet-4-20250514',
+        debuggingModel: 'claude-sonnet-4-20250514',
         language: 'python',
         theme: 'system'
-      }
+      } as any
     });
 
     // 5. 处理邀请关系（如果有）
