@@ -92,7 +92,7 @@ export const sendVerificationEmail = async (
       </head>
       <body>
         <div class="header">
-          <h1>${config.app.name}</h1>
+          <h1>QuizCoze</h1>
           <p>${subject}</p>
         </div>
         
@@ -121,7 +121,7 @@ export const sendVerificationEmail = async (
           <p>如有疑问，请联系技术支持。</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;">
           <p style="font-size: 12px; color: #999;">
-            ${config.app.name} v${config.app.version} | 
+            QuizCoze v${config.app.version} | 
             环境: ${config.app.environment}
           </p>
         </div>
@@ -130,7 +130,7 @@ export const sendVerificationEmail = async (
     `;
 
     const textContent = `
-      ${config.app.name} - ${subject}
+      QuizCoze - ${subject}
       
       您好！您正在进行${actionText}操作。
       
@@ -145,7 +145,7 @@ export const sendVerificationEmail = async (
     const mailOptions = {
       from: config.email.from,
       to: email,
-      subject: `[${config.app.name}] ${subject}`,
+      subject: `[QuizCoze] ${subject}`,
       text: textContent,
       html: htmlContent,
     };
