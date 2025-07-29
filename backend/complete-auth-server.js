@@ -135,11 +135,11 @@ function createVerificationEmail(code, email) {
   return {
     from: process.env.SMTP_USER,
     to: email,
-    subject: 'InterviewCodeOverlay - 邮箱验证码',
+    subject: 'QuizCoze - 邮箱验证码',
     html: `
       <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">InterviewCodeOverlay</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">QuizCoze</h1>
           <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">面试代码助手</p>
         </div>
         
