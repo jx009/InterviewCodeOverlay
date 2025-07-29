@@ -146,7 +146,7 @@ function createVerificationEmail(code, email) {
         <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
           <h2 style="color: #333; margin-top: 0;">邮箱验证码</h2>
           <p style="color: #666; font-size: 16px; line-height: 1.6;">
-            您好！您正在注册 InterviewCodeOverlay 账户，请使用以下验证码完成注册：
+            您好！您正在注册 QuizCoze 账户，请使用以下验证码完成注册：
           </p>
           
           <div style="background: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px dashed #667eea;">

@@ -34,6 +34,30 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('./database');
 
+// 导入 Prisma 枚举 - 安全导入方式
+let TransactionType;
+try {
+  const prismaModule = require('@prisma/client');
+  console.log('🔍 Prisma 模块导入成功，可用属性:', Object.keys(prismaModule));
+  TransactionType = prismaModule.point_transactions_transaction_type;
+  console.log('🔍 TransactionType 枚举导入结果:', TransactionType);
+} catch (error) {
+  console.error('❌ TransactionType 枚举导入失败:', error);
+}
+
+// 确保 TransactionType 总是有值
+if (!TransactionType) {
+  console.log('⚠️ 使用回退的枚举定义');
+  TransactionType = {
+    consume: 'consume',
+    recharge: 'recharge', 
+    refund: 'refund',
+    reward: 'reward'
+  };
+}
+
+console.log('🔍 最终使用的 TransactionType:', TransactionType);
+
 // 创建数据库实例
 const db = new Database();
 
@@ -250,18 +274,18 @@ function createVerificationEmail(code, email) {
   return {
     from: process.env.SMTP_USER || 'noreply@example.com',
     to: email,
-    subject: 'InterviewCodeOverlay - 邮箱验证码',
+    subject: 'QuizCoze - 邮箱验证码',
     html: `
       <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">InterviewCodeOverlay</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">QuizCoze</h1>
           <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">面试代码助手</p>
         </div>
         
         <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
           <h2 style="color: #333; margin-top: 0;">邮箱验证码</h2>
           <p style="color: #666; font-size: 16px; line-height: 1.6;">
-            您好！您正在注册 InterviewCodeOverlay 账户，请使用以下验证码完成注册：
+            您好！您正在注册 QuizCoze 账户，请使用以下验证码完成注册：
           </p>
           
           <div style="background: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px dashed #667eea;">
@@ -1014,18 +1038,18 @@ function createPasswordResetEmail(code, email) {
   return {
     from: process.env.SMTP_USER,
     to: email,
-    subject: 'InterviewCodeOverlay - 密码重置验证码',
+    subject: 'QuizCoze - 密码重置验证码',
     html: `
       <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">InterviewCodeOverlay</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">QuizCoze</h1>
           <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">面试代码助手</p>
         </div>
         
         <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
           <h2 style="color: #333; margin-top: 0;">密码重置验证码</h2>
           <p style="color: #666; font-size: 16px; line-height: 1.6;">
-            您好！您正在重置 InterviewCodeOverlay 账户密码，请使用以下验证码完成重置：
+            您好！您正在重置 QuizCoze 账户密码，请使用以下验证码完成重置：
           </p>
           
           <div style="background: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px dashed #ff6b6b;">
@@ -1696,6 +1720,26 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
     // 扣除积分
     const newCredits = currentCredits - requiredCredits
     await db.updateUserCredits(userId, newCredits)
+
+    // 创建积分交易记录到数据库
+    console.log('💰 创建积分交易记录到数据库...')
+    try {
+      const transaction = await db.prisma.pointTransaction.create({
+        data: {
+          userId: userId,
+          transactionType: 'CONSUME',
+          amount: -requiredCredits,
+          balanceAfter: newCredits,
+          modelName: modelName,
+          questionType: questionType.toLowerCase(),
+          description: `搜题操作 [${operationId || `ai_call_${Date.now()}`}]: 使用${modelName}模型处理${questionType === 'multiple_choice' ? '选择题' : '编程题'}`,
+        }
+      });
+      console.log('✅ 积分交易记录创建成功 - 事务ID:', transaction.id)
+    } catch (dbError) {
+      console.error('❌ 创建积分交易记录失败:', dbError)
+      // 注意：这里不抛出错误，避免影响积分扣除的主流程
+    }
 
     // 记录积分交易（如果有相关表的话）
     const transactionData = {
