@@ -227,7 +227,7 @@ model user_configs {
   display               String?  @db.Text
   processing            String?  @db.Text
   created_at            DateTime @default(now())
-  updated_at            DateTime
+  updated_at            DateTime @default(now())
   users                 users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
