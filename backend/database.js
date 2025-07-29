@@ -71,19 +71,19 @@ class Database {
     try {
       const { username, email, password } = userData;
       
-      const user = await this.prisma.user.create({
+      const user = await this.prisma.users.create({
         data: {
           username,
           email,
           password,
-          config: {
+          user_configs: {
             create: {
               // 创建默认配置
             }
           }
         },
         include: {
-          config: true
+          user_configs: true
         }
       });
       
@@ -95,10 +95,10 @@ class Database {
 
   async getUserByEmail(email) {
     try {
-      return await this.prisma.user.findUnique({
+      return await this.prisma.users.findUnique({
         where: { email },
         include: {
-          config: true
+          user_configs: true
         }
       });
     } catch (error) {
@@ -108,10 +108,10 @@ class Database {
 
   async getUserByUsername(username) {
     try {
-      return await this.prisma.user.findUnique({
+      return await this.prisma.users.findUnique({
         where: { username },
         include: {
-          config: true
+          user_configs: true
         }
       });
     } catch (error) {
@@ -121,10 +121,10 @@ class Database {
 
   async getUserById(id) {
     try {
-      return await this.prisma.user.findUnique({
+      return await this.prisma.users.findUnique({
         where: { id: parseInt(id) },
         include: {
-          config: true
+          user_configs: true
         }
       });
     } catch (error) {
@@ -134,7 +134,7 @@ class Database {
 
   async getUserByUsernameOrEmail(identifier) {
     try {
-      const user = await this.prisma.user.findFirst({
+      const user = await this.prisma.users.findFirst({
         where: {
           OR: [
             { username: identifier },
@@ -151,7 +151,7 @@ class Database {
   // 🆕 更新用户密码
   async updateUserPassword(userId, hashedPassword) {
     try {
-      const updatedUser = await this.prisma.user.update({
+      const updatedUser = await this.prisma.users.update({
         where: { id: parseInt(userId) },
         data: { password: hashedPassword }
       });
@@ -164,7 +164,7 @@ class Database {
   // 🆕 更新用户积分
   async updateUserCredits(userId, newCredits) {
     try {
-      const updatedUser = await this.prisma.user.update({
+      const updatedUser = await this.prisma.users.update({
         where: { id: parseInt(userId) },
         data: { points: parseInt(newCredits) }
       });
@@ -177,14 +177,14 @@ class Database {
   // 🆕 记录积分交易
   async recordPointTransaction(transactionData) {
     try {
-      const transaction = await this.prisma.pointTransaction.create({
+      const transaction = await this.prisma.point_transactions.create({
         data: {
-          userId: parseInt(transactionData.userId),
-          transactionType: transactionData.transactionType,
+          user_id: parseInt(transactionData.userId),
+          transaction_type: transactionData.transactionType,
           amount: parseInt(transactionData.amount),
-          balanceAfter: parseInt(transactionData.balanceAfter),
-          modelName: transactionData.modelName || null,
-          questionType: transactionData.questionType || null,
+          balance_after: parseInt(transactionData.balanceAfter),
+          model_name: transactionData.modelName || null,
+          question_type: transactionData.questionType || null,
           description: transactionData.description || null,
           metadata: transactionData.metadata || null
         }
@@ -200,24 +200,24 @@ class Database {
   async getUserPointTransactions(userId, limit = 50, offset = 0) {
     try {
       const [transactions, total] = await Promise.all([
-        this.prisma.pointTransaction.findMany({
-          where: { userId: parseInt(userId) },
-          orderBy: { createdAt: 'desc' },
+        this.prisma.point_transactions.findMany({
+          where: { user_id: parseInt(userId) },
+          orderBy: { created_at: 'desc' },
           take: parseInt(limit),
           skip: parseInt(offset),
           select: {
             id: true,
-            transactionType: true,
+            transaction_type: true,
             amount: true,
-            balanceAfter: true,
-            modelName: true,
-            questionType: true,
+            balance_after: true,
+            model_name: true,
+            question_type: true,
             description: true,
-            createdAt: true
+            created_at: true
           }
         }),
-        this.prisma.pointTransaction.count({
-          where: { userId: parseInt(userId) }
+        this.prisma.point_transactions.count({
+          where: { user_id: parseInt(userId) }
         })
       ]);
       
@@ -235,9 +235,9 @@ class Database {
   // 🆕 获取积分交易统计
   async getPointTransactionStats(userId) {
     try {
-      const stats = await this.prisma.pointTransaction.groupBy({
-        by: ['transactionType'],
-        where: { userId: parseInt(userId) },
+      const stats = await this.prisma.point_transactions.groupBy({
+        by: ['transaction_type'],
+        where: { user_id: parseInt(userId) },
         _sum: { amount: true },
         _count: { id: true }
       });
@@ -250,8 +250,8 @@ class Database {
 
   async getUserConfig(userId) {
     try {
-      let config = await this.prisma.userConfig.findUnique({
-        where: { userId: parseInt(userId) }
+      let config = await this.prisma.user_configs.findUnique({
+        where: { user_id: parseInt(userId) }
       });
 
       if (!config) {
@@ -285,9 +285,9 @@ class Database {
 
   async createDefaultConfig(userId) {
     try {
-      return await this.prisma.userConfig.create({
+      return await this.prisma.user_configs.create({
         data: {
-          userId: parseInt(userId)
+          user_id: parseInt(userId)
         }
       });
     } catch (error) {
@@ -309,11 +309,11 @@ class Database {
         processedUpdate.processing = JSON.stringify(processedUpdate.processing);
       }
 
-      const result = await this.prisma.userConfig.upsert({
-        where: { userId: parseInt(userId) },
+      const result = await this.prisma.user_configs.upsert({
+        where: { user_id: parseInt(userId) },
         update: processedUpdate,
         create: {
-          userId: parseInt(userId),
+          user_id: parseInt(userId),
           ...processedUpdate
         }
       });
@@ -345,12 +345,12 @@ class Database {
 
   async storeRefreshToken(userId, token, expiresAt) {
     try {
-      return await this.prisma.userSession.create({
+      return await this.prisma.user_sessions.create({
         data: {
-          userId: parseInt(userId),
+          user_id: parseInt(userId),
           token: crypto.randomUUID(),
-          refreshToken: token,
-          expiresAt: new Date(expiresAt)
+          refresh_token: token,
+          expires_at: new Date(expiresAt)
         }
       });
     } catch (error) {
@@ -360,17 +360,17 @@ class Database {
 
   async validateRefreshToken(token) {
     try {
-      const session = await this.prisma.userSession.findUnique({
+      const session = await this.prisma.user_sessions.findUnique({
         where: { 
-          refreshToken: token,
-          isActive: true
+          refresh_token: token,
+          is_active: true
         },
         include: {
-          user: true
+          users: true
         }
       });
 
-      if (!session || session.expiresAt < new Date()) {
+      if (!session || session.expires_at < new Date()) {
         return null;
       }
 
@@ -382,9 +382,9 @@ class Database {
 
   async deleteRefreshToken(token) {
     try {
-      await this.prisma.userSession.updateMany({
-        where: { refreshToken: token },
-        data: { isActive: false }
+      await this.prisma.user_sessions.updateMany({
+        where: { refresh_token: token },
+        data: { is_active: false }
       });
     } catch (error) {
       throw error;
@@ -393,14 +393,14 @@ class Database {
 
   async cleanupExpiredTokens() {
     try {
-      await this.prisma.userSession.updateMany({
+      await this.prisma.user_sessions.updateMany({
         where: {
-          expiresAt: {
+          expires_at: {
             lt: new Date()
           }
         },
         data: {
-          isActive: false
+          is_active: false
         }
       });
     } catch (error) {
@@ -411,12 +411,12 @@ class Database {
   // 邮箱验证码相关方法
   async storeEmailVerificationCode(email, code, token, expiresAt) {
     try {
-      return await this.prisma.emailVerificationCode.create({
+      return await this.prisma.email_verification_codes.create({
         data: {
           email,
           code,
           token,
-          expiresAt: new Date(expiresAt)
+          expires_at: new Date(expiresAt)
         }
       });
     } catch (error) {
@@ -426,21 +426,21 @@ class Database {
 
   async verifyEmailCode(token, code) {
     try {
-      const verification = await this.prisma.emailVerificationCode.findUnique({
+      const verification = await this.prisma.email_verification_codes.findUnique({
         where: { 
           token,
-          isUsed: false
+          is_used: false
         }
       });
 
-      if (!verification || verification.expiresAt < new Date() || verification.code !== code) {
+      if (!verification || verification.expires_at < new Date() || verification.code !== code) {
         return null;
       }
 
       // 标记为已使用
-      await this.prisma.emailVerificationCode.update({
+      await this.prisma.email_verification_codes.update({
         where: { id: verification.id },
-        data: { isUsed: true }
+        data: { is_used: true }
       });
 
       return verification;
@@ -454,10 +454,10 @@ class Database {
   // 获取所有模型积分配置
   async getAllModelPointConfigs() {
     try {
-      return await this.prisma.modelPointConfig.findMany({
+      return await this.prisma.model_point_configs.findMany({
         orderBy: [
-          { modelName: 'asc' },
-          { questionType: 'asc' }
+          { model_name: 'asc' },
+          { question_type: 'asc' }
         ]
       });
     } catch (error) {
@@ -468,10 +468,10 @@ class Database {
   // 根据模型名称和题目类型获取配置
   async getModelPointConfig(modelName, questionType) {
     try {
-      return await this.prisma.modelPointConfig.findFirst({
+      return await this.prisma.model_point_configs.findFirst({
         where: {
-          modelName,
-          questionType
+          model_name: modelName,
+          question_type: questionType
         }
       });
     } catch (error) {
@@ -484,25 +484,25 @@ class Database {
     try {
       const { modelName, questionType, cost, description, isActive = true } = configData;
       
-      return await this.prisma.modelPointConfig.upsert({
+      return await this.prisma.model_point_configs.upsert({
         where: {
-          unique_model_question_type: {
-            modelName,
-            questionType
+          model_name_question_type: {
+            model_name: modelName,
+            question_type: questionType
           }
         },
         update: {
           cost: parseInt(cost),
           description,
-          isActive,
-          updatedAt: new Date()
+          is_active: isActive,
+          updated_at: new Date()
         },
         create: {
-          modelName,
-          questionType,
+          model_name: modelName,
+          question_type: questionType,
           cost: parseInt(cost),
           description: description || '',
-          isActive
+          is_active: isActive
         }
       });
     } catch (error) {
@@ -513,11 +513,11 @@ class Database {
   // 删除模型积分配置
   async deleteModelPointConfig(modelName, questionType) {
     try {
-      return await this.prisma.modelPointConfig.delete({
+      return await this.prisma.model_point_configs.delete({
         where: {
-          unique_model_question_type: {
-            modelName,
-            questionType
+          model_name_question_type: {
+            model_name: modelName,
+            question_type: questionType
           }
         }
       });
@@ -545,7 +545,7 @@ class Database {
   // 初始化默认积分配置
   async seedDefaultPointConfigs() {
     try {
-      const existingConfigs = await this.prisma.modelPointConfig.count();
+      const existingConfigs = await this.prisma.model_point_configs.count();
       if (existingConfigs > 0) {
         console.log('💡 积分配置已存在，跳过初始化');
         return;
@@ -555,43 +555,43 @@ class Database {
       
       const defaultConfigs = [
         {
-          modelName: 'gpt-4',
-          questionType: 'MULTIPLE_CHOICE',
+          model_name: 'gpt-4',
+          question_type: 'multiple_choice',
           cost: 2,
           description: 'GPT-4模型处理选择题',
-          isActive: true
+          is_active: true
         },
         {
-          modelName: 'gpt-4',
-          questionType: 'PROGRAMMING',
+          model_name: 'gpt-4',
+          question_type: 'programming',
           cost: 5,
           description: 'GPT-4模型处理编程题',
-          isActive: true
+          is_active: true
         },
         {
-          modelName: 'gpt-3.5-turbo',
-          questionType: 'MULTIPLE_CHOICE',
+          model_name: 'gpt-3.5-turbo',
+          question_type: 'multiple_choice',
           cost: 1,
           description: 'GPT-3.5模型处理选择题',
-          isActive: true
+          is_active: true
         },
         {
-          modelName: 'claude-3-sonnet',
-          questionType: 'PROGRAMMING',
+          model_name: 'claude-3-sonnet',
+          question_type: 'programming',
           cost: 4,
           description: 'Claude-3模型处理编程题',
-          isActive: true
+          is_active: true
         },
         {
-          modelName: 'claude-3-sonnet',
-          questionType: 'MULTIPLE_CHOICE',
+          model_name: 'claude-3-sonnet',
+          question_type: 'multiple_choice',
           cost: 2,
           description: 'Claude-3模型处理选择题',
-          isActive: true
+          is_active: true
         }
       ];
 
-      await this.prisma.modelPointConfig.createMany({
+      await this.prisma.model_point_configs.createMany({
         data: defaultConfigs,
         skipDuplicates: true
       });
