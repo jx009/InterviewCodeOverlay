@@ -72,7 +72,13 @@ export class ShortcutsHelper {
       // Clear both screenshot queues
       this.deps.clearQueues()
 
-      console.log("Cleared queues.")
+      // 🆕 清理所有临时文件和缓存
+      const screenshotHelper = this.deps.getScreenshotHelper?.()
+      if (screenshotHelper) {
+        screenshotHelper.cleanupAllTempFiles()
+      }
+
+      console.log("Cleared queues and cleaned up temp files.")
 
       // Update the view state to 'queue'
       this.deps.setView("queue")

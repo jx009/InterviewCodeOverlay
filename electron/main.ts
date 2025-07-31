@@ -80,6 +80,7 @@ export interface IProcessingHelperDeps {
 
 export interface IShortcutsHelperDeps {
   getMainWindow: () => BrowserWindow | null
+  getScreenshotHelper: () => ScreenshotHelper | null
   takeScreenshot: () => Promise<string>
   getImagePreview: (filepath: string) => Promise<string>
   processingHelper: SimpleProcessingHelper | null
@@ -203,6 +204,7 @@ function initializeHelpers() {
   } as IProcessingHelperDeps)
   state.shortcutsHelper = new ShortcutsHelper({
     getMainWindow,
+    getScreenshotHelper,
     takeScreenshot,
     getImagePreview,
     processingHelper: state.processingHelper,
