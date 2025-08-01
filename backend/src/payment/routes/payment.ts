@@ -9,7 +9,7 @@ import {
   validateWechatNotifyHeaders
 } from '../utils/payment-validator';
 import { PaymentMethod, PaymentStatus } from '../../types/payment';
-import { authenticateToken, optionalAuth, rateLimit, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 const paymentService = getPaymentService();
@@ -88,7 +88,7 @@ router.get('/packages/:id', async (req: Request, res: Response) => {
  * POST /api/payment/orders
  * Body: { packageId: number, paymentMethod?: string }
  */
-router.post('/orders', authenticateToken, rateLimit(10, 60000), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/orders', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { packageId, paymentMethod = 'WECHAT_PAY' } = req.body;
     const userId = req.user?.userId;

@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { initializeDatabase, getConfig } from './config/database';
 import { verifyEmailConfig } from './utils/email';
@@ -81,18 +80,7 @@ async function startServer() {
     // 静态文件服务
     app.use(express.static(path.join(__dirname, '../public')));
 
-    // 速率限制
-    const limiter = rateLimit({
-      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15分钟
-      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // 限制每个IP每15分钟最多100个请求
-      message: {
-        success: false,
-        error: '请求过于频繁，请稍后再试'
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-    });
-    app.use(limiter);
+    // 速率限制已移除
 
     // 健康检查端点
     app.get('/health', (req, res) => {

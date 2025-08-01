@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 // Cookie解析将通过express内置功能处理
 import path from 'path';
 import { initializeDatabase, getConfig } from './config/database';
@@ -108,30 +107,7 @@ async function startServer() {
     // 静态文件服务
     app.use(express.static(path.join(__dirname, '../public')));
 
-    // 增强的速率限制
-    const generalLimiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15分钟
-      max: 100, // 每个IP每15分钟最多100个请求
-      message: {
-        success: false,
-        error: '请求过于频繁，请稍后再试'
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-    });
-
-    const authLimiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15分钟
-      max: 20, // 认证相关请求更严格限制
-      message: {
-        success: false,
-        error: '登录尝试过于频繁，请15分钟后再试'
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-    });
-
-    app.use(generalLimiter);
+    // 速率限制已移除
 
     // 添加调试中间件
     app.use((req, res, next) => {
