@@ -838,76 +838,103 @@ export default function ProfilePage() {
 
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">🤖 AI模型介绍</h2>
-              <p className="text-gray-300 mb-6">正确答案与模型价格呈正比，按需选择</p>
+              <p className="text-gray-300 mb-6">模型性能与积分消耗成正比，请根据需要选择适合的模型</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* o4-mini */}
-                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-2">o4-mini</h3>
-                  <p className="text-sm text-gray-300 mb-3">青春版逻辑推理和编程模型，价格简单，威力强大</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-400">⭐ 强力</span>
-                    <span className="text-green-400 font-semibold">50 点 / 次</span>
+                {/* claude-4-sonnet - 编程题首选 */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 ring-2 ring-yellow-500">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-white">claude-4-sonnet</h3>
+                    <span className="bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold">编程题首选</span>
+                  </div>
+                  <p className="text-sm text-gray-300 mb-3">均衡型AI助手，在编程和逻辑推理方面表现优异</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-green-400">🎯 均衡</span>
+                  </div>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-blue-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-blue-400 font-semibold">选择题：8积分 | 编程题：12积分</div>
                   </div>
                 </div>
 
-                {/* o4-mini-high */}
-                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-2">o4-mini-high</h3>
-                  <p className="text-sm text-gray-300 mb-3">最新最强大的逻辑推理和编程模型，价格有点贵，威力强大</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-400">⭐ 强力</span>
-                    <span className="text-green-400 font-semibold">250 点 / 次</span>
+                {/* gpt-4o - 编程题首选 */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 ring-2 ring-yellow-500">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-white">gpt-4o</h3>
+                    <span className="bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold">编程题首选</span>
                   </div>
-                </div>
-
-                {/* gemini-pro-2.5 */}
-                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-2">gemini-pro-2.5</h3>
-                  <p className="text-sm text-gray-300 mb-3">智商超群，适合编程、速图、逻辑分析</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-400">⭐ 强力</span>
-                    <span className="text-green-400 font-semibold">50 点 / 次</span>
+                  <p className="text-sm text-gray-300 mb-3">全能型语言模型，在文本理解和知识问答方面见长</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-blue-400">🧠 全能</span>
                   </div>
-                </div>
-
-                {/* gemini-flash-2.5 */}
-                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-2">gemini-flash-2.5</h3>
-                  <p className="text-sm text-gray-300 mb-3">便宜且快，性能不俗</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-orange-400">⚡ 快速</span>
-                    <span className="text-orange-400 font-semibold">10 点 / 次</span>
-                  </div>
-                </div>
-
-                {/* claude-4-sonnet */}
-                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-2">claude-4-sonnet</h3>
-                  <p className="text-sm text-gray-300 mb-3">智商优秀，适合编程、行测题目</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-400">⭐ 强力</span>
-                    <span className="text-green-400 font-semibold">15 点 / 次</span>
-                  </div>
-                </div>
-
-                {/* gpt-4o */}
-                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <h3 className="text-lg font-semibold text-white mb-2">gpt-4o</h3>
-                  <p className="text-sm text-gray-300 mb-3">智商优秀，适合语言分析、通识类题目</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-400">⭐ 强力</span>
-                    <span className="text-green-400 font-semibold">12 点 / 次</span>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-blue-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-blue-400 font-semibold">选择题：6积分 | 编程题：10积分</div>
                   </div>
                 </div>
 
                 {/* gpt-4o-mini */}
                 <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
                   <h3 className="text-lg font-semibold text-white mb-2">gpt-4o-mini</h3>
-                  <p className="text-sm text-gray-300 mb-3">很快很便宜，有点蠢</p>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-orange-400">⚡ 快速</span>
-                    <span className="text-orange-400 font-semibold">5 点 / 次</span>
+                  <p className="text-sm text-gray-300 mb-3">轻量版通用模型，响应迅速，适合基础问题处理</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-cyan-400">🔹 轻量</span>
+                  </div>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-green-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-green-400 font-semibold">选择题：3积分 | 编程题：4积分</div>
+                  </div>
+                </div>
+
+                {/* gemini-flash-2.5 */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">gemini-flash-2.5</h3>
+                  <p className="text-sm text-gray-300 mb-3">高速响应模型，快速准确，适合日常题目解答</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-orange-400">⚡ 高速</span>
+                  </div>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-green-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-green-400 font-semibold">选择题：5积分 | 编程题：8积分</div>
+                  </div>
+                </div>
+
+                {/* o4-mini */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">o4-mini</h3>
+                  <p className="text-sm text-gray-300 mb-3">轻量级智能推理模型，经济实用，性能稳定</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-blue-400">💡 智能</span>
+                  </div>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-orange-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-orange-400 font-semibold">选择题：30积分 | 编程题：40积分</div>
+                  </div>
+                </div>
+
+                {/* gemini-pro-2.5 */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">gemini-pro-2.5</h3>
+                  <p className="text-sm text-gray-300 mb-3">多模态专业AI，擅长代码理解和复杂推理分析</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-green-400">⭐ 专业</span>
+                  </div>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-orange-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-orange-400 font-semibold">选择题：30积分 | 编程题：40积分</div>
+                  </div>
+                </div>
+
+                {/* o4-mini-high */}
+                <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <h3 className="text-lg font-semibold text-white mb-2">o4-mini-high</h3>
+                  <p className="text-sm text-gray-300 mb-3">高级推理引擎，逻辑能力卓越，适合复杂问题求解</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-purple-400">🚀 超强</span>
+                  </div>
+                  <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-red-400">
+                    <div className="text-sm font-bold text-white mb-1">积分消耗</div>
+                    <div className="text-red-400 font-semibold">选择题：150积分 | 编程题：250积分</div>
                   </div>
                 </div>
               </div>
