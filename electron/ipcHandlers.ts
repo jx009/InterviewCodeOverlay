@@ -406,6 +406,25 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // 🆕 LLM配置管理
+  ipcMain.handle("llm-config:refresh", async () => {
+    try {
+      const processingHelper = deps.processingHelper
+      if (processingHelper && typeof processingHelper.refreshLLMConfig === 'function') {
+        const success = await processingHelper.refreshLLMConfig()
+        return { 
+          success: success, 
+          message: success ? 'LLM配置刷新成功' : 'LLM配置刷新失败' 
+        }
+      } else {
+        return { success: false, error: 'ProcessingHelper不可用' }
+      }
+    } catch (error) {
+      console.error("刷新LLM配置失败:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
   // Handle notification actions
   ipcMain.handle("handle-notification-action", async (_event, action) => {
     try {

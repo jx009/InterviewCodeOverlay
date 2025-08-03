@@ -12,6 +12,7 @@ import { ResponseUtils } from './utils/response';
 import authRoutes from './routes/auth';
 import configRoutes from './routes/config';
 import inviteRoutes from './routes/invite-simple';
+import llmConfigRoutes from './routes/llm-config';
 // 导入支付路由
 import { paymentRoutes } from './payment';
 
@@ -91,8 +92,193 @@ async function startServer() {
         environment: config.app.environment,
         version: config.app.version,
         database: 'mysql',
-        redis: 'connected'
+        redis: 'connected',
+        llmRouteAdded: true // 添加标识表明我们的修改生效了
       });
+    });
+
+    // 添加测试端点确认修改生效
+    app.get('/api/test-modification', (req, res) => {
+      console.log('📡 测试修改端点被访问');
+      res.json({
+        success: true,
+        message: '服务器修改已生效',
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // 添加LLM配置数据库测试端点
+    app.get('/api/test-llm-db', async (req, res) => {
+      try {
+        console.log('📡 测试LLM配置数据库端点被访问');
+        const { prisma } = require('./config/database');
+        
+        // 检查表是否存在
+        const tableExists = await prisma.$queryRaw`
+          SELECT COUNT(*) as count FROM information_schema.tables 
+          WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+        `;
+        
+        console.log('📋 llm_config表检查结果:', tableExists);
+        
+        if (!tableExists[0] || tableExists[0].count === 0) {
+          return res.json({
+            success: true,
+            message: 'llm_config表不存在',
+            tableExists: false,
+            configs: []
+          });
+        }
+
+        // 从数据库读取LLM配置
+        const configs = await prisma.$queryRaw`
+          SELECT config_key, config_value, is_active FROM llm_config
+        `;
+        
+        console.log('📦 数据库配置查询结果:', configs);
+        
+        const activeConfigs = await prisma.$queryRaw`
+          SELECT config_key, config_value FROM llm_config WHERE is_active = 1
+        `;
+        
+        res.json({
+          success: true,
+          message: 'LLM配置数据库测试成功',
+          tableExists: true,
+          allConfigs: configs,
+          activeConfigs: activeConfigs,
+          activeCount: activeConfigs.length
+        });
+      } catch (error) {
+        console.error('❌ LLM配置数据库测试失败:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+          message: 'LLM配置数据库测试失败'
+        });
+      }
+    });
+
+    // 添加LLM配置路由（直接在server.ts中）
+    app.get('/api/llm/config', async (req, res) => {
+      try {
+        console.log('📡 收到LLM配置请求');
+        
+        const sessionId = req.headers['x-session-id'] as string;
+        if (!sessionId) {
+          console.log('❌ 未提供会话ID');
+          return res.status(401).json({
+            success: false,
+            error: '未提供会话ID'
+          });
+        }
+        
+        // 使用正确的导入路径
+        const { SessionManager } = require('./config/redis-simple');
+        const sessionManager = new SessionManager();
+        const sessionValidation = await sessionManager.validateSession(sessionId);
+        
+        if (!sessionValidation.valid) {
+          console.log('❌ 会话无效');
+          return res.status(401).json({
+            success: false,
+            error: '会话已过期或无效'
+          });
+        }
+        
+        // 检查数据库表是否存在
+        const { prisma } = require('./config/database');
+        const tableExists = await prisma.$queryRaw`
+          SELECT COUNT(*) as count FROM information_schema.tables 
+          WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+        `;
+        
+        if (!tableExists[0] || tableExists[0].count === 0) {
+          console.warn('⚠️ llm_config表不存在，返回默认配置');
+          const defaultConfig = {
+            baseUrl: 'https://ismaque.org/v1',
+            apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+            maxRetries: 2,
+            timeout: 30000,
+            provider: 'ismaque'
+          };
+          
+          return res.json({
+            success: true,
+            config: defaultConfig,
+            source: 'default'
+          });
+        }
+
+        // 从数据库读取LLM配置
+        const configs = await prisma.$queryRaw`
+          SELECT config_key, config_value FROM llm_config WHERE is_active = 1
+        `;
+        
+        console.log('📦 数据库配置查询结果:', configs);
+        
+        if (!configs || configs.length === 0) {
+          console.warn('⚠️ 数据库中未找到配置，返回默认配置');
+          const defaultConfig = {
+            baseUrl: 'https://ismaque.org/v1',
+            apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+            maxRetries: 2,
+            timeout: 30000,
+            provider: 'ismaque'
+          };
+          
+          return res.json({
+            success: true,
+            config: defaultConfig,
+            source: 'default'
+          });
+        }
+
+        // 将配置转换为对象格式
+        const configObj = {};
+        configs.forEach(config => {
+          configObj[config.config_key] = config.config_value;
+        });
+
+        // 构建返回的配置对象
+        const llmConfig = {
+          baseUrl: configObj.base_url || 'https://ismaque.org/v1',
+          apiKey: configObj.api_key || 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+          maxRetries: parseInt(configObj.max_retries || '2'),
+          timeout: parseInt(configObj.timeout || '30000'),
+          provider: configObj.provider || 'ismaque'
+        };
+
+        console.log('✅ 返回LLM配置:', { 
+          provider: llmConfig.provider, 
+          baseUrl: llmConfig.baseUrl,
+          hasApiKey: !!llmConfig.apiKey
+        });
+
+        res.json({
+          success: true,
+          config: llmConfig,
+          source: 'database'
+        });
+      } catch (error) {
+        console.error('❌ 获取LLM配置失败:', error);
+        
+        // 发生异常时返回默认配置
+        const defaultConfig = {
+          baseUrl: 'https://ismaque.org/v1',
+          apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+          maxRetries: 2,
+          timeout: 30000,
+          provider: 'ismaque'
+        };
+        
+        res.json({
+          success: true,
+          config: defaultConfig,
+          source: 'fallback',
+          error: error.message
+        });
+      }
     });
 
     // 添加会话状态检查路由
@@ -160,12 +346,66 @@ async function startServer() {
           { expiresIn: '7d' }
         );
 
+        // 获取LLM配置
+        let llmConfig = null;
+        try {
+          // 检查数据库表是否存在
+          const tableExists = await prisma.$queryRaw`
+            SELECT COUNT(*) as count FROM information_schema.tables 
+            WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+          `;
+          
+          if (tableExists[0] && tableExists[0].count > 0) {
+            // 从数据库读取LLM配置
+            const configs = await prisma.$queryRaw`
+              SELECT config_key, config_value FROM llm_config WHERE is_active = 1
+            `;
+            
+            if (configs && configs.length > 0) {
+              const configObj = {};
+              configs.forEach(config => {
+                configObj[config.config_key] = config.config_value;
+              });
+
+              llmConfig = {
+                baseUrl: configObj.base_url || 'https://ismaque.org/v1',
+                apiKey: configObj.api_key || 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+                maxRetries: parseInt(configObj.max_retries || '2'),
+                timeout: parseInt(configObj.timeout || '30000'),
+                provider: configObj.provider || 'ismaque'
+              };
+              console.log('📦 从数据库加载LLM配置成功');
+            }
+          }
+        } catch (llmError) {
+          console.warn('⚠️ 获取LLM配置失败，将使用默认配置:', llmError.message);
+        }
+
+        // 如果没有从数据库获取到配置，使用默认配置
+        if (!llmConfig) {
+          llmConfig = {
+            baseUrl: 'https://ismaque.org/v1',
+            apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+            maxRetries: 2,
+            timeout: 30000,
+            provider: 'ismaque'
+          };
+          console.log('📦 使用默认LLM配置');
+        }
+
         console.log('✅ 会话有效，已生成token', { userId: user.id, username: user.username });
         return res.json({
           success: true,
+          message: '会话有效',
           user,
           sessionId,
-          token
+          token,
+          llmConfig, // 添加LLM配置到响应中
+          debugInfo: {
+            llmConfigSource: llmConfig ? (llmConfig.provider !== 'ismaque' ? 'database' : 'default') : 'null',
+            timestamp: new Date().toISOString(),
+            modification: 'server-restart-' + Date.now()
+          }
         });
       } catch (error) {
         console.error('❌ 会话状态检查失败:', error);
@@ -196,6 +436,13 @@ async function startServer() {
     app.use('/api/auth', authRoutes);
     app.use('/api/config', configRoutes);
     app.use('/api/invite', inviteRoutes);
+    console.log('🔧 注册LLM配置路由: /api');
+    app.use('/api', llmConfigRoutes);
+    
+    // 添加简单的LLM路由测试
+    const simpleLLMRoutes = require('../simple-llm-route-test');
+    console.log('🔧 注册简单LLM测试路由: /api');
+    app.use('/api', simpleLLMRoutes);
     
     // 支付路由
     app.use('/api/payment', paymentRoutes);
@@ -207,6 +454,10 @@ async function startServer() {
     // 客户端积分路由
     const clientCreditsRoutes = require('./routes/client-credits').default;
     app.use('/api/client/credits', clientCreditsRoutes);
+    
+    // 客户端LLM配置路由
+    const clientLLMConfigRoutes = require('./routes/client-llm-config').default;
+    app.use('/api/client/llm-config', clientLLMConfigRoutes);
     
     // 搜题路由
     const searchRoutes = require('./routes/search').default;

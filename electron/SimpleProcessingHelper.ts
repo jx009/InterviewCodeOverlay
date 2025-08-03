@@ -18,8 +18,14 @@ if (process.stderr.setEncoding) {
   process.stderr.setEncoding('utf8')
 }
 
-// 统一的API密钥 - 用户无需配置
-const ISMAQUE_API_KEY = "sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP"
+// LLM配置接口
+interface LLMConfig {
+  baseUrl: string;
+  apiKey: string;
+  maxRetries: number;
+  timeout: number;
+  provider: string;
+}
 
 // 类型定义
 type CreditResult = { 
@@ -57,30 +63,152 @@ export class SimpleProcessingHelper {
   private lastCreditsFetchTime: number = 0
   private CREDITS_CACHE_TTL = 60000 // 1分钟缓存时间
   private creditModelsCache: Map<string, number> = new Map() // 缓存模型积分配置
+  
+  // 🆕 LLM配置缓存
+  private llmConfig: LLMConfig | null = null
+  private lastLLMConfigFetchTime: number = 0
+  private LLM_CONFIG_CACHE_TTL = 300000 // 5分钟缓存时间
 
   constructor(deps: IProcessingHelperDeps) {
     this.deps = deps
     this.screenshotHelper = deps.getScreenshotHelper()
     
-    // Initialize AI client
-    this.initializeAIClient()
+    // AI客户端将在需要时动态初始化
   }
   
   /**
-   * Initialize the AI client with fixed API key
+   * 从后端获取LLM配置
    */
-  private initializeAIClient(): void {
+  private async getLLMConfig(forceRefresh = false): Promise<LLMConfig | null> {
+    const now = Date.now()
+    
+    // 如果有缓存且未过期，直接返回缓存数据
+    if (!forceRefresh && this.llmConfig && (now - this.lastLLMConfigFetchTime) < this.LLM_CONFIG_CACHE_TTL) {
+      console.log("✅ 使用缓存的LLM配置")
+      return this.llmConfig
+    }
+
     try {
-      this.ismaqueClient = new OpenAI({ 
-        apiKey: ISMAQUE_API_KEY,
-        baseURL: "https://ismaque.org/v1",
-        maxRetries: 2
+      const token = simpleAuthManager.getToken()
+      if (!token) {
+        console.error("❌ 未找到认证token，无法获取LLM配置")
+        // 降级到默认配置
+        return this.getDefaultLLMConfig()
+      }
+
+      const BASE_URL = 'https://quiz.playoffer.cn'
+      console.log("🔍 正在获取LLM配置，URL:", `${BASE_URL}/api/client/credits?llm-config=true`)
+      
+      const response = await fetch(`${BASE_URL}/api/client/credits?llm-config=true`, {
+        method: 'GET',
+        headers: {
+          'X-Session-Id': token,
+          'Content-Type': 'application/json'
+        }
       })
-      console.log("✅ Ismaque.org API客户端初始化成功")
+
+      console.log("📡 LLM配置请求响应状态:", response.status, response.statusText)
+
+      if (!response.ok) {
+        console.error("❌ 获取LLM配置失败:", response.status, response.statusText)
+        
+        // 如果是404，说明API接口不存在，使用默认配置
+        if (response.status === 404) {
+          console.warn("⚠️ LLM配置API不存在，使用默认配置")
+          return this.getDefaultLLMConfig()
+        }
+        
+        // 其他错误也降级到默认配置
+        return this.getDefaultLLMConfig()
+      }
+
+      const data = await response.json()
+      console.log("📦 LLM配置响应数据:", data)
+      
+      if (data.success && data.data && data.data.config) {
+        // 更新缓存
+        this.llmConfig = data.data.config
+        this.lastLLMConfigFetchTime = now
+        console.log("✅ LLM配置获取成功:", { 
+          provider: data.data.config.provider, 
+          baseUrl: data.data.config.baseUrl,
+          hasApiKey: !!data.data.config.apiKey,
+          source: data.data.source
+        })
+        return data.data.config
+      } else {
+        console.error("❌ LLM配置响应格式错误:", data)
+        console.warn("⚠️ 降级到默认配置")
+        return this.getDefaultLLMConfig()
+      }
+    } catch (error) {
+      console.error("❌ 获取LLM配置异常:", error)
+      console.warn("⚠️ 网络异常，降级到默认配置")
+      return this.getDefaultLLMConfig()
+    }
+  }
+
+  /**
+   * 获取默认LLM配置（降级方案）
+   */
+  private getDefaultLLMConfig(): LLMConfig {
+    console.log("🔧 使用默认LLM配置")
+    return {
+      baseUrl: "https://ismaque.org/v1",
+      apiKey: "sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP",
+      maxRetries: 2,
+      timeout: 30000,
+      provider: "ismaque"
+    }
+  }
+
+  /**
+   * 动态初始化AI客户端
+   */
+  private async initializeAIClient(): Promise<boolean> {
+    try {
+      // 获取LLM配置
+      const config = await this.getLLMConfig()
+      if (!config) {
+        console.error("❌ 无法获取LLM配置，AI客户端初始化失败")
+        return false
+      }
+
+      // 使用配置初始化AI客户端
+      this.ismaqueClient = new OpenAI({ 
+        apiKey: config.apiKey,
+        baseURL: config.baseUrl,
+        maxRetries: config.maxRetries || 2,
+        timeout: config.timeout || 30000
+      })
+      
+      console.log(`✅ AI客户端初始化成功 (${config.provider})`)
+      return true
     } catch (error) {
       console.error("❌ AI客户端初始化失败:", error)
       this.ismaqueClient = null
+      return false
     }
+  }
+
+  /**
+   * 确保AI客户端已初始化
+   */
+  private async ensureAIClient(): Promise<boolean> {
+    if (!this.ismaqueClient) {
+      return await this.initializeAIClient()
+    }
+    return true
+  }
+
+  /**
+   * 刷新LLM配置并重新初始化客户端
+   */
+  public async refreshLLMConfig(): Promise<boolean> {
+    console.log("🔄 刷新LLM配置...")
+    this.llmConfig = null
+    this.ismaqueClient = null
+    return await this.initializeAIClient()
   }
 
   /**
@@ -359,13 +487,10 @@ export class SimpleProcessingHelper {
     try {
       const mainWindow = this.deps.getMainWindow()
       
-      if (!this.ismaqueClient) {
-        this.initializeAIClient()
-        if (!this.ismaqueClient) {
-          return {
-            success: false,
-            error: "AI客户端初始化失败，请重启应用"
-          }
+      if (!(await this.ensureAIClient())) {
+        return {
+          success: false,
+          error: "AI客户端初始化失败，请检查网络连接或联系管理员"
         }
       }
 
@@ -554,10 +679,10 @@ export class SimpleProcessingHelper {
    */
   private async generateSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
     try {
-      if (!this.ismaqueClient) {
+      if (!(await this.ensureAIClient())) {
         return {
           success: false,
-          error: "AI客户端未初始化"
+          error: "AI客户端初始化失败"
         }
       }
 
@@ -1175,10 +1300,10 @@ ${questionsText}
 
       const imageDataList = screenshots.map(screenshot => screenshot.data)
       
-      if (!this.ismaqueClient) {
+      if (!(await this.ensureAIClient())) {
         return {
           success: false,
-          error: "AI客户端未初始化"
+          error: "AI客户端初始化失败，无法处理调试截图"
         }
       }
       
@@ -1334,8 +1459,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
     signal: AbortSignal
   ): Promise<'programming' | 'multiple_choice'> {
     try {
-      if (!this.ismaqueClient) {
-        throw new Error("AI客户端未初始化")
+      if (!(await this.ensureAIClient())) {
+        throw new Error("AI客户端初始化失败，无法识别题目类型")
       }
 
       // 固定使用 gemini-2.5-flash-preview-04-17 进行截图识别
@@ -1406,10 +1531,10 @@ ${problemInfo.example_output || "未提供示例输出。"}
     signal: AbortSignal
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      if (!this.ismaqueClient) {
+      if (!(await this.ensureAIClient())) {
         return {
           success: false,
-          error: "AI客户端未初始化"
+          error: "AI客户端初始化失败，无法提取题目信息"
         }
       }
 
