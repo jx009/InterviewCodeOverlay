@@ -61,6 +61,12 @@ export class ShortcutsHelper {
       await this.deps.processingHelper?.processScreenshots()
     })
 
+    // 多选题快捷键
+    globalShortcut.register("CommandOrControl+Shift+Enter", async () => {
+      console.log("Ctrl/Cmd + Shift + Enter pressed. Processing as multiple choice questions...")
+      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice()
+    })
+
     globalShortcut.register("CommandOrControl+R", () => {
       console.log(
         "Command + R pressed. Canceling requests and resetting queues..."

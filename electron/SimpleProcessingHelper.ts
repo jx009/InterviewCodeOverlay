@@ -212,6 +212,71 @@ export class SimpleProcessingHelper {
   }
 
   /**
+   * 核心方法：处理截图（强制多选题模式）
+   * 强制登录流程：检查认证 → 获取配置 → 处理AI → 返回结果
+   */
+  public async processScreenshotsAsMultipleChoice(): Promise<void> {
+    const mainWindow = this.deps.getMainWindow()
+    if (!mainWindow) return
+
+    console.log('🚀 开始多选题AI处理流程...')
+
+    // Step 1: 强制检查用户认证
+    console.log('🔐 执行认证检查...')
+    const isAuthenticated = await simpleAuthManager.isAuthenticated()
+    console.log('🔐 认证检查结果:', isAuthenticated)
+    
+    if (!isAuthenticated) {
+      console.log('❌ 用户未认证，必须登录')
+      await this.showLoginDialog()
+      return
+    }
+
+    // Step 2: 获取用户和配置
+    console.log('👤 获取用户信息...')
+    const user = simpleAuthManager.getCurrentUser()
+    console.log('👤 用户信息:', user ? `${user.username} (${user.id})` : 'null')
+    
+    console.log('⚙️ 获取用户配置...')
+    // 强制刷新配置以确保获取最新设置
+    console.log('🔄 强制刷新用户配置以获取最新设置...')
+    await simpleAuthManager.refreshUserConfig(true) // 强制刷新
+    
+    const userConfig = simpleAuthManager.getUserConfig()
+    console.log('⚙️ 用户配置:', userConfig ? {
+      aiModel: userConfig.aiModel,
+      programmingModel: userConfig.programmingModel,
+      multipleChoiceModel: userConfig.multipleChoiceModel,
+      language: userConfig.language
+    } : 'null')
+    
+    if (!user || !userConfig) {
+      console.log('❌ 用户信息或配置获取失败，需要重新登录')
+      console.log('  - 用户信息存在:', !!user)
+      console.log('  - 用户配置存在:', !!userConfig)
+      await this.showLoginDialog()
+      return
+    }
+
+    console.log(`✅ 用户认证成功: ${user.username}`)
+    console.log(`📋 使用配置: 多选题模型=${userConfig.multipleChoiceModel || userConfig.aiModel || 'gpt-3.5-turbo'}`)
+
+    // Step 3: 使用Web端语言设置（优先级最高）
+    const finalLanguage = userConfig.language || 'python'
+
+    console.log(`🎯 最终使用语言 (来自Web配置): ${finalLanguage}`)
+
+    // Step 4: 执行多选题AI处理
+    const view = this.deps.getView()
+    if (view === "queue") {
+      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage)
+    } else {
+      console.log('⚠️ 多选题模式只支持主队列处理')
+      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage)
+    }
+  }
+
+  /**
    * 核心方法：处理截图
    * 强制登录流程：检查认证 → 获取配置 → 处理AI → 返回结果
    */
@@ -294,6 +359,110 @@ export class SimpleProcessingHelper {
     throw new Error("应用程序5秒后初始化失败")
   }
 
+
+  /**
+   * 处理主队列截图（强制多选题模式）
+   */
+  private async processMainQueueAsMultipleChoice(userConfig: any, language: string): Promise<void> {
+    const mainWindow = this.deps.getMainWindow()
+    if (!mainWindow) return
+
+    console.log('📸 开始处理主队列截图（多选题模式）...')
+    mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.INITIAL_START)
+    
+    const screenshotQueue = this.screenshotHelper.getScreenshotQueue()
+    
+    // 检查截图队列
+    if (!screenshotQueue || screenshotQueue.length === 0) {
+      console.log("❌ 主队列中没有截图")
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS)
+      return
+    }
+
+    // 检查文件是否存在
+    const existingScreenshots = screenshotQueue.filter(path => fs.existsSync(path))
+    if (existingScreenshots.length === 0) {
+      console.log("❌ 截图文件不存在")
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS)
+      return
+    }
+
+    try {
+      // 初始化AbortController
+      this.currentProcessingAbortController = new AbortController()
+      const { signal } = this.currentProcessingAbortController
+
+      // 加载截图数据
+      const screenshots = await Promise.all(
+        existingScreenshots.map(async (path) => {
+          try {
+            return {
+              path,
+              preview: await this.screenshotHelper.getImagePreview(path),
+              data: fs.readFileSync(path).toString('base64')
+            }
+          } catch (err) {
+            console.error(`读取截图错误 ${path}:`, err)
+            return null
+          }
+        })
+      )
+
+      const validScreenshots = screenshots.filter(Boolean)
+      
+      if (validScreenshots.length === 0) {
+        throw new Error("加载截图数据失败")
+      }
+
+      // 处理截图（强制为多选题）
+      const result = await this.processScreenshotsWithAIAsMultipleChoice(validScreenshots, userConfig, language, signal)
+
+      if (!result.success) {
+        console.log("❌ 多选题AI处理失败:", result.error)
+        
+        // 检查是否是认证错误
+        if (this.isAuthError(result.error)) {
+          await simpleAuthManager.logout()
+          await this.showLoginDialog()
+        } else {
+          mainWindow.webContents.send(
+            this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
+            result.error
+          )
+        }
+        
+        this.deps.setView("queue")
+        return
+      }
+
+      // 成功处理
+      console.log("✅ 多选题AI处理成功")
+      mainWindow.webContents.send(
+        this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
+        'data' in result ? result.data : null
+      )
+      this.deps.setView("solutions")
+
+    } catch (error: any) {
+      console.error("多选题处理错误:", error)
+      
+      if (error.name === 'AbortError') {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
+          "多选题处理已被用户取消"
+        )
+      } else {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
+          error.message || "多选题处理失败，请重试"
+        )
+      }
+      
+      this.deps.setView("queue")
+    } finally {
+      this.currentProcessingAbortController = null
+    }
+  }
 
   /**
    * 处理主队列截图
@@ -469,6 +638,200 @@ export class SimpleProcessingHelper {
     simpleAuthManager.once('login-success', handleLoginSuccess)
     simpleAuthManager.once('login-error', handleLoginError)
     simpleAuthManager.once('login-cancelled', handleLoginCancelled)
+  }
+
+  /**
+   * 使用AI处理截图（强制多选题模式）
+   */
+  private async processScreenshotsWithAIAsMultipleChoice(
+    screenshots: Array<{ path: string; data: string }>,
+    userConfig: any,
+    language: string,
+    signal: AbortSignal
+  ) {
+    // 生成唯一操作ID，用于跟踪整个处理过程中的积分消费
+    const operationId = `ai_call_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`📝 创建多选题操作ID: ${operationId}`);
+    
+    try {
+      const mainWindow = this.deps.getMainWindow()
+      
+      if (!(await this.ensureAIClient())) {
+        return {
+          success: false,
+          error: "AI客户端初始化失败，请检查网络连接或联系管理员"
+        }
+      }
+
+      // Step 1: 强制设定为多选题，跳过题目类型识别
+      const questionType = 'multiple_choice'
+      
+      if (mainWindow) {
+        mainWindow.webContents.send("processing-status", {
+          message: "检测到多选题模式，正在提取题目信息...",
+          progress: 20
+        })
+      }
+
+      // 确定要使用的模型（多选题模型）
+      const modelName = userConfig.multipleChoiceModel || userConfig.aiModel || 'gpt-3.5-turbo';
+        
+      // Step 1.5: 积分检查和扣除
+      if (mainWindow) {
+        mainWindow.webContents.send("processing-status", {
+          message: "检查积分余额...",
+          progress: 15
+        })
+      }
+      
+      // 使用直接的检查方式，避免类型错误
+      try {
+        // 先获取token
+        const token = simpleAuthManager.getToken();
+        if (!token) {
+          return {
+            success: false,
+            error: "用户未登录，请先登录"
+          };
+        }
+        
+        const BASE_URL = 'https://quiz.playoffer.cn';
+        
+        // 1. 检查积分
+        const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+          body: JSON.stringify({ modelName, questionType })
+        });
+        
+        const checkResult = await checkResponse.json();
+        console.log('✅ 多选题积分检查结果:', checkResult);
+        
+        if (!checkResponse.ok || !checkResult.sufficient) {
+          return {
+            success: false,
+            error: checkResult.error || `积分不足 (需要 ${checkResult.requiredCredits || '未知'} 积分)`
+          };
+        }
+        
+        // 2. 扣除积分
+        const deductResponse = await fetch(`${BASE_URL}/api/client/credits/deduct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+          body: JSON.stringify({ modelName, questionType, operationId })
+        });
+        
+        const deductResult = await deductResponse.json();
+        console.log('💰 多选题积分扣除结果:', deductResult);
+        
+        if (!deductResponse.ok || !deductResult.success) {
+          return {
+            success: false,
+            error: deductResult.error || '积分扣除失败'
+          };
+        }
+        
+        // 记录积分操作，便于后续退款
+        this.pendingCreditOperations.set(operationId, {
+          modelName,
+          questionType,
+          amount: checkResult.requiredCredits || 0
+        });
+        
+        console.log(`✅ 多选题积分检查通过，扣除成功，剩余积分: ${deductResult.newCredits || '未知'}`);
+      } catch (creditsError) {
+        console.error("多选题积分检查或扣除失败:", creditsError);
+        return {
+          success: false,
+          error: `积分处理失败: ${creditsError.message || '未知错误'}`
+        };
+      }
+
+      const imageDataList = screenshots.map(screenshot => screenshot.data)
+      
+      // 强制提取多选题信息（跳过类型识别）
+      const problemInfo = await this.extractMultipleChoiceProblems(imageDataList, 'gemini-2.5-flash-preview-04-17', signal)
+      
+      if (!problemInfo.success) {
+        // 提取信息失败，退款积分
+        try {
+          await this.refundCredits(operationId, 0, "多选题信息提取失败: " + (problemInfo.error || "未知错误"));
+        } catch (refundError) {
+          console.error("退款失败:", refundError);
+          // 继续处理，不中断流程
+        }
+        return problemInfo
+      }
+      
+      console.log("✅ 多选题信息提取成功:", (problemInfo as any).data)
+
+      // Step 2: 生成多选题解决方案
+      if (mainWindow) {
+        mainWindow.webContents.send("processing-status", {
+          message: "正在生成多选题解决方案...",
+          progress: 60
+        })
+      }
+
+      // 存储题目信息
+      this.deps.setProblemInfo((problemInfo as any).data)
+
+      // 发送题目提取成功事件
+      if (mainWindow) {
+        mainWindow.webContents.send(
+          this.deps.PROCESSING_EVENTS.PROBLEM_EXTRACTED,
+          (problemInfo as any).data
+        )
+      }
+
+      // 使用专门的多选题解决方案生成逻辑
+      const solutionsResult = await this.generateMultipleChoiceSolutionsWithCustomPrompt(userConfig, (problemInfo as any).data, signal)
+      
+      if (solutionsResult.success) {
+        // 🆕 积分操作标记为完成
+        try {
+          await this.completeCreditsOperation(operationId);
+        } catch (completeError) {
+          console.error("标记积分操作完成失败:", completeError);
+          // 继续处理，不中断流程
+        }
+        
+        // 清除额外截图队列
+        this.screenshotHelper.clearExtraScreenshotQueue()
+        
+        if (mainWindow) {
+          mainWindow.webContents.send("processing-status", {
+            message: "多选题解决方案生成成功",
+            progress: 100
+          })
+        }
+        
+        return { success: true, data: (solutionsResult as any).data }
+      } else {
+        // 生成解决方案失败，退款积分
+        try {
+          await this.refundCredits(operationId, 0, "生成多选题解决方案失败: " + ((solutionsResult as any).error || "未知错误"));
+        } catch (refundError) {
+          console.error("退款失败:", refundError);
+          // 继续处理，不中断流程
+        }
+        throw new Error((solutionsResult as any).error || "生成多选题解决方案失败")
+      }
+      
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "多选题处理已被用户取消"
+        }
+      }
+      
+      console.error("多选题AI处理错误:", error)
+      return { 
+        success: false, 
+        error: error.message || "多选题AI处理失败，请重试" 
+      }
+    }
   }
 
   /**
@@ -1169,6 +1532,371 @@ ${questionsText}
       return { 
         success: false, 
         error: error.message || "AI处理失败，请重试" 
+      }
+    }
+  }
+
+  /**
+   * 生成多选题解决方案（使用自定义提示词）
+   */
+  private async generateMultipleChoiceSolutionsWithCustomPrompt(userConfig: any, problemInfo: any, signal: AbortSignal) {
+    try {
+      const model = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+      console.log('🎯 开始生成多选题解决方案（自定义提示词）...')
+      
+      const questions = problemInfo.multiple_choice_questions || []
+      console.log('📝 处理题目数量:', questions.length)
+      
+      if (questions.length === 0) {
+        console.log('❌ 没有找到选择题题目')
+        return {
+          success: false,
+          error: "没有找到选择题题目"
+        }
+      }
+
+      // 构建问题文本
+      const questionsText = questions.map((q: any, index: number) => `
+题目${q.question_number || (index + 1)}：
+${q.question_text}
+
+选项：
+${q.options.join('\n')}
+`).join('\n---\n')
+
+      // 专门为多选题设计的提示词
+      const promptText = `
+你是一位专业的多选题分析专家。以下题目都是多选题，请选出所有正确答案。
+
+${questionsText}
+
+**关键要求：**
+1. 这些题目都是多选题，每道题可能有多个正确答案
+2. 必须将所有正确选项的字母连续写在一起，比如：ABC、AD、BC等
+3. 不要只选择一个选项，要找出所有正确答案
+4. 仔细分析每个选项的正确性，不要遗漏任何正确答案
+
+**答案格式要求（严格按照此格式）：**
+题目1 - ABC
+题目2 - BD  
+题目3 - ABCD
+题目4 - A
+
+**示例说明：**
+- 如果题目1的A、B、C选项都正确，写成：题目1 - ABC
+- 如果题目2的B、D选项正确，写成：题目2 - BD
+- 如果题目3的所有选项都正确，写成：题目3 - ABCD
+- 如果题目4只有A选项正确，写成：题目4 - A
+
+现在请分析以下多选题并严格按照格式给出答案：
+
+**答案：**
+(在这里写出每道题的答案，格式：题目X - 所有正确选项字母)
+
+**解题思路：**
+(在这里写出详细的分析过程)
+`
+
+      console.log('🔄 发送多选题请求到AI...')
+      
+      let solutionResponse
+      try {
+        solutionResponse = await this.ismaqueClient.chat.completions.create({
+          model: model,
+          messages: [
+            { role: "system", content: "你是一位专业的多选题分析助手。用户已确认这些都是多选题，每道题可能有多个正确答案。请严格按照要求的格式输出答案，将所有正确选项的字母连续写在一起（如ABC、BD等）。绝不能只选择一个选项，要找出所有正确答案。" },
+            { role: "user", content: promptText }
+          ],
+          max_tokens: 4000,
+          temperature: 0.1
+        }, { signal })
+        
+        console.log('✅ 多选题AI调用成功')
+        console.log('🔍 多选题原始响应:', JSON.stringify(solutionResponse, null, 2))
+      } catch (error) {
+        console.error('❌ 多选题AI调用失败:', error)
+        throw error
+      }
+
+      // 🔧 修复：安全访问API响应，支持不同的响应格式
+      console.log('🔍 多选题API响应调试信息:')
+      console.log('  - 响应类型:', typeof solutionResponse)
+      console.log('  - 响应对象存在:', !!solutionResponse)
+      console.log('  - choices字段存在:', !!solutionResponse?.choices)
+      console.log('  - choices类型:', Array.isArray(solutionResponse?.choices) ? 'array' : typeof solutionResponse?.choices)
+      console.log('  - choices长度:', solutionResponse?.choices?.length)
+      console.log('  - 完整响应结构:', Object.keys(solutionResponse || {}))
+
+      // 如果响应是字符串，尝试解析为JSON
+      if (typeof solutionResponse === 'string') {
+        console.log('⚠️ 多选题响应是字符串格式，尝试解析JSON...')
+        try {
+          solutionResponse = JSON.parse(solutionResponse)
+          console.log('✅ 多选题JSON解析成功')
+        } catch (parseError) {
+          console.error('❌ 多选题JSON解析失败:', parseError)
+          throw new Error('多选题AI响应解析失败')
+        }
+      }
+
+      // 🔧 修复：支持多种响应格式
+      let responseContent = ''
+      
+      if (solutionResponse && solutionResponse.choices && solutionResponse.choices.length > 0) {
+        // 标准OpenAI格式
+        responseContent = solutionResponse.choices[0]?.message?.content || ''
+        console.log('✅ 使用标准OpenAI响应格式')
+      } else if (solutionResponse && typeof solutionResponse === 'object') {
+        // 尝试其他可能的响应格式
+        if (solutionResponse.content) {
+          responseContent = solutionResponse.content
+          console.log('✅ 使用content字段')
+        } else if (solutionResponse.message) {
+          responseContent = solutionResponse.message
+          console.log('✅ 使用message字段')
+        } else if (solutionResponse.text) {
+          responseContent = solutionResponse.text
+          console.log('✅ 使用text字段')
+        } else if (solutionResponse.response) {
+          responseContent = solutionResponse.response
+          console.log('✅ 使用response字段')
+        } else {
+          // 如果是对象但没有找到内容字段，将整个对象转为字符串
+          responseContent = JSON.stringify(solutionResponse)
+          console.log('⚠️ 使用整个响应对象作为内容')
+        }
+      } else if (typeof solutionResponse === 'string') {
+        // 直接字符串响应
+        responseContent = solutionResponse
+        console.log('✅ 使用字符串响应')
+      }
+      
+      if (!responseContent) {
+        console.error('❌ 多选题AI响应格式错误，无法提取内容:', {
+          hasResponse: !!solutionResponse,
+          responseType: typeof solutionResponse,
+          responseKeys: Object.keys(solutionResponse || {}),
+          fullResponse: solutionResponse
+        })
+        throw new Error('多选题AI响应格式错误：无法提取内容')
+      }
+      console.log('✅ 多选题AI响应完成')
+      console.log('📝 AI原始响应内容:')
+      console.log('='.repeat(50))
+      console.log(responseContent)
+      console.log('='.repeat(50))
+      
+      // 解析答案 - 支持多选题格式
+      console.log('🔍 开始解析多选题答案...')
+      console.log('📄 原始响应内容（用于调试）:')
+      console.log('='.repeat(100))
+      console.log(responseContent)
+      console.log('='.repeat(100))
+      
+      const answers: Array<{ question_number: string; answer: string; reasoning: string; is_multiple: boolean }> = []
+      
+      // 提取答案部分 - 改进的解析逻辑支持多选
+      const answerMatch = responseContent.match(/答案[:：]?\s*([\s\S]*?)(?=\n\s*(?:解题思路|多选题要点|整体思路|$))/i)
+      console.log('🔍 答案部分匹配结果:', answerMatch ? '找到' : '未找到')
+      
+      if (answerMatch) {
+        console.log('📝 提取到的答案部分:', answerMatch[1])
+        const answerLines = answerMatch[1].split('\n').filter(line => line.trim())
+        console.log('📋 答案行数:', answerLines.length)
+        console.log('📋 答案行内容:', answerLines)
+        
+        for (const line of answerLines) {
+          console.log('🔍 正在解析答案行:', line)
+          
+          // 支持多选题的正则表达式 - 扩展支持更多格式
+          const patterns = [
+            /题目(\d+)\s*[-－:：]\s*([A-D]+)/i,
+            /(\d+)\s*[-－:：]\s*([A-D]+)/i,
+            /题(\d+)\s*[-－:：]\s*([A-D]+)/i,
+            /第?(\d+)题?\s*[-－:：]?\s*答案?\s*[:：]?\s*([A-D]+)/i,
+            /(\d+)\.\s*([A-D]+)/i,
+            // 新增更宽松的匹配模式
+            /(\d+)[^\w]*([A-D]+)/i,
+            /题目?\s*(\d+)[^\w]*([A-D]+)/i
+          ]
+          
+          let match = null
+          let matchedPattern = ''
+          for (let i = 0; i < patterns.length; i++) {
+            match = line.match(patterns[i])
+            if (match) {
+              matchedPattern = `Pattern ${i + 1}: ${patterns[i].source}`
+              break
+            }
+          }
+          
+          if (match) {
+            const questionNumber = match[1]
+            const answer = match[2].toUpperCase()
+            console.log(`✅ 匹配成功 - 题目${questionNumber}: ${answer} (使用${matchedPattern})`)
+            
+            // 尝试从解题思路中提取对应的推理过程
+            let reasoning = `题目${questionNumber}的多选题解答分析`
+            const reasoningPattern = new RegExp(`题目${questionNumber}[分析：:]*([^\\n]*(?:\\n(?!\\d+\\.|题目|第)[^\\n]*)*)`, 'i')
+            const reasoningMatch = responseContent.match(reasoningPattern)
+            if (reasoningMatch && reasoningMatch[1]) {
+              reasoning = reasoningMatch[1].trim().replace(/^[：:]\s*/, '')
+            }
+            
+            answers.push({
+              question_number: questionNumber,
+              answer: answer,
+              reasoning: reasoning,
+              is_multiple: true // 强制标记为多选题
+            })
+          } else {
+            console.log('❌ 未匹配到答案:', line)
+          }
+        }
+      }
+      
+      // 如果没有解析到答案，尝试备用方案
+      if (answers.length === 0) {
+        console.log('⚠️ 主要解析未找到答案，尝试备用解析...')
+        
+        // 在整个响应中搜索答案模式（支持多选）
+        const fullTextPatterns = [
+          /(?:题目|第)?(\d+)(?:题)?[：:\s]*([A-D]+)(?:\s|$|\.)/gi,
+          /(\d+)\s*[-)]\s*([A-D]+)/gi,
+          /[（(](\d+)[）)]\s*([A-D]+)/gi
+        ]
+        
+        for (const pattern of fullTextPatterns) {
+          const matches = [...responseContent.matchAll(pattern)]
+          for (const match of matches) {
+            const questionNumber = match[1]
+            const answer = match[2].toUpperCase()
+            
+            // 避免重复添加
+            if (!answers.find(a => a.question_number === questionNumber)) {
+              answers.push({
+                question_number: questionNumber,
+                answer: answer,
+                reasoning: `从AI回复中提取的多选题答案`,
+                is_multiple: true
+              })
+            }
+          }
+          
+          if (answers.length > 0) break
+        }
+      }
+      
+      console.log('🎯 解析到的答案数量:', answers.length)
+      console.log('📋 答案详情:', answers)
+      
+      // 提取解题思路 - 重点提取对每个选项的具体分析
+      let thoughts: string[] = []
+      
+      // 首先尝试提取"解题思路"部分的具体分析
+      const thoughtsMatch = responseContent.match(/解题思路[:：]?\s*([\s\S]*?)(?=\n\s*(?:多选题要点|整体思路|$))/i)
+      if (thoughtsMatch && thoughtsMatch[1]) {
+        const thoughtsContent = thoughtsMatch[1]
+        
+        // 提取每个题目的分析
+        const topicAnalyses = thoughtsContent.match(/题目\d+[分析：:]*[\s\S]*?(?=题目\d+|$)/gi)
+        if (topicAnalyses && topicAnalyses.length > 0) {
+          topicAnalyses.forEach(analysis => {
+            // 提取选项分析
+            const optionAnalyses = analysis.match(/[A-D]选项[:：][^-\n]*(?:正确|错误)[^-\n]*/gi)
+            if (optionAnalyses && optionAnalyses.length > 0) {
+              thoughts.push(...optionAnalyses.map(opt => opt.trim()))
+            } else {
+              // 如果没有找到选项分析，就提取整个题目分析
+              const lines = analysis.split('\n').map(line => line.trim()).filter(Boolean)
+              if (lines.length > 1) {
+                thoughts.push(...lines.slice(1)) // 跳过题目标题行
+              }
+            }
+          })
+        }
+        
+        // 如果没有找到题目分析，提取所有非空行
+        if (thoughts.length === 0) {
+          thoughts = thoughtsContent.split('\n')
+            .map(line => line.trim())
+            .filter(line => line && !line.match(/^题目\d+[分析：:]*$/i))
+            .filter(line => !line.match(/^[-*•]\s*认真检查|多个选项可以同时正确/i)) // 过滤掉通用提示
+        }
+      }
+      
+      // 如果解题思路部分没有内容，尝试从整个响应中提取选项分析
+      if (thoughts.length === 0) {
+        console.log('⚠️ 解题思路为空，尝试从整个响应中提取选项分析...')
+        
+        // 直接从响应中提取选项分析
+        const optionAnalyses = responseContent.match(/[A-D]选项[:：][^-\n]*(?:正确|错误|因为)[^-\n]*/gi)
+        if (optionAnalyses && optionAnalyses.length > 0) {
+          thoughts = optionAnalyses.map(opt => opt.trim())
+        }
+      }
+      
+      // 如果还是没有，尝试提取包含"因为"、"由于"等解释性内容的行
+      if (thoughts.length === 0) {
+        console.log('⚠️ 选项分析为空，尝试提取解释性内容...')
+        
+        const explanations = responseContent.split('\n')
+          .map(line => line.trim())
+          .filter(line => line && (
+            line.includes('因为') || 
+            line.includes('由于') || 
+            line.includes('所以') || 
+            line.includes('正确') || 
+            line.includes('错误') ||
+            line.includes('提供') ||
+            line.includes('确保') ||
+            line.includes('机制')
+          ))
+          .filter(line => !line.match(/^[-*•]\s*认真检查|多个选项可以同时正确/i)) // 过滤掉通用提示
+        
+        if (explanations.length > 0) {
+          thoughts = explanations.slice(0, 8) // 最多取8行解释
+        }
+      }
+      
+      // 最后的兜底方案：提取响应中的主要内容行
+      if (thoughts.length === 0) {
+        console.log('⚠️ 使用兜底方案提取思路...')
+        thoughts = responseContent.split('\n')
+          .map(line => line.trim())
+          .filter(line => line && line.length > 10) // 过滤掉太短的行
+          .filter(line => !line.match(/^(答案|解题思路|多选题要点)[:：]?$/i)) // 过滤掉标题行
+          .filter(line => !line.match(/^题目\d+\s*[-－:：]\s*[A-D]+$/i)) // 过滤掉纯答案行
+          .filter(line => !line.match(/^[-*•]\s*认真检查|多个选项可以同时正确/i)) // 过滤掉通用提示
+          .slice(0, 6) // 最多取6行
+      }
+      
+      console.log('📝 提取到的解题思路数量:', thoughts.length)
+      console.log('📝 解题思路内容:', thoughts)
+
+      const formattedResponse = {
+        type: 'multiple_choice',
+        answers: answers,
+        thoughts: thoughts,
+        is_multiple_choice_mode: true // 标识这是多选题模式
+      }
+
+      console.log('✅ 多选题解决方案生成完成')
+      console.log('📊 最终响应:', JSON.stringify(formattedResponse, null, 2))
+      
+      return { success: true, data: formattedResponse }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "多选题处理已被用户取消"
+        }
+      }
+      
+      console.error("多选题AI处理错误:", error)
+      return { 
+        success: false, 
+        error: error.message || "多选题AI处理失败，请重试" 
       }
     }
   }
