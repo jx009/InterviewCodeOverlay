@@ -1844,7 +1844,7 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
           amount: -requiredCredits,
           balanceAfter: newCredits,
           modelName: modelName,
-          questionType: questionType.toLowerCase(),
+          questionType: questionType.toUpperCase(),
           description: `搜题操作 [${operationId || `ai_call_${Date.now()}`}]: 使用${modelName}模型处理${questionType === 'multiple_choice' ? '选择题' : '编程题'}`,
         }
       });
