@@ -4766,6 +4766,193 @@ app.get('/api/announcements/current', async (req, res) => {
   }
 });
 
+// ======================
+// 管理员LLM配置API路由
+// ======================
+
+// 获取LLM配置
+app.get('/api/admin/llm-config', verifySessionId, async (req, res) => {
+  try {
+    console.log('📡 管理员请求LLM配置');
+
+    // 检查管理员权限
+    const userId = req.user.userId;
+    const user = await db.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, username: true }
+    });
+
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: '需要管理员权限'
+      });
+    }
+
+    console.log('✅ 管理员权限验证通过:', user.username);
+
+    // 检查表是否存在
+    const tableExists = await db.prisma.$queryRaw`
+      SELECT COUNT(*) as count FROM information_schema.tables 
+      WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+    `;
+
+    if (!tableExists[0] || tableExists[0].count === 0) {
+      console.warn('⚠️ llm_config表不存在');
+      return res.json({
+        success: true,
+        data: {
+          configs: [],
+          tableExists: false
+        },
+        message: 'llm_config表不存在，需要先创建表'
+      });
+    }
+
+    // 从数据库读取所有LLM配置
+    const configs = await db.prisma.$queryRaw`
+      SELECT config_key, config_value, is_active, created_at, updated_at 
+      FROM llm_config 
+      ORDER BY config_key
+    `;
+
+    console.log('📦 数据库配置查询结果:', configs);
+
+    // 将数组格式转换为对象格式
+    const configObj = {};
+    configs.forEach(config => {
+      configObj[config.config_key] = {
+        value: config.config_value,
+        isActive: config.is_active,
+        createdAt: config.created_at,
+        updatedAt: config.updated_at
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        configs: configObj,
+        tableExists: true,
+        rawConfigs: configs
+      },
+      message: 'LLM配置获取成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取LLM配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取LLM配置失败',
+      error: error.message
+    });
+  }
+});
+
+// 更新LLM配置
+app.put('/api/admin/llm-config', verifySessionId, async (req, res) => {
+  try {
+    console.log('🔄 管理员更新LLM配置:', req.body);
+
+    // 检查管理员权限
+    const userId = req.user.userId;
+    const user = await db.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, username: true }
+    });
+
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: '需要管理员权限'
+      });
+    }
+
+    const { base_url, api_key } = req.body;
+
+    // 验证输入
+    if (!base_url || !api_key) {
+      return res.status(400).json({
+        success: false,
+        message: 'base_url和api_key不能为空'
+      });
+    }
+
+    // 验证URL格式
+    try {
+      new URL(base_url);
+    } catch (urlError) {
+      return res.status(400).json({
+        success: false,
+        message: 'base_url格式无效，请输入有效的URL'
+      });
+    }
+
+    console.log('✅ 管理员权限验证通过:', user.username);
+
+    // 检查表是否存在
+    const tableExists = await db.prisma.$queryRaw`
+      SELECT COUNT(*) as count FROM information_schema.tables 
+      WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+    `;
+
+    if (!tableExists[0] || tableExists[0].count === 0) {
+      console.warn('⚠️ llm_config表不存在，需要先创建表');
+      return res.status(400).json({
+        success: false,
+        message: 'llm_config表不存在，请联系管理员创建表'
+      });
+    }
+
+    // 使用事务更新配置
+    const result = await db.prisma.$transaction(async (tx) => {
+      // 更新base_url
+      await tx.$executeRaw`
+        INSERT INTO llm_config (config_key, config_value, is_active, created_at, updated_at)
+        VALUES ('base_url', ${base_url}, 1, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE 
+          config_value = ${base_url},
+          updated_at = NOW()
+      `;
+
+      // 更新api_key
+      await tx.$executeRaw`
+        INSERT INTO llm_config (config_key, config_value, is_active, created_at, updated_at)
+        VALUES ('api_key', ${api_key}, 1, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE 
+          config_value = ${api_key},
+          updated_at = NOW()
+      `;
+
+      // 查询更新后的配置
+      const updatedConfigs = await tx.$queryRaw`
+        SELECT config_key, config_value, is_active, updated_at 
+        FROM llm_config 
+        WHERE config_key IN ('base_url', 'api_key')
+      `;
+
+      return updatedConfigs;
+    });
+
+    console.log('✅ LLM配置更新成功:', result);
+
+    res.json({
+      success: true,
+      data: {
+        updatedConfigs: result,
+        message: 'LLM配置更新成功'
+      },
+      message: `LLM配置更新成功 - base_url: ${base_url}`
+    });
+  } catch (error) {
+    console.error('❌ 更新LLM配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新LLM配置失败',
+      error: error.message
+    });
+  }
+});
+
 // 使用充值路由
 app.use('/api/recharge', rechargeRoutes);
 app.use('/api/payment/wechat', wechatCallbackRoutes);

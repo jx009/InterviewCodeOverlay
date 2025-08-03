@@ -47,6 +47,26 @@ interface EditingPackage {
   bonusPoints: number;
 }
 
+interface LLMConfig {
+  base_url: {
+    value: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+  api_key: {
+    value: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+interface LLMConfigForm {
+  base_url: string;
+  api_key: string;
+}
+
 interface UsageTransaction {
   id: number;
   transaction_type: string;
@@ -152,11 +172,19 @@ export default function ManagerPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchEmail, setSearchEmail] = useState<string>('');
-  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages' | 'usage-stats' | 'announcements'>('configs');
+  const [currentTab, setCurrentTab] = useState<'configs' | 'users' | 'credits' | 'invites' | 'packages' | 'usage-stats' | 'announcements' | 'llm-config'>('configs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  
+  // LLM配置相关状态
+  const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
+  const [llmConfigForm, setLlmConfigForm] = useState<LLMConfigForm>({
+    base_url: '',
+    api_key: ''
+  });
+  const [llmConfigLoading, setLlmConfigLoading] = useState(false);
   const [editingConfig, setEditingConfig] = useState<EditingConfig>({
     modelName: '',
     questionType: 'multiple_choice',
@@ -274,6 +302,8 @@ export default function ManagerPage() {
         loadUsageData();
       } else if (currentTab === 'announcements') {
         loadAnnouncements();
+      } else if (currentTab === 'llm-config') {
+        loadLLMConfig();
       }
     }
   }, [isAdmin, currentTab]);
@@ -759,6 +789,94 @@ export default function ManagerPage() {
       setMessage(`加载配置失败: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // LLM配置相关函数
+  const loadLLMConfig = async () => {
+    try {
+      setLlmConfigLoading(true);
+      const sessionId = localStorage.getItem('sessionId');
+      console.log('loadLLMConfig - SessionId:', sessionId);
+
+      const response = await fetch('/api/admin/llm-config', {
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('loadLLMConfig - Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('loadLLMConfig - Error response:', errorText);
+        throw new Error(`Failed to load LLM config: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('loadLLMConfig - Response data:', data);
+      
+      if (data.success) {
+        setLlmConfig(data.data.configs);
+        
+        // 设置表单初始值
+        setLlmConfigForm({
+          base_url: data.data.configs?.base_url?.value || '',
+          api_key: data.data.configs?.api_key?.value || ''
+        });
+        
+        setMessage('LLM配置加载成功');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        throw new Error(data.message || 'Failed to load LLM config');
+      }
+    } catch (error) {
+      console.error('加载LLM配置失败:', error);
+      setMessage(`加载LLM配置失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLlmConfigLoading(false);
+    }
+  };
+
+  const updateLLMConfig = async () => {
+    try {
+      setSaving(true);
+      const sessionId = localStorage.getItem('sessionId');
+      console.log('updateLLMConfig - 提交数据:', llmConfigForm);
+
+      const response = await fetch('/api/admin/llm-config', {
+        method: 'PUT',
+        headers: {
+          'X-Session-Id': sessionId || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(llmConfigForm)
+      });
+
+      console.log('updateLLMConfig - Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('updateLLMConfig - Error response:', errorText);
+        throw new Error(`Failed to update LLM config: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('updateLLMConfig - Response data:', data);
+      
+      if (data.success) {
+        setMessage('LLM配置更新成功');
+        // 重新加载配置
+        await loadLLMConfig();
+      } else {
+        throw new Error(data.message || 'Failed to update LLM config');
+      }
+    } catch (error) {
+      console.error('更新LLM配置失败:', error);
+      setMessage(`更新LLM配置失败: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1333,6 +1451,16 @@ export default function ManagerPage() {
                 }`}
               >
                 公告管理
+              </button>
+              <button
+                onClick={() => setCurrentTab('llm-config')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200 ${
+                  currentTab === 'llm-config'
+                    ? 'border-blue-500 text-blue-400 bg-gradient-to-r from-blue-600/20 to-indigo-600/20'
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-blue-600/10 hover:to-indigo-600/10'
+                }`}
+              >
+                模型配置
               </button>
             </nav>
           </div>
@@ -3229,6 +3357,135 @@ export default function ManagerPage() {
                     • 只有启用状态的公告才会显示<br />
                     • 优先级高的公告会优先显示<br />
                     • 可设置公告的生效和失效时间
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* LLM配置管理标签页 */}
+        {currentTab === 'llm-config' && (
+          <>
+            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-white">模型配置管理</h2>
+                <button
+                  onClick={() => loadLLMConfig()}
+                  disabled={llmConfigLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {llmConfigLoading ? '刷新中...' : '刷新配置'}
+                </button>
+              </div>
+
+              {/* 配置表单 */}
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    API基础URL
+                  </label>
+                  <input
+                    type="url"
+                    value={llmConfigForm.base_url}
+                    onChange={(e) => setLlmConfigForm({ ...llmConfigForm, base_url: e.target.value })}
+                    placeholder="https://example.com/v1"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    请输入完整的API基础URL，例如: https://api.openai.com/v1
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    API密钥
+                  </label>
+                  <input
+                    type="password"
+                    value={llmConfigForm.api_key}
+                    onChange={(e) => setLlmConfigForm({ ...llmConfigForm, api_key: e.target.value })}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    API密钥将被安全存储，仅用于模型调用
+                  </p>
+                </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={updateLLMConfig}
+                    disabled={saving || !llmConfigForm.base_url || !llmConfigForm.api_key}
+                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {saving ? '保存中...' : '保存配置'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLlmConfigForm({
+                        base_url: llmConfig?.base_url?.value || '',
+                        api_key: llmConfig?.api_key?.value || ''
+                      });
+                    }}
+                    disabled={llmConfigLoading}
+                    className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+                  >
+                    重置
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 当前配置显示 */}
+            {llmConfig && (
+              <div className="bg-gray-800 rounded-lg p-6 mb-8">
+                <h3 className="text-lg font-semibold text-white mb-4">当前数据库配置</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <div className="text-sm font-medium text-gray-300 mb-2">API基础URL</div>
+                    <div className="px-3 py-2 bg-gray-700 rounded-lg text-green-400 font-mono text-sm">
+                      {llmConfig.base_url?.value || '未配置'}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      最后更新: {llmConfig.base_url?.updatedAt ? new Date(llmConfig.base_url.updatedAt).toLocaleString('zh-CN') : '未知'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-medium text-gray-300 mb-2">API密钥</div>
+                    <div className="px-3 py-2 bg-gray-700 rounded-lg text-yellow-400 font-mono text-sm">
+                      {llmConfig.api_key?.value ? '••••••••••••••••' + llmConfig.api_key.value.slice(-8) : '未配置'}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      最后更新: {llmConfig.api_key?.updatedAt ? new Date(llmConfig.api_key.updatedAt).toLocaleString('zh-CN') : '未知'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 使用说明 */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4">💡 使用说明</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div className="font-medium mb-2">功能说明:</div>
+                  <div className="text-gray-300">
+                    • <span className="font-medium text-blue-400">动态配置</span>: 支持在线修改API配置，无需重启服务<br />
+                    • <span className="font-medium text-green-400">安全存储</span>: API密钥在数据库中安全存储<br />
+                    • <span className="font-medium text-purple-400">实时生效</span>: 配置更新后立即生效<br />
+                    • <span className="font-medium text-yellow-400">多厂商支持</span>: 支持OpenAI兼容的各种API厂商
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="font-medium mb-2">注意事项:</div>
+                  <div className="text-gray-300">
+                    • URL必须以http://或https://开头<br />
+                    • API密钥请妥善保管，避免泄露<br />
+                    • 修改配置前请确认API可正常访问<br />
+                    • 建议使用具有适当权限的API密钥<br />
+                    • 配置保存后客户端会自动使用新配置
                   </div>
                 </div>
               </div>
