@@ -1361,6 +1361,29 @@ ${questionsText}
         }, { signal })
 
         console.log('✅ 选择题AI调用成功')
+        
+        // 🔧 调试：打印完整的API响应结构
+        console.log('🔍 选择题API响应调试信息:')
+        console.log('  - 响应类型:', typeof solutionResponse)
+        console.log('  - 响应对象存在:', !!solutionResponse)
+        console.log('  - choices字段存在:', !!solutionResponse?.choices)
+        console.log('  - choices类型:', Array.isArray(solutionResponse?.choices) ? 'array' : typeof solutionResponse?.choices)
+        console.log('  - choices长度:', solutionResponse?.choices?.length)
+
+        // 如果响应是字符串，尝试解析为JSON
+        if (typeof solutionResponse === 'string') {
+          console.log('⚠️ 选择题响应是字符串格式，尝试解析JSON...')
+          try {
+            solutionResponse = JSON.parse(solutionResponse)
+            console.log('✅ 选择题JSON解析成功')
+          } catch (parseError) {
+            console.error('❌ 选择题JSON解析失败:', parseError)
+            if (deductionInfo.requiredPoints) {
+              await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI响应JSON解析失败')
+            }
+            throw new Error('选择题AI响应格式错误：无法解析JSON响应')
+          }
+        }
       } catch (error) {
         console.error('❌ 选择题AI调用失败:', error)
         // AI调用失败，退还积分
