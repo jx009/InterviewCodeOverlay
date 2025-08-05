@@ -2035,9 +2035,9 @@ ${questionsText}
         }
       }
 
-      // 固定使用 gemini-2.5-flash-preview-04-17 进行调试截图处理
-      const debuggingModel = 'gemini-2.5-flash-preview-04-17'
-      console.log('🔍 使用固定模型进行调试截图处理:', debuggingModel)
+      // 使用用户配置的编程模型进行调试截图处理
+      const debuggingModel = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+      console.log('🔍 使用用户配置的模型进行调试截图处理:', debuggingModel)
 
       const messages = [
         {
@@ -2084,12 +2084,46 @@ ${problemInfo.example_output || "未提供示例输出。"}
         })
       }
 
-      const debugResponse = await this.ismaqueClient.chat.completions.create({
+      let debugResponse = await this.ismaqueClient.chat.completions.create({
         model: debuggingModel,
         messages: messages,
         max_tokens: 4000,
         temperature: 0.2
       }, { signal })
+
+      console.log('🔍 调试AI响应调试信息:')
+      console.log('  - 响应类型:', typeof debugResponse)
+      console.log('  - 响应对象存在:', !!debugResponse)
+      console.log('  - choices字段存在:', !!debugResponse?.choices)
+      console.log('  - choices类型:', Array.isArray(debugResponse?.choices) ? 'array' : typeof debugResponse?.choices)
+      console.log('  - choices长度:', debugResponse?.choices?.length)
+
+      // 如果响应是字符串，尝试解析为JSON
+      if (typeof debugResponse === 'string') {
+        console.log('⚠️ 调试响应是字符串格式，尝试解析JSON...')
+        try {
+          debugResponse = JSON.parse(debugResponse)
+          console.log('✅ 调试JSON解析成功')
+        } catch (parseError) {
+          console.error('❌ 调试JSON解析失败:', parseError)
+          throw new Error('调试AI响应格式错误：无法解析JSON响应')
+        }
+      }
+
+      // 安全访问API响应，防止undefined错误
+      if (!debugResponse || !debugResponse.choices || debugResponse.choices.length === 0) {
+        console.error('❌ 调试AI响应格式错误:', {
+          hasResponse: !!debugResponse,
+          hasChoices: !!debugResponse?.choices,
+          choicesLength: debugResponse?.choices?.length
+        })
+        throw new Error('调试AI响应格式错误：缺少choices数据')
+      }
+
+      if (!debugResponse.choices[0]?.message?.content) {
+        console.error('❌ 调试AI响应缺少内容:', debugResponse.choices[0])
+        throw new Error('调试AI响应格式错误：缺少message内容')
+      }
 
       const debugContent = debugResponse.choices[0].message.content
 
@@ -2148,6 +2182,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
 
       const response = {
+        type: 'programming',
         code: code,
         thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
         time_complexity: timeComplexity,
