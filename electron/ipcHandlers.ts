@@ -1,6 +1,6 @@
 // ipcHandlers.ts
 
-import { ipcMain, shell, dialog } from "electron"
+import { ipcMain, shell, dialog, clipboard } from "electron"
 import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
@@ -231,6 +231,18 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("get-image-preview", async (event, path: string) => {
     return deps.getImagePreview(path)
+  })
+
+  // 代码复制处理器
+  ipcMain.handle("copy-code-to-clipboard", async (event, code: string) => {
+    try {
+      clipboard.writeText(code)
+      console.log("✅ Code copied to clipboard successfully via main process")
+      return { success: true }
+    } catch (error) {
+      console.error("❌ Failed to copy code to clipboard:", error)
+      return { success: false, error: error.message }
+    }
   })
 
   // Screenshot processing handlers

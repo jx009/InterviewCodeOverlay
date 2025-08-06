@@ -484,6 +484,51 @@ const Solutions: React.FC<SolutionsProps> = ({
           "neutral"
         )
       }),
+      // 代码复制快捷键监听器 - 使用主进程clipboard API
+      window.electronAPI.onRequestCodeForCopy(() => {
+        console.log("📥 Received request-code-for-copy event, executing copy logic...")
+        
+        // 获取当前 solution 数据
+        const solution = queryClient.getQueryData(["solution"]) as any
+        
+        // 检查是否有编程题代码
+        if (solution?.code && typeof solution.code === "string") {
+          console.log("✅ Found code, copying to clipboard via main process...")
+          
+          // 使用主进程的clipboard API
+          window.electronAPI.copyCodeToClipboard(solution.code).then((result) => {
+            if (result.success) {
+              console.log("✅ Code copied successfully via main process")
+              showToast(
+                "复制成功",
+                "代码已复制到剪贴板",
+                "success"
+              )
+            } else {
+              console.error("❌ Main process copy failed:", result.error)
+              showToast(
+                "复制失败",
+                "无法复制代码到剪贴板",
+                "error"
+              )
+            }
+          }).catch((error) => {
+            console.error("❌ Copy operation failed:", error)
+            showToast(
+              "复制失败",
+              "无法复制代码到剪贴板",
+              "error"
+            )
+          })
+        } else {
+          console.log("❌ No valid code found to copy")
+          showToast(
+            "复制失败",
+            "没有找到可复制的代码",
+            "error"
+          )
+        }
+      }),
       // Removed out of credits handler - unlimited credits in this version
     ]
 
@@ -497,7 +542,21 @@ const Solutions: React.FC<SolutionsProps> = ({
     setProblemStatementData(
       queryClient.getQueryData(["problem_statement"]) || null
     )
-    setSolutionData(queryClient.getQueryData(["solution"]) || null)
+    
+    // 正确处理初始解决方案数据
+    const initialSolution = queryClient.getQueryData(["solution"]) as SolutionData | null
+    if (initialSolution?.type === 'multiple_choice') {
+      // 选择题：不设置代码数据
+      setSolutionData(null)
+      setMultipleChoiceAnswers(initialSolution?.answers ?? null)
+    } else if (initialSolution) {
+      // 编程题：设置代码数据
+      setSolutionData(initialSolution?.code ?? null)
+      setMultipleChoiceAnswers(null)
+    } else {
+      setSolutionData(null)
+      setMultipleChoiceAnswers(null)
+    }
 
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
       if (event?.query.queryKey[0] === "problem_statement") {

@@ -259,6 +259,24 @@ export class ShortcutsHelper {
         console.error("Error during manual config refresh:", error)
       }
     })
+
+    // Copy code shortcut (Ctrl/Cmd+J) - 直接在主进程中处理复制
+    const copySuccess = globalShortcut.register("CommandOrControl+J", () => {
+      console.log("🔥 Command/Ctrl + J pressed. Copying code directly...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // 请求代码内容并直接在主进程中复制
+        mainWindow.webContents.send("request-code-for-copy")
+      } else {
+        console.error("❌ MainWindow is null or destroyed")
+      }
+    })
+    
+    if (copySuccess) {
+      console.log("✅ CommandOrControl+J shortcut registered successfully")
+    } else {
+      console.error("❌ Failed to register CommandOrControl+J shortcut")
+    }
     
     // Unregister shortcuts when quitting
     app.on("will-quit", () => {

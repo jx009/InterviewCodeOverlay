@@ -18,8 +18,9 @@ export const PROCESSING_EVENTS = {
 
   //states for processing the debugging
   DEBUG_START: "debug-start",
-  DEBUG_SUCCESS: "debug-success",
-  DEBUG_ERROR: "debug-error"
+  DEBUG_SUCCESS: "debug-success", 
+  DEBUG_ERROR: "debug-error",
+  REQUEST_CODE_FOR_COPY: "request-code-for-copy"
 } as const
 
 // At the top of the file
@@ -177,6 +178,13 @@ const electronAPI = {
       ipcRenderer.removeListener(PROCESSING_EVENTS.RESET, subscription)
     }
   },
+  onRequestCodeForCopy: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on(PROCESSING_EVENTS.REQUEST_CODE_FOR_COPY, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.REQUEST_CODE_FOR_COPY, subscription)
+    }
+  },
   startUpdate: () => ipcRenderer.invoke("start-update"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   onUpdateAvailable: (callback: (info: any) => void) => {
@@ -217,6 +225,7 @@ const electronAPI = {
   getConfig: () => ipcRenderer.invoke("get-config"),
   updateConfig: (config: { apiKey?: string; model?: string; language?: string; opacity?: number }) => 
     ipcRenderer.invoke("update-config", config),
+  copyCodeToClipboard: (code: string) => ipcRenderer.invoke("copy-code-to-clipboard", code),
   onShowSettings: (callback: () => void) => {
     const subscription = () => callback()
     ipcRenderer.on("show-settings-dialog", subscription)
