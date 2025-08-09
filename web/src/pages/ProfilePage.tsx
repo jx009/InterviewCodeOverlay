@@ -895,7 +895,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-green-400">
                     <div className="text-sm font-bold text-white mb-1">积分消耗</div>
-                    <div className="text-green-400 font-semibold">选择题：5积分 | 编程题：8积分</div>
+                    <div className="text-green-400 font-semibold">选择题：8积分 | 编程题：12积分</div>
                   </div>
                 </div>
 
