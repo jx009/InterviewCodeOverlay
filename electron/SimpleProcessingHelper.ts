@@ -1138,40 +1138,86 @@ ${problemInfo.example_output || "未提供示例输出"}
 - 包含必要的导入语句
 - 代码可直接运行，无需修改`
 
-      let solutionResponse
+      // 🆕 使用流式调用替代批式调用
+      console.log('🌊 开始流式AI调用...')
+      let fullContent = ''
+      
       try {
-        solutionResponse = await this.ismaqueClient.chat.completions.create({
+        // 创建流式AI调用
+        const stream = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: [
             { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。" },
             { role: "user", content: promptText }
           ],
           max_tokens: 6000,
-          temperature: 0.1
+          temperature: 0.1,
+          stream: true  // 🆕 启用流式输出
         }, { signal })
 
-        console.log('✅ 编程题AI调用成功')
+        console.log('✅ 编程题流式AI调用启动成功')
 
-        // 🔧 调试：打印完整的API响应结构
-        console.log('🔍 API响应调试信息:')
-        console.log('  - 响应类型:', typeof solutionResponse)
-        console.log('  - 响应对象存在:', !!solutionResponse)
-        console.log('  - choices字段存在:', !!solutionResponse?.choices)
-        console.log('  - choices类型:', Array.isArray(solutionResponse?.choices) ? 'array' : typeof solutionResponse?.choices)
-        console.log('  - choices长度:', solutionResponse?.choices?.length)
+        // 🆕 处理流式数据
+        const mainWindow = this.deps.getMainWindow()
+        if (!mainWindow) {
+          throw new Error('主窗口不可用')
+        }
 
-        // 如果响应是字符串，尝试解析为JSON
-        if (typeof solutionResponse === 'string') {
-          console.log('⚠️ 响应是字符串格式，尝试解析JSON...')
-          try {
-            solutionResponse = JSON.parse(solutionResponse)
-            console.log('✅ JSON解析成功')
-          } catch (parseError) {
-            console.error('❌ JSON解析失败:', parseError)
+        // 🆕 发送流式传输开始信号
+        mainWindow.webContents.send('solution-stream-chunk', {
+          delta: '',
+          fullContent: '',
+          progress: 0,
+          isComplete: false,
+          chunkIndex: 0,
+          streamingStarted: true  // 标识流式传输开始
+        })
+        console.log('🚀 流式传输开始信号已发送')
+
+        // 🆕 流式数据处理循环
+        let chunkCount = 0
+        for await (const chunk of stream) {
+          if (signal.aborted) {
+            throw new Error('操作已取消')
+          }
+
+          const delta = chunk.choices[0]?.delta?.content || ''
+          if (delta) {
+            fullContent += delta
+            chunkCount++
+            
+            // 🔧 每个数据块都发送到前端，确保真正的流式效果
+            mainWindow.webContents.send('solution-stream-chunk', {
+              delta: delta,
+              fullContent: fullContent,
+              progress: Math.min(Math.floor((fullContent.length / 2000) * 100), 95), // 基于预期长度估算进度
+              isComplete: false,
+              chunkIndex: chunkCount
+            })
+            
+            console.log(`📝 流式数据块 #${chunkCount}: "${delta}" (+${delta.length} 字符, 总计: ${fullContent.length})`)
           }
         }
+
+        console.log('✅ 编程题流式AI调用完成，总长度:', fullContent.length)
+
+        // 🆕 发送完成信号
+        mainWindow.webContents.send('solution-stream-chunk', {
+          delta: '',
+          fullContent: fullContent,
+          progress: 100,
+          isComplete: true
+        })
+
       } catch (error) {
-        console.error('❌ 编程题AI调用失败:', error)
+        console.error('❌ 编程题流式AI调用失败:', error)
+        
+        // 发送错误信号给前端
+        const mainWindow = this.deps.getMainWindow()
+        if (mainWindow) {
+          mainWindow.webContents.send('solution-stream-error', error.message || '流式调用失败')
+        }
+        
         // AI调用失败，退还积分
         if (deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '编程题AI调用失败')
@@ -1179,36 +1225,24 @@ ${problemInfo.example_output || "未提供示例输出"}
         throw error
       }
 
-      // 🔧 修复：安全访问API响应，防止undefined错误
-      if (!solutionResponse || !solutionResponse.choices || solutionResponse.choices.length === 0) {
-        console.error('❌ AI响应格式错误:', {
-          hasResponse: !!solutionResponse,
-          hasChoices: !!solutionResponse?.choices,
-          choicesLength: solutionResponse?.choices?.length
-        })
+      // 🆕 流式调用完成后，解析最终内容
+      if (!fullContent.trim()) {
+        console.error('❌ 流式调用未收到任何内容')
         if (deductionInfo.requiredPoints) {
-          await this.refundCredits(operationId, deductionInfo.requiredPoints, 'AI响应格式错误')
+          await this.refundCredits(operationId, deductionInfo.requiredPoints, '流式调用未收到内容')
         }
-        throw new Error('AI响应格式错误：缺少choices数据')
+        throw new Error('AI流式调用未返回任何内容')
       }
 
-      if (!solutionResponse.choices[0]?.message?.content) {
-        console.error('❌ AI响应缺少内容:', solutionResponse.choices[0])
-        if (deductionInfo.requiredPoints) {
-          await this.refundCredits(operationId, deductionInfo.requiredPoints, 'AI响应缺少内容')
-        }
-        throw new Error('AI响应格式错误：缺少message内容')
-      }
+      console.log('📝 开始解析流式响应内容，长度:', fullContent.length)
 
-      const responseContent = solutionResponse.choices[0].message.content
-
-      // 解析响应内容
-      const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
-      const code = codeMatch ? codeMatch[1].trim() : responseContent
+      // 🆕 解析完整的流式响应内容
+      const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
+      const code = codeMatch ? codeMatch[1].trim() : fullContent.trim()
 
       // 提取思路
-      const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:时间复杂度|$)/i
-      const thoughtsMatch = responseContent.match(thoughtsRegex)
+      const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:(?:代码实现|时间复杂度|复杂度分析|$))/i
+      const thoughtsMatch = fullContent.match(thoughtsRegex)
       let thoughts: string[] = []
 
       if (thoughtsMatch && thoughtsMatch[1]) {
@@ -1221,22 +1255,23 @@ ${problemInfo.example_output || "未提供示例输出"}
           thoughts = thoughtsMatch[1].split('\n')
               .map((line) => line.trim())
               .filter(Boolean)
+              .filter(line => line.length > 3) // 过滤太短的行
         }
       }
 
       // 提取复杂度信息
-      const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:空间复杂度|$))/i
-      const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:[A-Z]|$))/i
+      const timeComplexityPattern = /时间复杂度[:：]?\s*([^\n]+(?:\n[^\n]*详细解释[^\n]*)*?)(?=\n\s*(?:空间复杂度|$))/i
+      const spaceComplexityPattern = /空间复杂度[:：]?\s*([^\n]+(?:\n[^\n]*详细解释[^\n]*)*?)(?=\n\s*(?:[A-Z]|代码要求|$))/i
 
-      let timeComplexity = "O(n) - 线性时间复杂度，因为我们只需要遍历数组一次。"
-      let spaceComplexity = "O(n) - 线性空间复杂度，因为我们在哈希表中存储元素。"
+      let timeComplexity = "O(n) - 线性时间复杂度"
+      let spaceComplexity = "O(1) - 常数空间复杂度"
 
-      const timeMatch = responseContent.match(timeComplexityPattern)
+      const timeMatch = fullContent.match(timeComplexityPattern)
       if (timeMatch && timeMatch[1]) {
         timeComplexity = timeMatch[1].trim()
       }
 
-      const spaceMatch = responseContent.match(spaceComplexityPattern)
+      const spaceMatch = fullContent.match(spaceComplexityPattern)
       if (spaceMatch && spaceMatch[1]) {
         spaceComplexity = spaceMatch[1].trim()
       }
@@ -1244,10 +1279,17 @@ ${problemInfo.example_output || "未提供示例输出"}
       const formattedResponse = {
         type: 'programming',
         code: code,
-        thoughts: thoughts.length > 0 ? thoughts : ["基于效率和可读性的解决方案方法"],
+        thoughts: thoughts.length > 0 ? thoughts : ["基于算法分析的高效解决方案"],
         time_complexity: timeComplexity,
         space_complexity: spaceComplexity
       }
+
+      console.log('✅ 流式编程题解析完成:', {
+        codeLength: code.length,
+        thoughtsCount: thoughts.length,
+        hasTimeComplexity: !!timeComplexity,
+        hasSpaceComplexity: !!spaceComplexity
+      })
 
       // 🆕 AI调用成功，完成积分操作
       await this.completeCreditsOperation(operationId)

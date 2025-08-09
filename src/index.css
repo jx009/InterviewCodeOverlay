@@ -13,6 +13,60 @@ html, body, #root {
   to { opacity: 0.98; transform: translate(-50%, -50%); }
 }
 
+/* 🆕 流式输出动画效果 */
+@keyframes streamingPulse {
+  0% { 
+    border-color: #3b82f6; 
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); 
+  }
+  50% { 
+    border-color: #60a5fa; 
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); 
+  }
+  100% { 
+    border-color: #3b82f6; 
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); 
+  }
+}
+
+@keyframes typingCursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 流式代码样式 */
+.streaming-code {
+  animation: streamingPulse 2s ease-in-out infinite;
+  position: relative;
+}
+
+.streaming-code::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 2px;
+  height: 20px;
+  background-color: #3b82f6;
+  animation: typingCursor 1s infinite;
+}
+
+/* 流式内容渐入动画 */
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
 /* Dialog transition improvements */
 .settings-dialog {
   transform-origin: center;

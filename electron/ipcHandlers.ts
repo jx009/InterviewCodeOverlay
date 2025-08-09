@@ -699,6 +699,23 @@ export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
     }
     return result
   })
+
+  // 🆕 流式传输控制处理器
+  ipcMain.handle('cancel-streaming', async () => {
+    try {
+      const processingHelper = deps.processingHelper
+      if (processingHelper && typeof processingHelper.cancelOngoingRequests === 'function') {
+        processingHelper.cancelOngoingRequests()
+        console.log('✅ 流式传输已取消')
+        return { success: true, message: '流式传输已取消' }
+      } else {
+        return { success: false, error: 'ProcessingHelper不可用' }
+      }
+    } catch (error) {
+      console.error("取消流式传输失败:", error)
+      return { success: false, error: error.message }
+    }
+  })
 }
 
 /**

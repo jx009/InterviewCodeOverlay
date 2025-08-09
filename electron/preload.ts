@@ -20,7 +20,12 @@ export const PROCESSING_EVENTS = {
   DEBUG_START: "debug-start",
   DEBUG_SUCCESS: "debug-success", 
   DEBUG_ERROR: "debug-error",
-  REQUEST_CODE_FOR_COPY: "request-code-for-copy"
+  REQUEST_CODE_FOR_COPY: "request-code-for-copy",
+  
+  // 🆕 流式输出事件
+  SOLUTION_STREAM_CHUNK: "solution-stream-chunk",
+  SOLUTION_STREAM_COMPLETE: "solution-stream-complete",
+  SOLUTION_STREAM_ERROR: "solution-stream-error"
 } as const
 
 // At the top of the file
@@ -315,6 +320,40 @@ const electronAPI = {
       ipcRenderer.removeListener("clear-notification", subscription)
     }
   },
+
+  // 🆕 流式输出相关方法
+  onSolutionStreamChunk: (callback: (data: {
+    delta: string,
+    fullContent: string,
+    parsedContent: any,
+    progress: number,
+    isComplete: boolean
+  }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM_CHUNK, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM_CHUNK, subscription)
+    }
+  },
+
+  onSolutionStreamComplete: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM_COMPLETE, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM_COMPLETE, subscription)
+    }
+  },
+
+  onSolutionStreamError: (callback: (error: string) => void) => {
+    const subscription = (_: any, error: string) => callback(error)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM_ERROR, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM_ERROR, subscription)
+    }
+  },
+
+  // 🆕 取消流式传输
+  cancelStreaming: () => ipcRenderer.invoke("cancel-streaming"),
 }
 
 // Before exposing the API
