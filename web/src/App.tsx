@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import DocRedirect from './components/DocRedirect'
 import HomePage from './pages/HomePage'
 import DownloadPage from './pages/DownloadPage'
 import LoginPage from './pages/LoginPage'
@@ -48,6 +49,9 @@ function App() {
             <Route path="recharge" element={<RechargePage />} />
             <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           </Route>
+          
+          {/* 🆕 文档重定向路由 */}
+          <Route path="/doc" element={<DocRedirect />} />
           
           {/* 认证相关路由 - 无导航栏 */}
           <Route path="/login" element={<LoginPage />} />

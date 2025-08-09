@@ -475,6 +475,12 @@ async function startServer() {
     const docsRoutes = require('./routes/docs').default;
     app.use('/api/docs', docsRoutes);
 
+    // 🆕 文档重定向路由
+    app.get('/doc', (req, res) => {
+      console.log('📖 文档重定向被访问，跳转到语雀文档');
+      res.redirect(301, 'https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#');
+    });
+
     // 404处理
     app.use('*', (req, res) => {
       ResponseUtils.notFound(res, '请求的资源不存在');
