@@ -363,6 +363,71 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // 🆕 透明度控制IPC处理器
+  ipcMain.handle("adjust-opacity", (event, delta: number) => {
+    try {
+      const mainWindow = deps.getMainWindow()
+      if (!mainWindow) {
+        return { success: false, error: "Main window not available" }
+      }
+      
+      const currentOpacity = mainWindow.getOpacity()
+      const newOpacity = Math.max(0.1, Math.min(1.0, currentOpacity + delta))
+      console.log(`IPC调整透明度: ${currentOpacity} -> ${newOpacity}`)
+      
+      mainWindow.setOpacity(newOpacity)
+      
+      // 保存透明度到配置文件
+      configHelper.updateClientSettings({ opacity: newOpacity })
+      
+      return { 
+        success: true, 
+        opacity: newOpacity,
+        previousOpacity: currentOpacity 
+      }
+    } catch (error) {
+      console.error("Failed to adjust opacity:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("get-opacity", () => {
+    try {
+      const mainWindow = deps.getMainWindow()
+      if (!mainWindow) {
+        return { success: false, error: "Main window not available" }
+      }
+      
+      const currentOpacity = mainWindow.getOpacity()
+      return { success: true, opacity: currentOpacity }
+    } catch (error) {
+      console.error("Failed to get opacity:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("set-opacity", (event, opacity: number) => {
+    try {
+      const mainWindow = deps.getMainWindow()
+      if (!mainWindow) {
+        return { success: false, error: "Main window not available" }
+      }
+      
+      const clampedOpacity = Math.max(0.1, Math.min(1.0, opacity))
+      console.log(`IPC设置透明度: ${clampedOpacity}`)
+      
+      mainWindow.setOpacity(clampedOpacity)
+      
+      // 保存透明度到配置文件
+      configHelper.updateClientSettings({ opacity: clampedOpacity })
+      
+      return { success: true, opacity: clampedOpacity }
+    } catch (error) {
+      console.error("Failed to set opacity:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle("web-auth-status", async () => {
     try {
       const isAuthenticated = await simpleAuthManager.isAuthenticated()

@@ -286,6 +286,11 @@ async function createWindow(): Promise<void> {
   state.step = 60
   state.currentY = 50
 
+  // 🆕 从配置中加载保存的透明度
+  const config = configHelper.loadConfig()
+  const savedOpacity = config.clientSettings?.opacity || 1.0
+  console.log(`Loading saved opacity: ${savedOpacity}`)
+
   const windowSettings: Electron.BrowserWindowConstructorOptions = {
     width: 800,
     height: 600,
@@ -307,7 +312,7 @@ async function createWindow(): Promise<void> {
     transparent: true,
     fullscreenable: false,
     hasShadow: false,
-    opacity: 1.0,  // Start with full opacity
+    opacity: savedOpacity,  // 🆕 使用保存的透明度
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
@@ -502,7 +507,6 @@ async function createWindow(): Promise<void> {
   
   // Set initial window state
   const clientSettings = configHelper.getClientSettings();
-  const savedOpacity = clientSettings.opacity || 1.0;
   console.log(`Initial opacity from config: ${savedOpacity}`);
   
   // Force window to be visible initially and then set proper state

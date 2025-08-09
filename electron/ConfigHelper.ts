@@ -12,6 +12,7 @@ interface Config {
     windowPosition?: { x: number; y: number };
     windowSize?: { width: number; height: number };
     lastLanguage?: string; // 最后使用的语言
+    opacity?: number; // 🆕 窗口透明度
   }
 }
 

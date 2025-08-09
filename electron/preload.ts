@@ -288,6 +288,11 @@ const electronAPI = {
   webGetLanguages: () => ipcRenderer.invoke("web-get-languages"),
   webCheckConnection: () => ipcRenderer.invoke("web-check-connection"),
   
+  // 🆕 透明度控制API
+  adjustOpacity: (delta: number) => ipcRenderer.invoke("adjust-opacity", delta),
+  getOpacity: () => ipcRenderer.invoke("get-opacity"),
+  setOpacity: (opacity: number) => ipcRenderer.invoke("set-opacity", opacity),
+  
   // Web Authentication event listeners
   onWebAuthStatus: (callback: (data: { authenticated: boolean; user: any }) => void) => {
     const subscription = (_: any, data: { authenticated: boolean; user: any }) => callback(data)

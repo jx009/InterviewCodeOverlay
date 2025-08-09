@@ -174,6 +174,17 @@ export class ShortcutsHelper {
       console.log("Command/Ctrl + ] pressed. Increasing opacity.")
       this.adjustOpacity(0.1)
     })
+
+    // 🆕 新增透明度快捷键 - Ctrl+Shift+1 调低透明度，Ctrl+Shift+2 调高透明度
+    globalShortcut.register("CommandOrControl+Shift+1", () => {
+      console.log("Command/Ctrl + Shift + 1 pressed. Decreasing opacity.")
+      this.adjustOpacity(-0.1)
+    })
+
+    globalShortcut.register("CommandOrControl+Shift+2", () => {
+      console.log("Command/Ctrl + Shift + 2 pressed. Increasing opacity.")
+      this.adjustOpacity(0.1)
+    })
     
     // Zoom controls
     globalShortcut.register("CommandOrControl+-", () => {
