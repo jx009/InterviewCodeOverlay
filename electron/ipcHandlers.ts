@@ -351,6 +351,18 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // 🆕 手动触发自动重新登录
+  ipcMain.handle("attempt-auto-relogin", async () => {
+    try {
+      console.log("📱 IPC: 手动触发自动重新登录")
+      const success = await simpleAuthManager.attemptAutoRelogin()
+      return { success, user: success ? simpleAuthManager.getCurrentUser() : null }
+    } catch (error) {
+      console.error("Failed to attempt auto relogin:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle("web-auth-status", async () => {
     try {
       const isAuthenticated = await simpleAuthManager.isAuthenticated()

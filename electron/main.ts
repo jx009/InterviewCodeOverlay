@@ -824,6 +824,35 @@ async function initializeApp() {
     // Initialize Web authentication manager
     await initializeWebAuth()
     
+    // 🆕 监听自动重新登录事件
+    simpleAuthManager.on('auto-relogin-started', () => {
+      console.log('🔄 自动重新登录开始')
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('auto-relogin-started')
+      }
+    })
+
+    simpleAuthManager.on('auto-relogin-success', (data) => {
+      console.log('✅ 自动重新登录成功:', data)
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('auto-relogin-success', data)
+      }
+    })
+
+    simpleAuthManager.on('auto-relogin-failed', (data) => {
+      console.log('❌ 自动重新登录失败:', data)
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('auto-relogin-failed', data)
+      }
+    })
+
+    simpleAuthManager.on('show-relogin-prompt', () => {
+      console.log('💬 显示重新登录提示')
+      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.webContents.send('show-relogin-prompt')
+      }
+    })
+    
     // 智能认证检查 - 如果未登录则引导用户登录
     await performSimpleStartupCheck()
     

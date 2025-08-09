@@ -282,6 +282,7 @@ const electronAPI = {
   webAuthLogout: () => ipcRenderer.invoke("web-auth-logout"),
   webAuthStatus: () => ipcRenderer.invoke("web-auth-status"),
   webSyncConfig: () => ipcRenderer.invoke("web-sync-config"),
+  attemptAutoRelogin: () => ipcRenderer.invoke("attempt-auto-relogin"),
   webUpdateConfig: (config: any) => ipcRenderer.invoke("web-update-config", config),
   webGetAIModels: () => ipcRenderer.invoke("web-get-ai-models"),
   webGetLanguages: () => ipcRenderer.invoke("web-get-languages"),

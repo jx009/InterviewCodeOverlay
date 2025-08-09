@@ -61,11 +61,15 @@ export class SessionProtection {
     const lastActivity = localStorage.getItem(this.LAST_ACTIVITY_KEY);
     
     if (!sessionId) {
+      console.log('🔍 Session检查: 无sessionId');
       return false;
     }
     
     if (!lastActivity) {
-      return true; // 如果没有记录最后活动时间，认为有效
+      console.log('🔍 Session检查: 无lastActivity记录，认为有效');
+      // 如果没有记录最后活动时间，更新一下当前时间并认为有效
+      localStorage.setItem(this.LAST_ACTIVITY_KEY, Date.now().toString());
+      return true;
     }
     
     // 检查是否超过2周未活动
@@ -73,10 +77,22 @@ export class SessionProtection {
     const now = Date.now();
     const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000; // 2周毫秒数
     
-    const isValid = (now - lastActivityTime) < TWO_WEEKS;
+    // 添加更详细的调试信息
+    const timeDiff = now - lastActivityTime;
+    const daysDiff = timeDiff / (24 * 60 * 60 * 1000);
+    
+    console.log('🔍 Session超时检查:', {
+      sessionIdPrefix: sessionId.substring(0, 10) + '...',
+      lastActivityTime: new Date(lastActivityTime).toLocaleString(),
+      now: new Date(now).toLocaleString(),
+      daysDiff: daysDiff.toFixed(2),
+      isExpired: timeDiff >= TWO_WEEKS
+    });
+    
+    const isValid = timeDiff < TWO_WEEKS;
     
     if (!isValid) {
-      console.log('⏰ SessionId超时，已失效');
+      console.log(`⏰ SessionId超时，已失效 (${daysDiff.toFixed(2)}天未活动)`);
       this.clearSessionId();
     }
     
