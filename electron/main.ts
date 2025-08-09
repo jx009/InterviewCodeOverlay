@@ -286,10 +286,10 @@ async function createWindow(): Promise<void> {
   state.step = 60
   state.currentY = 50
 
-  // 🆕 从配置中加载保存的透明度
+  // 🆕 从配置中加载保存的背景透明度
   const config = configHelper.loadConfig()
-  const savedOpacity = config.clientSettings?.opacity || 1.0
-  console.log(`Loading saved opacity: ${savedOpacity}`)
+  const savedBackgroundOpacity = config.clientSettings?.backgroundOpacity || 0.8
+  console.log(`Loading saved background opacity: ${savedBackgroundOpacity}`)
 
   const windowSettings: Electron.BrowserWindowConstructorOptions = {
     width: 800,
@@ -312,7 +312,7 @@ async function createWindow(): Promise<void> {
     transparent: true,
     fullscreenable: false,
     hasShadow: false,
-    opacity: savedOpacity,  // 🆕 使用保存的透明度
+    opacity: 1.0,  // 窗口保持完全不透明，背景透明度通过CSS控制
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
@@ -507,25 +507,20 @@ async function createWindow(): Promise<void> {
   
   // Set initial window state
   const clientSettings = configHelper.getClientSettings();
-  console.log(`Initial opacity from config: ${savedOpacity}`);
+  console.log(`Initial background opacity from config: ${savedBackgroundOpacity}`);
   
-  // Force window to be visible initially and then set proper state
-  state.mainWindow.show(); // Use show() instead of showInactive()
-  state.mainWindow.focus(); // Ensure window has focus
+  // Force window to be visible initially
+  state.mainWindow.show();
+  state.mainWindow.focus();
+  state.isWindowVisible = true;
   
-  if (savedOpacity <= 0.1) {
-    console.log('Initial opacity too low, will hide after showing');
-    // Show window first, then hide it
-    setTimeout(() => {
-      if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-        hideMainWindow();
-      }
-    }, 100);
-  } else {
-    console.log(`Setting initial opacity to ${savedOpacity}`);
-    state.mainWindow.setOpacity(savedOpacity);
-    state.isWindowVisible = true;
-  }
+  // 发送初始背景透明度到前端
+  setTimeout(() => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.webContents.send("background-opacity-changed", savedBackgroundOpacity);
+      console.log(`Sent initial background opacity ${savedBackgroundOpacity} to frontend`);
+    }
+  }, 1000); // 等待前端加载完成
   
   // Ensure window is always on top and visible on all workspaces
   state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
@@ -649,9 +644,9 @@ function hideMainWindow(): void {
     state.windowPosition = { x: bounds.x, y: bounds.y };
     state.windowSize = { width: bounds.width, height: bounds.height };
     state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    state.mainWindow.setOpacity(0);
+    state.mainWindow.hide();
     state.isWindowVisible = false;
-    console.log('Window hidden, opacity set to 0');
+    console.log('Window hidden');
   }
 }
 
@@ -689,16 +684,13 @@ function showMainWindow(): void {
         visibleOnFullScreen: true
       });
       state.mainWindow.setContentProtection(true);
-      state.mainWindow.setOpacity(0); // Set opacity to 0 before showing
-      state.mainWindow.showInactive(); // Use showInactive instead of show+focus
-      state.mainWindow.setOpacity(1); // Then set opacity to 1 after showing
+      state.mainWindow.show();
       state.isWindowVisible = true;
-      console.log(`Window shown at position (${state.currentX}, ${state.currentY}), opacity set to 1`);
+      console.log(`Window shown at position (${state.currentX}, ${state.currentY})`);
     } catch (error) {
       console.error('Error showing main window:', error)
       // 简单回退方案
-      state.mainWindow.setOpacity(1)
-      state.mainWindow.showInactive()
+      state.mainWindow.show()
       state.isWindowVisible = true
     }
   }
@@ -744,9 +736,9 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
   })
 
   // 确保窗口可见且响应
-  if (state.mainWindow.getOpacity() === 0) {
+  if (!state.isWindowVisible || !state.mainWindow.isVisible()) {
     console.log("Window was hidden, making it visible for movement")
-    state.mainWindow.setOpacity(1)
+    state.mainWindow.show()
     state.mainWindow.setIgnoreMouseEvents(false)
     state.isWindowVisible = true
   }

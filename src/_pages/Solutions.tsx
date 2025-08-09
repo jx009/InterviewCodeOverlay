@@ -833,7 +833,7 @@ const Solutions: React.FC<SolutionsProps> = ({
           </div>
 
           {/* Main Content - Modified width constraints */}
-          <div className="w-full text-sm text-black bg-black/60 rounded-md pointer-events-none main-content">
+          <div className="w-full text-sm text-black opacity-controlled-bg rounded-md pointer-events-none main-content">
             <div className="rounded-lg overflow-hidden">
               <div className="px-4 py-3 space-y-4 max-w-full">
                 {!solutionData && !multipleChoiceAnswers && !isStreaming && (

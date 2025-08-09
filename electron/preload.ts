@@ -293,6 +293,15 @@ const electronAPI = {
   getOpacity: () => ipcRenderer.invoke("get-opacity"),
   setOpacity: (opacity: number) => ipcRenderer.invoke("set-opacity", opacity),
   
+  // 🆕 背景透明度变更事件监听
+  onBackgroundOpacityChanged: (callback: (opacity: number) => void) => {
+    const subscription = (_: any, opacity: number) => callback(opacity)
+    ipcRenderer.on("background-opacity-changed", subscription)
+    return () => {
+      ipcRenderer.removeListener("background-opacity-changed", subscription)
+    }
+  },
+  
   // Web Authentication event listeners
   onWebAuthStatus: (callback: (data: { authenticated: boolean; user: any }) => void) => {
     const subscription = (_: any, data: { authenticated: boolean; user: any }) => callback(data)

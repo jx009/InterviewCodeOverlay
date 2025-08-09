@@ -236,6 +236,19 @@ function App() {
     };
   }, []);
 
+  // 🆕 监听背景透明度变更事件
+  useEffect(() => {
+    const unsubscribeOpacity = window.electronAPI.onBackgroundOpacityChanged?.((opacity: number) => {
+      console.log('Background opacity changed:', opacity);
+      // 更新CSS变量以控制背景透明度
+      document.documentElement.style.setProperty('--bg-opacity', opacity.toString());
+    });
+    
+    return () => {
+      unsubscribeOpacity?.();
+    };
+  }, []);
+
   // Initialize basic app state
   useEffect(() => {
     // Load config and set values

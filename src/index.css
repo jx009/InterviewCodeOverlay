@@ -2,9 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 🆕 CSS变量用于控制背景透明度 */
+:root {
+  --bg-opacity: 0.8; /* 默认背景透明度 */
+}
+
 /* 根元素透明背景 */
 html, body, #root {
   background: transparent !important;
+}
+
+/* 🆕 背景透明度控制类 */
+.opacity-controlled-bg {
+  background-color: rgba(0, 0, 0, var(--bg-opacity)) !important;
+}
+
+/* 🆕 可控制的半透明背景（用于按钮等） */
+.opacity-controlled-bg-light {
+  background-color: rgba(0, 0, 0, calc(var(--bg-opacity) * 0.6)) !important;
+}
+
+.opacity-controlled-bg-light:hover {
+  background-color: rgba(0, 0, 0, var(--bg-opacity)) !important;
+}
+
+/* 🆕 代码块背景 - 使用固定的半透明度以确保可读性 */
+.code-block-bg {
+  background-color: rgba(0, 0, 0, 0.4) !important; /* 代码块背景保持固定透明度 */
+}
+
+/* 🆕 代码高亮背景 - 更暗一些以便突出代码 */
+.code-highlight-bg {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* 确保代码块文字始终不透明 */
+pre, code, .hljs {
+  color: rgba(255, 255, 255, 1) !important; /* 代码文字始终完全不透明 */
+}
+
+/* 确保其他重要文字元素不受背景透明度影响 */
+.text-preserve {
+  opacity: 1 !important;
 }
 
 /* Custom animations for UI elements */

@@ -13,19 +13,20 @@ export class ShortcutsHelper {
     const mainWindow = this.deps.getMainWindow();
     if (!mainWindow) return;
     
-    let currentOpacity = mainWindow.getOpacity();
+    // 从配置获取当前背景透明度
+    const config = configHelper.loadConfig();
+    let currentOpacity = config.clientSettings?.backgroundOpacity || 0.8;
     let newOpacity = Math.max(0.1, Math.min(1.0, currentOpacity + delta));
-    console.log(`Adjusting opacity from ${currentOpacity} to ${newOpacity}`);
+    console.log(`Adjusting background opacity from ${currentOpacity} to ${newOpacity}`);
     
-    mainWindow.setOpacity(newOpacity);
+    // 发送背景透明度变更事件到前端
+    mainWindow.webContents.send("background-opacity-changed", newOpacity);
     
-    // Save the opacity setting to config without re-initializing the client
+    // Save the background opacity setting to config
     try {
-      const config = configHelper.loadConfig();
-      configHelper.updateClientSettings({ opacity: newOpacity });
-      configHelper.saveConfig(config);
+      configHelper.updateClientSettings({ backgroundOpacity: newOpacity });
     } catch (error) {
-      console.error('Error saving opacity to config:', error);
+      console.error('Error saving background opacity to config:', error);
     }
     
     // If we're making the window visible, also make sure it's shown and interaction is enabled
@@ -93,9 +94,8 @@ export class ShortcutsHelper {
       const mainWindow = this.deps.getMainWindow()
       if (mainWindow && !mainWindow.isDestroyed()) {
         // 确保窗口可见并恢复焦点
-        if (mainWindow.getOpacity() === 0 || !this.deps.isVisible()) {
+        if (!this.deps.isVisible()) {
           console.log("Window was hidden, restoring visibility...")
-          mainWindow.setOpacity(1)
           mainWindow.setIgnoreMouseEvents(false)
           mainWindow.showInactive()
           // 更新状态管理
@@ -240,7 +240,6 @@ export class ShortcutsHelper {
           const centerY = workArea.y + (workArea.height - bounds.height) / 2
           
           mainWindow.setPosition(Math.round(centerX), Math.round(centerY))
-          mainWindow.setOpacity(1)
           mainWindow.setIgnoreMouseEvents(false)
           mainWindow.show()
           mainWindow.focus()

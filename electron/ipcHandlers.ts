@@ -363,7 +363,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
-  // 🆕 透明度控制IPC处理器
+  // 🆕 透明度控制IPC处理器 - 改为控制CSS背景透明度而非窗口透明度
   ipcMain.handle("adjust-opacity", (event, delta: number) => {
     try {
       const mainWindow = deps.getMainWindow()
@@ -371,14 +371,17 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: "Main window not available" }
       }
       
-      const currentOpacity = mainWindow.getOpacity()
+      // 从配置获取当前透明度值
+      const config = configHelper.loadConfig()
+      const currentOpacity = config.clientSettings?.backgroundOpacity || 0.8
       const newOpacity = Math.max(0.1, Math.min(1.0, currentOpacity + delta))
-      console.log(`IPC调整透明度: ${currentOpacity} -> ${newOpacity}`)
+      console.log(`IPC调整背景透明度: ${currentOpacity} -> ${newOpacity}`)
       
-      mainWindow.setOpacity(newOpacity)
+      // 发送CSS透明度更新事件到前端
+      mainWindow.webContents.send("background-opacity-changed", newOpacity)
       
-      // 保存透明度到配置文件
-      configHelper.updateClientSettings({ opacity: newOpacity })
+      // 保存背景透明度到配置文件
+      configHelper.updateClientSettings({ backgroundOpacity: newOpacity })
       
       return { 
         success: true, 
@@ -386,22 +389,19 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         previousOpacity: currentOpacity 
       }
     } catch (error) {
-      console.error("Failed to adjust opacity:", error)
+      console.error("Failed to adjust background opacity:", error)
       return { success: false, error: error.message }
     }
   })
 
   ipcMain.handle("get-opacity", () => {
     try {
-      const mainWindow = deps.getMainWindow()
-      if (!mainWindow) {
-        return { success: false, error: "Main window not available" }
-      }
-      
-      const currentOpacity = mainWindow.getOpacity()
+      // 从配置获取背景透明度值
+      const config = configHelper.loadConfig()
+      const currentOpacity = config.clientSettings?.backgroundOpacity || 0.8
       return { success: true, opacity: currentOpacity }
     } catch (error) {
-      console.error("Failed to get opacity:", error)
+      console.error("Failed to get background opacity:", error)
       return { success: false, error: error.message }
     }
   })
@@ -414,16 +414,17 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
       }
       
       const clampedOpacity = Math.max(0.1, Math.min(1.0, opacity))
-      console.log(`IPC设置透明度: ${clampedOpacity}`)
+      console.log(`IPC设置背景透明度: ${clampedOpacity}`)
       
-      mainWindow.setOpacity(clampedOpacity)
+      // 发送CSS透明度更新事件到前端
+      mainWindow.webContents.send("background-opacity-changed", clampedOpacity)
       
-      // 保存透明度到配置文件
-      configHelper.updateClientSettings({ opacity: clampedOpacity })
+      // 保存背景透明度到配置文件
+      configHelper.updateClientSettings({ backgroundOpacity: clampedOpacity })
       
       return { success: true, opacity: clampedOpacity }
     } catch (error) {
-      console.error("Failed to set opacity:", error)
+      console.error("Failed to set background opacity:", error)
       return { success: false, error: error.message }
     }
   })
