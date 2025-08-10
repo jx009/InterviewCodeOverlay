@@ -5,8 +5,8 @@ import { Pagination } from '../components/shared/Pagination';
 
 // 使用与其他模块一致的API基础URL
 const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://quiz.playoffer.cn/api'
-  : 'https://quiz.playoffer.cn/api';
+  ? 'http://159.75.174.234:3004/api'
+  : 'http://159.75.174.234:3004/api';
 
 interface ModelPointConfig {
   id: number;
