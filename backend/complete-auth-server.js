@@ -135,18 +135,18 @@ function createVerificationEmail(code, email) {
   return {
     from: process.env.SMTP_USER,
     to: email,
-    subject: 'InterviewCodeOverlay - 邮箱验证码',
+    subject: 'QuizCoze - 邮箱验证码',
     html: `
       <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">InterviewCodeOverlay</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">QuizCoze</h1>
           <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">面试代码助手</p>
         </div>
         
         <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
           <h2 style="color: #333; margin-top: 0;">邮箱验证码</h2>
           <p style="color: #666; font-size: 16px; line-height: 1.6;">
-            您好！您正在注册 InterviewCodeOverlay 账户，请使用以下验证码完成注册：
+            您好！您正在注册 QuizCoze 账户，请使用以下验证码完成注册：
           </p>
           
           <div style="background: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px dashed #667eea;">

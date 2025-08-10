@@ -30,7 +30,7 @@ const PaymentPackageCard: React.FC<PaymentPackageCardProps> = ({
   };
 
   // 计算总积分
-  const totalPoints = pkg.points + pkg.bonusPoints;
+  const totalPoints = pkg.totalPoints || (pkg.points + pkg.bonusPoints);
   
   // 计算性价比（积分/元）
   const costEffectiveness = totalPoints / pkg.amount;
@@ -55,11 +55,22 @@ const PaymentPackageCard: React.FC<PaymentPackageCardProps> = ({
         </div>
       )}
 
-      {/* 测试套餐标签 */}
-      {pkg.id === 999 && (
+      {/* 套餐标签 */}
+      {pkg.label && (
         <div className="absolute -top-3 right-4">
-          <span className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-            🧪 测试
+          <span
+            className={`text-white px-3 py-1 rounded-full text-sm font-medium ${
+              pkg.labelColor === 'red' ? 'bg-red-500' :
+              pkg.labelColor === 'blue' ? 'bg-blue-500' :
+              pkg.labelColor === 'green' ? 'bg-green-500' :
+              pkg.labelColor === 'orange' ? 'bg-orange-500' :
+              'bg-gray-500'
+            }`}
+          >
+            {pkg.label === 'hot_sale' ? '热门推荐' :
+             pkg.label === 'best_value' ? '性价比之选' :
+             pkg.label === 'limited_time' ? '限时优惠' :
+             pkg.label}
           </span>
         </div>
       )}
@@ -104,17 +115,12 @@ const PaymentPackageCard: React.FC<PaymentPackageCardProps> = ({
         </div>
       </div>
 
-      {/* 标签 */}
-      {pkg.tags && pkg.tags.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {pkg.tags.map((tag, index) => (
-            <span
-              key={index}
-              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-            >
-              {tag}
-            </span>
-          ))}
+      {/* 额外赠送提示 */}
+      {pkg.bonusPoints > 0 && (
+        <div className="text-center mb-4">
+          <span className="text-green-600 text-sm font-medium">
+            💰 额外获得 {Math.round((pkg.bonusPoints / pkg.points) * 100)}% 积分
+          </span>
         </div>
       )}
 

@@ -340,7 +340,7 @@ const Debug: React.FC<DebugProps> = ({
       </div>
 
       {/* Main Content */}
-      <div className="w-full text-sm text-black bg-black/60 rounded-md pointer-events-none main-content">
+      <div className="w-full text-sm text-black opacity-controlled-bg rounded-md pointer-events-none main-content">
         <div className="rounded-lg overflow-hidden">
           <div className="px-4 py-3 space-y-4">
             {/* Thoughts Section */}
@@ -383,7 +383,7 @@ const Debug: React.FC<DebugProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="w-full bg-black/30 rounded-md p-4 text-[13px] leading-[1.4] text-gray-100 whitespace-pre-wrap overflow-auto max-h-[500px]">
+                <div className="w-full code-block-bg rounded-md p-4 text-[13px] leading-[1.4] text-gray-100 whitespace-pre-wrap overflow-auto max-h-[500px] text-preserve">
                   {/* Process the debug analysis text by sections and lines */}
                   {(() => {
                     // First identify key sections based on common patterns in the debug output
@@ -448,7 +448,7 @@ const Debug: React.FC<DebugProps> = ({
                                   lineIndex = codeBlockEndIndex;
                                   
                                   return (
-                                    <div key={lineIndex} className="font-mono text-xs bg-black/50 p-3 my-2 rounded overflow-x-auto">
+                                    <div key={lineIndex} className="font-mono text-xs code-highlight-bg p-3 my-2 rounded overflow-x-auto text-preserve">
                                       {codeContent}
                                     </div>
                                   );
@@ -475,7 +475,7 @@ const Debug: React.FC<DebugProps> = ({
                                 <div key={lineIndex} className="my-1.5">
                                   {parts.map((part, partIndex) => {
                                     if (part.startsWith('`') && part.endsWith('`')) {
-                                      return <span key={partIndex} className="font-mono bg-black/30 px-1 py-0.5 rounded">{part.slice(1, -1)}</span>;
+                                      return <span key={partIndex} className="font-mono code-block-bg px-1 py-0.5 rounded text-preserve">{part.slice(1, -1)}</span>;
                                     }
                                     return <span key={partIndex}>{part}</span>;
                                   })}

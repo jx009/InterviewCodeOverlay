@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
+  darkMode: 'class', // 启用深色模式支持
   theme: {
     extend: {
       fontFamily: {

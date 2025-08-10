@@ -11,7 +11,8 @@ const rechargePackages = [
     isRecommended: false,
     sortOrder: 0,
     icon: "🧪",
-    tags: ["测试专用"]
+    label: "test",
+    labelColor: "gray"
   },
   {
     id: 1,
@@ -24,7 +25,8 @@ const rechargePackages = [
     isRecommended: false,
     sortOrder: 1,
     icon: "🌟",
-    tags: ["新手推荐"]
+    label: "new_user",
+    labelColor: "blue"
   },
   {
     id: 2,
@@ -37,7 +39,7 @@ const rechargePackages = [
     isRecommended: true,
     sortOrder: 2,
     icon: "💎",
-    tags: ["热门推荐", "性价比之选"]
+    label: "package", labelColor: "blue"
   },
   {
     id: 3,
@@ -50,7 +52,7 @@ const rechargePackages = [
     isRecommended: false,
     sortOrder: 3,
     icon: "👑",
-    tags: ["专业版"]
+    label: "package", labelColor: "blue"
   },
   {
     id: 4,
@@ -63,7 +65,7 @@ const rechargePackages = [
     isRecommended: false,
     sortOrder: 4,
     icon: "🏢",
-    tags: ["企业专用", "大容量"]
+    label: "package", labelColor: "blue"
   },
   {
     id: 5,
@@ -76,7 +78,7 @@ const rechargePackages = [
     isRecommended: false,
     sortOrder: 5,
     icon: "💰",
-    tags: ["VIP专享", "超值优惠"]
+    label: "package", labelColor: "blue"
   }
 ];
 

@@ -49,6 +49,37 @@ function App() {
             <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           </Route>
           
+          {/* 🆕 文档重定向路由 */}
+          <Route path="/doc" element={
+            (() => {
+              // 使用立即执行函数创建内联重定向组件
+              const DocRedirectComponent = () => {
+                useEffect(() => {
+                  window.location.href = 'https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#';
+                }, []);
+
+                return (
+                  <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                      <p className="text-lg mb-2">正在跳转到文档...</p>
+                      <p className="text-sm text-gray-400">
+                        如果没有自动跳转，请
+                        <a 
+                          href="https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#" 
+                          className="text-blue-400 hover:text-blue-300 underline ml-1"
+                        >
+                          点击这里
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                );
+              };
+              return <DocRedirectComponent />;
+            })()
+          } />
+          
           {/* 认证相关路由 - 无导航栏 */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

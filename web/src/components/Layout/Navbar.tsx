@@ -38,10 +38,12 @@ const Navbar: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+              <img 
+                src="/logo.png" 
+                alt="QuizCoze Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="text-white font-semibold text-lg">QuizCoze</span>
           </Link>
@@ -61,6 +63,16 @@ const Navbar: React.FC = () => {
                 {item.name}
               </Link>
             ))}
+            
+            {/* 使用文档按钮 */}
+            <a
+              href="https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors duration-200"
+            >
+              使用文档
+            </a>
             
             {/* 个人按钮 */}
             <button
@@ -118,6 +130,14 @@ const Navbar: React.FC = () => {
               {item.name}
             </Link>
           ))}
+          <a
+            href="https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors duration-200"
+          >
+            使用文档
+          </a>
           <button
             onClick={handleProfileClick}
             className={`block w-full text-left px-3 py-2 text-base font-medium transition-colors duration-200 ${

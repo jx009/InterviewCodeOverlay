@@ -22,6 +22,10 @@ export class ScreenshotHelper {
 
   private view: "queue" | "solutions" | "debug" = "queue"
 
+  // 资源管理相关
+  private lastScreenshotTime = 0
+  private readonly MIN_SCREENSHOT_INTERVAL = 1000 // 1秒间隔
+
   constructor(view: "queue" | "solutions" | "debug" = "queue") {
     this.view = view
 
@@ -263,6 +267,15 @@ export class ScreenshotHelper {
     showMainWindow: () => void
   ): Promise<string> {
     console.log("Taking screenshot in view:", this.view)
+    
+    // 检查截图频率限制
+    const now = Date.now()
+    if (now - this.lastScreenshotTime < this.MIN_SCREENSHOT_INTERVAL) {
+      const remainingTime = this.MIN_SCREENSHOT_INTERVAL - (now - this.lastScreenshotTime)
+      throw new Error(`截图过于频繁，请等待 ${Math.ceil(remainingTime / 1000)} 秒后再试`)
+    }
+    this.lastScreenshotTime = now
+    
     hideMainWindow()
     
     // Increased delay for window hiding on Windows
@@ -384,5 +397,55 @@ export class ScreenshotHelper {
       }
     })
     this.extraScreenshotQueue = []
+  }
+
+  /**
+   * 清理所有临时文件和缓存 (Ctrl+R调用)
+   */
+  public cleanupAllTempFiles(): void {
+    console.log("🧹 开始清理所有临时文件和缓存...")
+    
+    try {
+      // 1. 清理临时目录中的所有文件
+      if (fs.existsSync(this.tempDir)) {
+        const tempFiles = fs.readdirSync(this.tempDir)
+        let cleanedCount = 0
+        
+        for (const file of tempFiles) {
+          try {
+            const filePath = path.join(this.tempDir, file)
+            const stats = fs.statSync(filePath)
+            
+            // 删除所有临时文件(包括temp-*.png和ps-temp-*.png)
+            if (file.includes('temp-') && file.endsWith('.png')) {
+              fs.unlinkSync(filePath)
+              console.log(`🗑️ 删除临时文件: ${file}`)
+              cleanedCount++
+            }
+            // 删除超过1小时的其他文件
+            else if (Date.now() - stats.mtime.getTime() > 60 * 60 * 1000) {
+              fs.unlinkSync(filePath)
+              console.log(`🗑️ 删除过期文件: ${file}`)
+              cleanedCount++
+            }
+          } catch (err) {
+            console.warn(`⚠️ 删除临时文件失败 ${file}:`, err.message)
+          }
+        }
+        
+        console.log(`✅ 临时目录清理完成，删除了 ${cleanedCount} 个文件`)
+      }
+      
+      // 2. 重新清理截图目录
+      this.cleanScreenshotDirectories()
+      
+      // 3. 清理队列
+      this.clearQueues()
+      
+      console.log("✅ 所有临时文件和缓存清理完成")
+      
+    } catch (error) {
+      console.error("❌ 清理临时文件时出错:", error)
+    }
   }
 }

@@ -83,7 +83,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
     
     // Save language preference to web-side configuration
     try {
-      const response = await fetch('http://localhost:3001/api/config', {
+      const response = await fetch('https://quiz.playoffer.cn/api/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -119,7 +119,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
       }}
     >
       {isHovered ? (
-        <div className="bg-black p-2 border-b border-white/10 flex items-center justify-between transition-all duration-200">
+        <div className="opacity-controlled-bg p-2 border-b border-white/10 flex items-center justify-between transition-all duration-200">
           <div className="flex items-center space-x-1">
             <span className="text-white text-sm mr-2">语言:</span>
             <div className="relative">
@@ -136,7 +136,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
               </button>
               
               {dropdownOpen && (
-                <div className="absolute z-10 mt-1 w-full rounded-md bg-black border border-white/10 shadow-lg">
+                <div className="absolute z-10 mt-1 w-full rounded-md opacity-controlled-bg border border-white/10 shadow-lg">
                   <div className="py-1">
                     {LANGUAGES.map((lang) => (
                       <button
@@ -214,7 +214,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
           </div>
         </div>
       ) : (
-        <div className="bg-black/50 hover:bg-black/80 p-2 w-8 h-8 rounded-br-lg flex items-center justify-center transition-all duration-200">
+        <div className="opacity-controlled-bg-light p-2 w-8 h-8 rounded-br-lg flex items-center justify-center transition-all duration-200">
           <Menu className="h-4 w-4 text-white/70" />
         </div>
       )}

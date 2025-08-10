@@ -1,9 +1,9 @@
 {
   "mysql": {
-    "host": "localhost",
+    "host": "159.75.174.234",
     "port": 3306,
-    "username": "root",
-    "password": "YOUR_MYSQL_PASSWORD_HERE",
+    "username": "shuaidi",
+    "password": "e123456@",
     "database": "interview_coder",
     "charset": "utf8mb4",
     "collation": "utf8mb4_unicode_ci",

@@ -12,6 +12,7 @@ import Debug from "./Debug"
 import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
 import { useLanguageConfig } from "../hooks/useLanguageConfig"
+import { parseStreamedSolution, shouldStartDisplaying } from "../utils/streamParser"
 
 export const ContentSection = ({
   title,
@@ -43,12 +44,20 @@ const SolutionSection = ({
   title,
   content,
   isLoading,
-  currentLanguage
+  currentLanguage,
+  // 🆕 流式相关属性
+  isStreaming,
+  streamingContent,
+  streamingProgress
 }: {
   title: string
   content: React.ReactNode
   isLoading: boolean
   currentLanguage: string
+  // 🆕 流式相关属性类型
+  isStreaming?: boolean
+  streamingContent?: string
+  streamingProgress?: number
 }) => {
   const [copied, setCopied] = useState(false)
   const [showCopyButton, setShowCopyButton] = useState(true)
@@ -66,20 +75,61 @@ const SolutionSection = ({
   }, [])
 
   const copyToClipboard = () => {
-    if (typeof content === "string") {
-      navigator.clipboard.writeText(content).then(() => {
+    // 🆕 优先复制流式内容，否则复制最终内容
+    const textToCopy = (isStreaming && streamingContent) ? streamingContent : content
+    if (typeof textToCopy === "string") {
+      navigator.clipboard.writeText(textToCopy).then(() => {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       })
     }
   }
 
+  // 🆕 决定显示什么内容：流式内容 > 最终内容
+  let displayContent = content
+  
+  if (isStreaming && streamingContent) {
+    // 🔧 从流式内容中提取代码部分进行显示
+    const codeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*?)(?:```|$)/)
+    if (codeMatch && codeMatch[1]) {
+      // 找到代码块，显示代码内容
+      displayContent = codeMatch[1]
+    } else {
+      // 没有找到完整代码块，尝试查找部分代码
+      const partialCodeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*)$/)
+      if (partialCodeMatch && partialCodeMatch[1]) {
+        displayContent = partialCodeMatch[1]
+      } else {
+        // 如果没有代码块标记，检查是否包含代码关键字，如果是则显示原始内容
+        if (streamingContent.includes('def ') || streamingContent.includes('function') || 
+            streamingContent.includes('class ') || streamingContent.includes('import') ||
+            streamingContent.includes('public ') || streamingContent.includes('#include') ||
+            streamingContent.includes('var ') || streamingContent.includes('let ') ||
+            streamingContent.includes('const ') || streamingContent.includes('int main')) {
+          displayContent = streamingContent
+        } else {
+          // 如果当前内容不像代码，则保持显示已有的内容或空
+          displayContent = content || ""
+        }
+      }
+    }
+  }
+  
+  const showStreamingIndicator = isStreaming && streamingProgress !== undefined
+  
   return (
     <div className="space-y-2 relative">
-      <h2 className="text-[13px] font-medium text-white tracking-wide">
+      <h2 className="text-[13px] font-medium text-white tracking-wide flex items-center gap-2">
         {title}
+        {/* 🆕 流式状态指示器 */}
+        {showStreamingIndicator && (
+          <div className="flex items-center gap-1 text-xs text-blue-400">
+            <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse"></div>
+            <span>正在生成... {streamingProgress}%</span>
+          </div>
+        )}
       </h2>
-      {isLoading ? (
+      {isLoading && !isStreaming ? (
         <div className="space-y-1.5">
           <div className="mt-4 flex">
             <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
@@ -99,6 +149,7 @@ const SolutionSection = ({
           )}
           <div>
             <SyntaxHighlighter
+              key={isStreaming ? `streaming-${streamingContent?.length || 0}` : 'static'}
               showLineNumbers
               language={
                 currentLanguage === "Go" || currentLanguage === "Golang" ? "go" : 
@@ -126,13 +177,26 @@ const SolutionSection = ({
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-all",
                 backgroundColor: "rgba(22, 27, 34, 0.5)",
-                userSelect: "none"
+                userSelect: "none",
+                // 🆕 流式模式的视觉效果
+                ...(isStreaming && {
+                  borderRight: "2px solid #3b82f6",
+                  animation: "pulse 1.5s ease-in-out infinite"
+                })
               }}
               wrapLongLines={true}
-              className="pointer-events-none"
+              className={`pointer-events-none ${isStreaming ? 'streaming-code' : ''}`}
             >
-              {content as string}
+              {displayContent as string}
             </SyntaxHighlighter>
+            
+            {/* 🆕 流式模式下的光标效果 */}
+            {isStreaming && (
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 text-xs text-blue-400 bg-black/50 px-2 py-1 rounded">
+                <div className="w-1 h-3 bg-blue-400 animate-pulse"></div>
+                <span>生成中...</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -276,6 +340,12 @@ const Solutions: React.FC<SolutionsProps> = ({
   )
   const [multipleChoiceAnswers, setMultipleChoiceAnswers] = useState<MultipleChoiceAnswer[] | null>(null)
 
+  // 🆕 流式输出状态管理
+  const [isStreaming, setIsStreaming] = useState<boolean>(false)
+  const [streamingContent, setStreamingContent] = useState<string>('')
+  const [streamingProgress, setStreamingProgress] = useState<number>(0)
+  const [streamingParsedData, setStreamingParsedData] = useState<any>(null)
+
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const [tooltipHeight, setTooltipHeight] = useState(0)
 
@@ -383,6 +453,12 @@ const Solutions: React.FC<SolutionsProps> = ({
         setThoughtsData(null)
         setTimeComplexityData(null)
         setSpaceComplexityData(null)
+        
+        // 🆕 重置流式状态，但不设置为false，让流式事件自己控制
+        // setIsStreaming(false) - 移除这行，让流式事件自己管理
+        setStreamingContent('')
+        setStreamingProgress(0)
+        setStreamingParsedData(null)
       }),
       window.electronAPI.onProblemExtracted((data) => {
         queryClient.setQueryData(["problem_statement"], data)
@@ -484,7 +560,150 @@ const Solutions: React.FC<SolutionsProps> = ({
           "neutral"
         )
       }),
+      // 代码复制快捷键监听器 - 使用主进程clipboard API
+      window.electronAPI.onRequestCodeForCopy(() => {
+        console.log("📥 Received request-code-for-copy event, executing copy logic...")
+        
+        // 获取当前 solution 数据
+        const solution = queryClient.getQueryData(["solution"]) as any
+        
+        // 检查是否有编程题代码
+        if (solution?.code && typeof solution.code === "string") {
+          console.log("✅ Found code, copying to clipboard via main process...")
+          
+          // 使用主进程的clipboard API
+          window.electronAPI.copyCodeToClipboard(solution.code).then((result) => {
+            if (result.success) {
+              console.log("✅ Code copied successfully via main process")
+              showToast(
+                "复制成功",
+                "代码已复制到剪贴板",
+                "success"
+              )
+            } else {
+              console.error("❌ Main process copy failed:", result.error)
+              showToast(
+                "复制失败",
+                "无法复制代码到剪贴板",
+                "error"
+              )
+            }
+          }).catch((error) => {
+            console.error("❌ Copy operation failed:", error)
+            showToast(
+              "复制失败",
+              "无法复制代码到剪贴板",
+              "error"
+            )
+          })
+        } else {
+          console.log("❌ No valid code found to copy")
+          showToast(
+            "复制失败",
+            "没有找到可复制的代码",
+            "error"
+          )
+        }
+      }),
       // Removed out of credits handler - unlimited credits in this version
+      
+      // 🆕 流式输出事件监听器
+      window.electronAPI.onSolutionStreamChunk((data) => {
+        console.log('📥 收到流式数据块:', {
+          deltaLength: data.delta?.length || 0,
+          fullContentLength: data.fullContent?.length || 0,
+          progress: data.progress,
+          isComplete: data.isComplete
+        })
+        
+        console.log('🔍 当前前端状态:', {
+          isStreaming,
+          streamingContent: streamingContent.substring(0, 50) + '...',
+          solutionData: solutionData?.substring(0, 50) + '...' || 'null'
+        })
+
+        // 🆕 处理流式传输开始信号
+        if (data.streamingStarted) {
+          console.log('🚀 收到流式传输开始信号，激活流式模式')
+          setIsStreaming(true)
+          setStreamingContent('')
+          setStreamingProgress(0)
+          return
+        }
+
+        if (data.isComplete) {
+          // 流式传输完成
+          console.log('✅ 流式传输完成，最终内容长度:', data.fullContent?.length)
+          
+          // 🔧 保持流式内容显示更长时间，然后逐渐切换到最终状态
+          setTimeout(() => {
+            setIsStreaming(false)
+            // 不要立即清空流式内容，让它自然切换到最终解析的内容
+            // setStreamingContent('')
+            setStreamingProgress(100)
+          }, 1500) // 延迟1500ms切换，让用户充分看到流式完成效果
+          
+          // 解析完整内容并设置最终状态
+          if (data.fullContent && shouldStartDisplaying(data.fullContent)) {
+            const parsed = parseStreamedSolution(data.fullContent)
+            console.log('📊 解析完成的流式内容:', parsed)
+            
+            // 根据类型设置相应的状态
+            if (parsed.type === 'programming') {
+              setSolutionData(parsed.code)
+              setThoughtsData(parsed.thoughts)
+              setTimeComplexityData(parsed.timeComplexity)
+              setSpaceComplexityData(parsed.spaceComplexity)
+              setMultipleChoiceAnswers(null)
+            } else {
+              setSolutionData(null)
+              setThoughtsData(parsed.thoughts)
+              setTimeComplexityData(null)
+              setSpaceComplexityData(null)
+              setMultipleChoiceAnswers(parsed.answers || null)
+            }
+            
+            // 缓存到queryClient
+            queryClient.setQueryData(["solution"], {
+              type: parsed.type,
+              code: parsed.code,
+              thoughts: parsed.thoughts,
+              time_complexity: parsed.timeComplexity,
+              space_complexity: parsed.spaceComplexity,
+              answers: parsed.answers
+            })
+          }
+        } else if (data.fullContent && shouldStartDisplaying(data.fullContent)) {
+          // 接收流式数据块
+          console.log('📝 处理流式数据块，设置流式状态为true')
+          setIsStreaming(true)
+          setStreamingContent(data.fullContent)
+          setStreamingProgress(data.progress || 0)
+          
+          // 实时解析内容用于预览
+          const parsed = parseStreamedSolution(data.fullContent)
+          setStreamingParsedData(parsed)
+          
+          console.log(`📝 流式内容更新: ${data.fullContent.length} 字符, 进度: ${data.progress}%`)
+          console.log(`📄 流式内容预览: "${data.fullContent.substring(0, 100)}..."`)
+        } else if (data.fullContent && data.fullContent.length > 0) {
+          // 即使内容不满足shouldStartDisplaying，但有内容就开始流式显示
+          console.log('📝 收到流式内容，强制开始流式显示')
+          setIsStreaming(true)
+          setStreamingContent(data.fullContent)
+          setStreamingProgress(data.progress || 0)
+        }
+      }),
+
+      window.electronAPI.onSolutionStreamError((error: string) => {
+        console.error('❌ 流式传输错误:', error)
+        setIsStreaming(false)
+        setStreamingContent('')
+        setStreamingProgress(0)
+        setStreamingParsedData(null)
+        
+        showToast("流式处理失败", error, "error")
+      }),
     ]
 
     return () => {
@@ -497,7 +716,21 @@ const Solutions: React.FC<SolutionsProps> = ({
     setProblemStatementData(
       queryClient.getQueryData(["problem_statement"]) || null
     )
-    setSolutionData(queryClient.getQueryData(["solution"]) || null)
+    
+    // 正确处理初始解决方案数据
+    const initialSolution = queryClient.getQueryData(["solution"]) as SolutionData | null
+    if (initialSolution?.type === 'multiple_choice') {
+      // 选择题：不设置代码数据
+      setSolutionData(null)
+      setMultipleChoiceAnswers(initialSolution?.answers ?? null)
+    } else if (initialSolution) {
+      // 编程题：设置代码数据
+      setSolutionData(initialSolution?.code ?? null)
+      setMultipleChoiceAnswers(null)
+    } else {
+      setSolutionData(null)
+      setMultipleChoiceAnswers(null)
+    }
 
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
       if (event?.query.queryKey[0] === "problem_statement") {
@@ -593,17 +826,17 @@ const Solutions: React.FC<SolutionsProps> = ({
           <div className="top-area">
             <SolutionCommands
               onTooltipVisibilityChange={handleTooltipVisibilityChange}
-              isProcessing={!problemStatementData || (!solutionData && !multipleChoiceAnswers)}
+              isProcessing={!problemStatementData || (!solutionData && !multipleChoiceAnswers && !isStreaming)}
               extraScreenshots={extraScreenshots}
               credits={credits}
             />
           </div>
 
           {/* Main Content - Modified width constraints */}
-          <div className="w-full text-sm text-black bg-black/60 rounded-md pointer-events-none main-content">
+          <div className="w-full text-sm text-black opacity-controlled-bg rounded-md pointer-events-none main-content">
             <div className="rounded-lg overflow-hidden">
               <div className="px-4 py-3 space-y-4 max-w-full">
-                {!solutionData && !multipleChoiceAnswers && (
+                {!solutionData && !multipleChoiceAnswers && !isStreaming && (
                   <>
                     <ContentSection
                       title="问题描述"
@@ -620,38 +853,53 @@ const Solutions: React.FC<SolutionsProps> = ({
                   </>
                 )}
 
-                {(solutionData || multipleChoiceAnswers) && (
+                {(solutionData || multipleChoiceAnswers || isStreaming) && (
                   <>
                     <ContentSection
-                      title={`我的思路 (${COMMAND_KEY} + 方向键滚动)`}
+                      title={`我的思路 (${COMMAND_KEY} + 方向键滚动)${isStreaming ? ' - 正在生成...' : ''}`}
                       content={
-                        thoughtsData && (
+                        // 🆕 优先显示流式解析的思路，否则显示最终思路
+                        (isStreaming && streamingParsedData?.thoughts?.length ? streamingParsedData.thoughts : thoughtsData) && (
                           <div className="space-y-3">
                             <div className="space-y-1">
-                              {thoughtsData.map((thought, index) => (
+                              {(isStreaming && streamingParsedData?.thoughts?.length ? streamingParsedData.thoughts : thoughtsData || []).map((thought, index) => (
                                 <div
                                   key={index}
-                                  className="flex items-start gap-2"
+                                  className={`flex items-start gap-2 ${isStreaming ? 'animate-fadeIn' : ''}`}
                                 >
-                                  <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-                                  <div>{thought}</div>
+                                  <div className={`w-1 h-1 rounded-full mt-2 shrink-0 ${
+                                    isStreaming ? 'bg-blue-400 animate-pulse' : 'bg-blue-400/80'
+                                  }`} />
+                                  <div className={isStreaming ? 'text-blue-100' : ''}>{thought}</div>
                                 </div>
                               ))}
+                              
+                              {/* 🆕 流式模式下的思路生成提示 */}
+                              {isStreaming && (
+                                <div className="flex items-start gap-2 opacity-60">
+                                  <div className="w-1 h-1 rounded-full bg-blue-400 mt-2 shrink-0 animate-ping" />
+                                  <div className="text-blue-300 text-xs italic">思路分析中...</div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )
                       }
-                      isLoading={!thoughtsData}
+                      isLoading={!thoughtsData && !isStreaming}
                     />
 
                     {/* 编程题显示代码和复杂度 */}
-                    {solutionData && (
+                    {(solutionData || (isStreaming && streamingContent)) && (
                       <>
                         <SolutionSection
                           title="解决方案"
                           content={solutionData}
-                          isLoading={!solutionData}
+                          isLoading={!solutionData && !isStreaming}
                           currentLanguage={currentLanguage}
+                          // 🆕 传递流式相关属性
+                          isStreaming={isStreaming}
+                          streamingContent={streamingContent} // 直接传递原始流式内容
+                          streamingProgress={streamingProgress}
                         />
 
                         <ComplexitySection

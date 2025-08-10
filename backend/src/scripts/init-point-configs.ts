@@ -19,9 +19,9 @@ const defaultConfigs = [
   { modelName: 'claude-3-haiku', questionType: QuestionType.MULTIPLE_CHOICE, cost: 1, description: 'Claude-3-Haiku 处理选择题' },
   { modelName: 'claude-3-haiku', questionType: QuestionType.PROGRAMMING, cost: 2, description: 'Claude-3-Haiku 处理编程题' },
   
-  // Claude 3.5系列
-  { modelName: 'claude-3-5-sonnet-20241022', questionType: QuestionType.MULTIPLE_CHOICE, cost: 2, description: 'Claude-3.5-Sonnet 处理选择题' },
-  { modelName: 'claude-3-5-sonnet-20241022', questionType: QuestionType.PROGRAMMING, cost: 4, description: 'Claude-3.5-Sonnet 处理编程题' },
+  // Claude Sonnet 4系列
+  { modelName: 'claude-sonnet-4-20250514', questionType: QuestionType.MULTIPLE_CHOICE, cost: 2, description: 'Claude-Sonnet-4 处理选择题' },
+  { modelName: 'claude-sonnet-4-20250514', questionType: QuestionType.PROGRAMMING, cost: 4, description: 'Claude-Sonnet-4 处理编程题' },
   
   // Gemini系列
   { modelName: 'gemini-pro', questionType: QuestionType.MULTIPLE_CHOICE, cost: 2, description: 'Gemini-Pro 处理选择题' },

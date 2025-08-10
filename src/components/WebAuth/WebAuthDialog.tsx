@@ -67,7 +67,7 @@ export function WebAuthDialog({ open, onOpenChange }: WebAuthDialogProps) {
             ) : (
               <WifiOff className="h-4 w-4 text-red-600" />
             )}
-            <span className="text-sm font-medium">
+            <span className="text-sm font-medium text-black">
               Web服务器: {' '}
               {connectionStatus.checking
                 ? '检查中...'
@@ -90,12 +90,12 @@ export function WebAuthDialog({ open, onOpenChange }: WebAuthDialogProps) {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span className="text-sm font-medium text-green-800">
+                    <span className="text-sm font-medium text-green-400">
                       已登录为: {user?.username}
                     </span>
                   </div>
                   
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-300">
                     <p>您已成功登录Web配置中心。现在可以：</p>
                     <ul className="mt-2 space-y-1 list-disc list-inside">
                       <li>选择和配置AI模型</li>
@@ -108,12 +108,12 @@ export function WebAuthDialog({ open, onOpenChange }: WebAuthDialogProps) {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm font-medium text-yellow-800">
+                    <span className="text-sm font-medium text-black">
                       需要登录Web配置中心
                     </span>
                   </div>
                   
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-300">
                     <p>点击下方按钮将打开Web配置中心登录页面。</p>
                     <p className="mt-1">登录后，您的配置将自动同步到客户端。</p>
                   </div>
@@ -125,9 +125,9 @@ export function WebAuthDialog({ open, onOpenChange }: WebAuthDialogProps) {
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-red-600" />
-                    <span className="text-sm font-medium text-red-800">错误</span>
+                    <span className="text-sm font-medium text-red-400">错误</span>
                   </div>
-                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                  <p className="text-sm text-red-300 mt-1">{error}</p>
                 </div>
               )}
             </div>
@@ -139,14 +139,14 @@ export function WebAuthDialog({ open, onOpenChange }: WebAuthDialogProps) {
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-red-600" />
-                  <span className="text-sm font-medium text-red-800">无法连接到Web服务器</span>
+                  <span className="text-sm font-medium text-red-400">无法连接到Web服务器</span>
                 </div>
-                <p className="text-sm text-red-700 mt-1">
+                <p className="text-sm text-red-300 mt-1">
                   请确保Web配置中心正在运行
                 </p>
               </div>
               
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-300">
                 <p className="font-medium">启动Web配置中心：</p>
                 <ol className="mt-2 space-y-1 list-decimal list-inside">
                   <li>打开命令行终端</li>

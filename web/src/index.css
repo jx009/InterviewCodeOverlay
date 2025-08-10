@@ -2,14 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 强制使用深色主题，覆盖系统浅色模式 */
+* {
+  color-scheme: dark !important;
+}
+
+/* 根元素强制深色背景 */
+html, body {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: dark !important;
+  color: rgba(255, 255, 255, 0.87) !important;
+  background-color: #0a0a0a !important;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -56,35 +67,16 @@ h1 {
   line-height: 1.1;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
+/* 移除了全局按钮样式，让组件使用自己的颜色 */
 
+/* 移除浅色模式媒体查询，强制使用深色主题，但保持按钮原有样式 */
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    color: rgba(255, 255, 255, 0.87) !important;
+    background-color: #0a0a0a !important;
   }
   a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+    color: #646cff !important;
   }
 }
 
@@ -100,14 +92,14 @@ button:focus-visible {
   }
   
   .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
+    @apply bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
   }
   
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200;
+    @apply w-full px-3 py-2 border border-gray-600 bg-gray-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+    @apply bg-gray-800 rounded-xl shadow-sm border border-gray-700 p-6 text-white;
   }
 }

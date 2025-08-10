@@ -4,8 +4,8 @@ import { SessionProtection } from '../utils/sessionProtection';
 
 // 更新BASE_URL以确保正确连接到后端服务器
 const BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' // 生产环境使用相对路径
-  : 'http://localhost:3001/api'; // 开发环境使用完整URL
+  ? 'https://quiz.playoffer.cn/api' // 生产环境使用HTTPS服务器地址
+  : 'https://quiz.playoffer.cn/api'; // 开发环境也使用HTTPS服务器地址
 
 // Removed unused interfaces
 
@@ -311,7 +311,7 @@ export const systemApi = {
 export const paymentApi = {
   // 获取支付套餐列表
   getPackages: async () => {
-    const response = await api.get('/recharge/packages');
+    const response = await api.get('/payment/packages');
     return response.data;
   },
 

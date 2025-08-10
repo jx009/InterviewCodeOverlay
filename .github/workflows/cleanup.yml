@@ -1,0 +1,76 @@
+name: 🧹 Cleanup Artifacts
+
+on:
+  schedule:
+    # 每天运行一次，清理旧的artifacts
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # 允许手动触发
+
+jobs:
+  cleanup:
+    name: 🗑️ Delete Old Artifacts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🧹 Delete old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            // 获取所有artifacts
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner,
+              repo,
+              per_page: 100
+            });
+            
+            console.log(`Found ${artifacts.data.artifacts.length} artifacts`);
+            
+            // 删除超过1天的artifacts
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            
+            let deletedCount = 0;
+            for (const artifact of artifacts.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              if (createdAt < oneDayAgo) {
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner,
+                    repo,
+                    artifact_id: artifact.id
+                  });
+                  console.log(`Deleted artifact: ${artifact.name} (${artifact.id})`);
+                  deletedCount++;
+                } catch (error) {
+                  console.log(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`Deleted ${deletedCount} old artifacts`);
+            
+            // 如果还有太多artifacts，删除最旧的一些
+            if (artifacts.data.artifacts.length > 10) {
+              const sortedArtifacts = artifacts.data.artifacts
+                .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                .slice(0, artifacts.data.artifacts.length - 5); // 保留最新的5个
+              
+              for (const artifact of sortedArtifacts) {
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner,
+                    repo,
+                    artifact_id: artifact.id
+                  });
+                  console.log(`Deleted excess artifact: ${artifact.name} (${artifact.id})`);
+                  deletedCount++;
+                } catch (error) {
+                  console.log(`Failed to delete excess artifact ${artifact.name}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`Total deleted: ${deletedCount} artifacts`);

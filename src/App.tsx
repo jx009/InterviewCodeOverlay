@@ -236,6 +236,19 @@ function App() {
     };
   }, []);
 
+  // 🆕 监听背景透明度变更事件
+  useEffect(() => {
+    const unsubscribeOpacity = window.electronAPI.onBackgroundOpacityChanged?.((opacity: number) => {
+      console.log('Background opacity changed:', opacity);
+      // 更新CSS变量以控制背景透明度
+      document.documentElement.style.setProperty('--bg-opacity', opacity.toString());
+    });
+    
+    return () => {
+      unsubscribeOpacity?.();
+    };
+  }, []);
+
   // Initialize basic app state
   useEffect(() => {
     // Load config and set values
@@ -354,7 +367,7 @@ function App() {
                 </ClickThroughManager>
               ) : (
                 // 🆕 未认证时显示等待登录的界面
-                <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="min-h-screen flex items-center justify-center" style={{backgroundColor: 'rgba(0, 0, 0, 0.9)'}}>
                   <div className="flex flex-col items-center gap-4 text-center">
                     {authLoading ? (
                       <>
@@ -382,7 +395,7 @@ function App() {
                 </div>
               )
             ) : (
-              <div className="min-h-screen bg-black flex items-center justify-center">
+              <div className="min-h-screen flex items-center justify-center" style={{backgroundColor: 'rgba(0, 0, 0, 0.9)'}}>
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
                   <p className="text-white/60 text-sm">

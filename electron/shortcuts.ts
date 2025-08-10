@@ -13,19 +13,20 @@ export class ShortcutsHelper {
     const mainWindow = this.deps.getMainWindow();
     if (!mainWindow) return;
     
-    let currentOpacity = mainWindow.getOpacity();
+    // 从配置获取当前背景透明度
+    const config = configHelper.loadConfig();
+    let currentOpacity = config.clientSettings?.backgroundOpacity || 0.8;
     let newOpacity = Math.max(0.1, Math.min(1.0, currentOpacity + delta));
-    console.log(`Adjusting opacity from ${currentOpacity} to ${newOpacity}`);
+    console.log(`Adjusting background opacity from ${currentOpacity} to ${newOpacity}`);
     
-    mainWindow.setOpacity(newOpacity);
+    // 发送背景透明度变更事件到前端
+    mainWindow.webContents.send("background-opacity-changed", newOpacity);
     
-    // Save the opacity setting to config without re-initializing the client
+    // Save the background opacity setting to config
     try {
-      const config = configHelper.loadConfig();
-      configHelper.updateClientSettings({ opacity: newOpacity });
-      configHelper.saveConfig(config);
+      configHelper.updateClientSettings({ backgroundOpacity: newOpacity });
     } catch (error) {
-      console.error('Error saving opacity to config:', error);
+      console.error('Error saving background opacity to config:', error);
     }
     
     // If we're making the window visible, also make sure it's shown and interaction is enabled
@@ -61,6 +62,12 @@ export class ShortcutsHelper {
       await this.deps.processingHelper?.processScreenshots()
     })
 
+    // 多选题快捷键
+    globalShortcut.register("CommandOrControl+Shift+Enter", async () => {
+      console.log("Ctrl/Cmd + Shift + Enter pressed. Processing as multiple choice questions...")
+      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice()
+    })
+
     globalShortcut.register("CommandOrControl+R", () => {
       console.log(
         "Command + R pressed. Canceling requests and resetting queues..."
@@ -72,7 +79,13 @@ export class ShortcutsHelper {
       // Clear both screenshot queues
       this.deps.clearQueues()
 
-      console.log("Cleared queues.")
+      // 🆕 清理所有临时文件和缓存
+      const screenshotHelper = this.deps.getScreenshotHelper?.()
+      if (screenshotHelper) {
+        screenshotHelper.cleanupAllTempFiles()
+      }
+
+      console.log("Cleared queues and cleaned up temp files.")
 
       // Update the view state to 'queue'
       this.deps.setView("queue")
@@ -81,9 +94,8 @@ export class ShortcutsHelper {
       const mainWindow = this.deps.getMainWindow()
       if (mainWindow && !mainWindow.isDestroyed()) {
         // 确保窗口可见并恢复焦点
-        if (mainWindow.getOpacity() === 0 || !this.deps.isVisible()) {
+        if (!this.deps.isVisible()) {
           console.log("Window was hidden, restoring visibility...")
-          mainWindow.setOpacity(1)
           mainWindow.setIgnoreMouseEvents(false)
           mainWindow.showInactive()
           // 更新状态管理
@@ -162,6 +174,17 @@ export class ShortcutsHelper {
       console.log("Command/Ctrl + ] pressed. Increasing opacity.")
       this.adjustOpacity(0.1)
     })
+
+    // 🆕 新增透明度快捷键 - Ctrl+Shift+1 调低透明度，Ctrl+Shift+2 调高透明度
+    globalShortcut.register("CommandOrControl+Shift+1", () => {
+      console.log("Command/Ctrl + Shift + 1 pressed. Decreasing opacity.")
+      this.adjustOpacity(-0.1)
+    })
+
+    globalShortcut.register("CommandOrControl+Shift+2", () => {
+      console.log("Command/Ctrl + Shift + 2 pressed. Increasing opacity.")
+      this.adjustOpacity(0.1)
+    })
     
     // Zoom controls
     globalShortcut.register("CommandOrControl+-", () => {
@@ -217,7 +240,6 @@ export class ShortcutsHelper {
           const centerY = workArea.y + (workArea.height - bounds.height) / 2
           
           mainWindow.setPosition(Math.round(centerX), Math.round(centerY))
-          mainWindow.setOpacity(1)
           mainWindow.setIgnoreMouseEvents(false)
           mainWindow.show()
           mainWindow.focus()
@@ -247,6 +269,24 @@ export class ShortcutsHelper {
         console.error("Error during manual config refresh:", error)
       }
     })
+
+    // Copy code shortcut (Ctrl/Cmd+J) - 直接在主进程中处理复制
+    const copySuccess = globalShortcut.register("CommandOrControl+J", () => {
+      console.log("🔥 Command/Ctrl + J pressed. Copying code directly...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // 请求代码内容并直接在主进程中复制
+        mainWindow.webContents.send("request-code-for-copy")
+      } else {
+        console.error("❌ MainWindow is null or destroyed")
+      }
+    })
+    
+    if (copySuccess) {
+      console.log("✅ CommandOrControl+J shortcut registered successfully")
+    } else {
+      console.error("❌ Failed to register CommandOrControl+J shortcut")
+    }
     
     // Unregister shortcuts when quitting
     app.on("will-quit", () => {

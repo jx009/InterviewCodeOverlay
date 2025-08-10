@@ -18,8 +18,14 @@ export const PROCESSING_EVENTS = {
 
   //states for processing the debugging
   DEBUG_START: "debug-start",
-  DEBUG_SUCCESS: "debug-success",
-  DEBUG_ERROR: "debug-error"
+  DEBUG_SUCCESS: "debug-success", 
+  DEBUG_ERROR: "debug-error",
+  REQUEST_CODE_FOR_COPY: "request-code-for-copy",
+  
+  // 🆕 流式输出事件
+  SOLUTION_STREAM_CHUNK: "solution-stream-chunk",
+  SOLUTION_STREAM_COMPLETE: "solution-stream-complete",
+  SOLUTION_STREAM_ERROR: "solution-stream-error"
 } as const
 
 // At the top of the file
@@ -177,6 +183,13 @@ const electronAPI = {
       ipcRenderer.removeListener(PROCESSING_EVENTS.RESET, subscription)
     }
   },
+  onRequestCodeForCopy: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on(PROCESSING_EVENTS.REQUEST_CODE_FOR_COPY, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.REQUEST_CODE_FOR_COPY, subscription)
+    }
+  },
   startUpdate: () => ipcRenderer.invoke("start-update"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   onUpdateAvailable: (callback: (info: any) => void) => {
@@ -217,6 +230,7 @@ const electronAPI = {
   getConfig: () => ipcRenderer.invoke("get-config"),
   updateConfig: (config: { apiKey?: string; model?: string; language?: string; opacity?: number }) => 
     ipcRenderer.invoke("update-config", config),
+  copyCodeToClipboard: (code: string) => ipcRenderer.invoke("copy-code-to-clipboard", code),
   onShowSettings: (callback: () => void) => {
     const subscription = () => callback()
     ipcRenderer.on("show-settings-dialog", subscription)
@@ -268,10 +282,25 @@ const electronAPI = {
   webAuthLogout: () => ipcRenderer.invoke("web-auth-logout"),
   webAuthStatus: () => ipcRenderer.invoke("web-auth-status"),
   webSyncConfig: () => ipcRenderer.invoke("web-sync-config"),
+  attemptAutoRelogin: () => ipcRenderer.invoke("attempt-auto-relogin"),
   webUpdateConfig: (config: any) => ipcRenderer.invoke("web-update-config", config),
   webGetAIModels: () => ipcRenderer.invoke("web-get-ai-models"),
   webGetLanguages: () => ipcRenderer.invoke("web-get-languages"),
   webCheckConnection: () => ipcRenderer.invoke("web-check-connection"),
+  
+  // 🆕 透明度控制API
+  adjustOpacity: (delta: number) => ipcRenderer.invoke("adjust-opacity", delta),
+  getOpacity: () => ipcRenderer.invoke("get-opacity"),
+  setOpacity: (opacity: number) => ipcRenderer.invoke("set-opacity", opacity),
+  
+  // 🆕 背景透明度变更事件监听
+  onBackgroundOpacityChanged: (callback: (opacity: number) => void) => {
+    const subscription = (_: any, opacity: number) => callback(opacity)
+    ipcRenderer.on("background-opacity-changed", subscription)
+    return () => {
+      ipcRenderer.removeListener("background-opacity-changed", subscription)
+    }
+  },
   
   // Web Authentication event listeners
   onWebAuthStatus: (callback: (data: { authenticated: boolean; user: any }) => void) => {
@@ -306,6 +335,40 @@ const electronAPI = {
       ipcRenderer.removeListener("clear-notification", subscription)
     }
   },
+
+  // 🆕 流式输出相关方法
+  onSolutionStreamChunk: (callback: (data: {
+    delta: string,
+    fullContent: string,
+    parsedContent: any,
+    progress: number,
+    isComplete: boolean
+  }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM_CHUNK, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM_CHUNK, subscription)
+    }
+  },
+
+  onSolutionStreamComplete: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM_COMPLETE, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM_COMPLETE, subscription)
+    }
+  },
+
+  onSolutionStreamError: (callback: (error: string) => void) => {
+    const subscription = (_: any, error: string) => callback(error)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM_ERROR, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM_ERROR, subscription)
+    }
+  },
+
+  // 🆕 取消流式传输
+  cancelStreaming: () => ipcRenderer.invoke("cancel-streaming"),
 }
 
 // Before exposing the API

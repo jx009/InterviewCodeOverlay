@@ -1,6 +1,6 @@
 // ipcHandlers.ts
 
-import { ipcMain, shell, dialog } from "electron"
+import { ipcMain, shell, dialog, clipboard } from "electron"
 import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
@@ -46,7 +46,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://localhost:3001/api/client/credits', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits', {
         method: 'GET',
         headers: {
           'X-Session-Id': sessionId,
@@ -78,7 +78,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://localhost:3001/api/client/credits/check', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/check', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -112,7 +112,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://localhost:3001/api/client/credits/deduct', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/deduct', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -151,7 +151,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://localhost:3001/api/client/credits/refund', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/refund', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -231,6 +231,18 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("get-image-preview", async (event, path: string) => {
     return deps.getImagePreview(path)
+  })
+
+  // 代码复制处理器
+  ipcMain.handle("copy-code-to-clipboard", async (event, code: string) => {
+    try {
+      clipboard.writeText(code)
+      console.log("✅ Code copied to clipboard successfully via main process")
+      return { success: true }
+    } catch (error) {
+      console.error("❌ Failed to copy code to clipboard:", error)
+      return { success: false, error: error.message }
+    }
   })
 
   // Screenshot processing handlers
@@ -339,6 +351,84 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // 🆕 手动触发自动重新登录
+  ipcMain.handle("attempt-auto-relogin", async () => {
+    try {
+      console.log("📱 IPC: 手动触发自动重新登录")
+      const success = await simpleAuthManager.attemptAutoRelogin()
+      return { success, user: success ? simpleAuthManager.getCurrentUser() : null }
+    } catch (error) {
+      console.error("Failed to attempt auto relogin:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // 🆕 透明度控制IPC处理器 - 改为控制CSS背景透明度而非窗口透明度
+  ipcMain.handle("adjust-opacity", (event, delta: number) => {
+    try {
+      const mainWindow = deps.getMainWindow()
+      if (!mainWindow) {
+        return { success: false, error: "Main window not available" }
+      }
+      
+      // 从配置获取当前透明度值
+      const config = configHelper.loadConfig()
+      const currentOpacity = config.clientSettings?.backgroundOpacity || 0.8
+      const newOpacity = Math.max(0.1, Math.min(1.0, currentOpacity + delta))
+      console.log(`IPC调整背景透明度: ${currentOpacity} -> ${newOpacity}`)
+      
+      // 发送CSS透明度更新事件到前端
+      mainWindow.webContents.send("background-opacity-changed", newOpacity)
+      
+      // 保存背景透明度到配置文件
+      configHelper.updateClientSettings({ backgroundOpacity: newOpacity })
+      
+      return { 
+        success: true, 
+        opacity: newOpacity,
+        previousOpacity: currentOpacity 
+      }
+    } catch (error) {
+      console.error("Failed to adjust background opacity:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("get-opacity", () => {
+    try {
+      // 从配置获取背景透明度值
+      const config = configHelper.loadConfig()
+      const currentOpacity = config.clientSettings?.backgroundOpacity || 0.8
+      return { success: true, opacity: currentOpacity }
+    } catch (error) {
+      console.error("Failed to get background opacity:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle("set-opacity", (event, opacity: number) => {
+    try {
+      const mainWindow = deps.getMainWindow()
+      if (!mainWindow) {
+        return { success: false, error: "Main window not available" }
+      }
+      
+      const clampedOpacity = Math.max(0.1, Math.min(1.0, opacity))
+      console.log(`IPC设置背景透明度: ${clampedOpacity}`)
+      
+      // 发送CSS透明度更新事件到前端
+      mainWindow.webContents.send("background-opacity-changed", clampedOpacity)
+      
+      // 保存背景透明度到配置文件
+      configHelper.updateClientSettings({ backgroundOpacity: clampedOpacity })
+      
+      return { success: true, opacity: clampedOpacity }
+    } catch (error) {
+      console.error("Failed to set background opacity:", error)
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle("web-auth-status", async () => {
     try {
       const isAuthenticated = await simpleAuthManager.isAuthenticated()
@@ -384,7 +474,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     try {
       // 简化版：返回固定的AI模型列表
       const models = [
-        'claude-3-5-sonnet-20241022',
+        'claude-sonnet-4-20250514',
         'gpt-4o',
         'gemini-2.0-flash'
       ]
@@ -403,6 +493,25 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     } catch (error) {
       console.error("Failed to get languages:", error)
       return { success: false, error: error.message, languages: [] }
+    }
+  })
+
+  // 🆕 LLM配置管理
+  ipcMain.handle("llm-config:refresh", async () => {
+    try {
+      const processingHelper = deps.processingHelper
+      if (processingHelper && typeof processingHelper.refreshLLMConfig === 'function') {
+        const success = await processingHelper.refreshLLMConfig()
+        return { 
+          success: success, 
+          message: success ? 'LLM配置刷新成功' : 'LLM配置刷新失败' 
+        }
+      } else {
+        return { success: false, error: 'ProcessingHelper不可用' }
+      }
+    } catch (error) {
+      console.error("刷新LLM配置失败:", error)
+      return { success: false, error: error.message }
     }
   })
 
@@ -613,7 +722,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 // 积分管理 (独立导出，在main.ts中单独注册)
 export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
   console.log('Initializing credits IPC handlers')
-  const BASE_URL = 'http://localhost:3001'
+  const BASE_URL = 'https://quiz.playoffer.cn'
 
   const makeAuthenticatedRequest = async (endpoint: string, options: any = {}) => {
     const token = simpleAuthManager.getToken()
@@ -667,6 +776,23 @@ export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
       deps.getMainWindow()?.webContents.send('credits-updated', result.newCredits)
     }
     return result
+  })
+
+  // 🆕 流式传输控制处理器
+  ipcMain.handle('cancel-streaming', async () => {
+    try {
+      const processingHelper = deps.processingHelper
+      if (processingHelper && typeof processingHelper.cancelOngoingRequests === 'function') {
+        processingHelper.cancelOngoingRequests()
+        console.log('✅ 流式传输已取消')
+        return { success: true, message: '流式传输已取消' }
+      } else {
+        return { success: false, error: 'ProcessingHelper不可用' }
+      }
+    } catch (error) {
+      console.error("取消流式传输失败:", error)
+      return { success: false, error: error.message }
+    }
   })
 }
 

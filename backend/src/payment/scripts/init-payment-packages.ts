@@ -29,7 +29,8 @@ async function initPaymentPackages() {
           points: packageData.points,
           bonusPoints: packageData.bonusPoints,
           sortOrder: packageData.sortOrder,
-          tags: packageData.tags,
+          label: packageData.label,
+          labelColor: packageData.labelColor,
           isRecommended: packageData.isRecommended || false,
           isActive: true
         }

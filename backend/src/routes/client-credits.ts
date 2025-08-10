@@ -43,6 +43,7 @@ const getUserId = async (req: Request, res: Response, next: Function) => {
 /**
  * 获取用户积分余额
  * GET /api/client/credits
+ * GET /api/client/credits?llm-config=true (获取LLM配置)
  */
 router.get('/', authMiddleware, getUserId, async (req: Request, res: Response) => {
   try {
@@ -51,6 +52,117 @@ router.get('/', authMiddleware, getUserId, async (req: Request, res: Response) =
       return ResponseUtils.unauthorized(res, '用户ID无效');
     }
     
+    // 检查是否请求LLM配置
+    console.log('📊 查询参数:', req.query);
+    
+    // 添加简单的测试参数
+    if (req.query.test === 'true') {
+      console.log('📡 收到测试请求');
+      return ResponseUtils.success(res, {
+        message: '测试参数工作正常',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (req.query['llm-config'] === 'true' || req.query.llmconfig === 'true') {
+      console.log('📡 收到LLM配置请求（通过积分API）');
+      
+      try {
+        // 检查表是否存在
+        const tableExists = await prisma.$queryRaw<Array<{count: number}>>`
+          SELECT COUNT(*) as count FROM information_schema.tables 
+          WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+        `;
+        
+        if (!tableExists[0] || tableExists[0].count === 0) {
+          console.warn('⚠️ llm_config表不存在，返回默认配置');
+          const defaultConfig = {
+            baseUrl: 'https://ismaque.org/v1',
+            apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+            maxRetries: 2,
+            timeout: 30000,
+            provider: 'ismaque'
+          };
+          
+          return ResponseUtils.success(res, {
+            config: defaultConfig,
+            source: 'default',
+            message: 'LLM配置获取成功（使用默认配置）'
+          });
+        }
+
+        // 从数据库读取LLM配置
+        const configs = await prisma.$queryRaw<Array<{config_key: string, config_value: string}>>`
+          SELECT config_key, config_value FROM llm_config WHERE is_active = 1
+        `;
+        
+        console.log('📦 数据库配置查询结果:', configs);
+        
+        if (!configs || configs.length === 0) {
+          console.warn('⚠️ 数据库中未找到配置，返回默认配置');
+          const defaultConfig = {
+            baseUrl: 'https://ismaque.org/v1',
+            apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+            maxRetries: 2,
+            timeout: 30000,
+            provider: 'ismaque'
+          };
+          
+          return ResponseUtils.success(res, {
+            config: defaultConfig,
+            source: 'default',
+            message: 'LLM配置获取成功（使用默认配置）'
+          });
+        }
+
+        // 将配置转换为对象格式
+        const configObj: any = {};
+        configs.forEach(config => {
+          configObj[config.config_key] = config.config_value;
+        });
+
+        // 构建返回的配置对象
+        const llmConfig = {
+          baseUrl: configObj.base_url || 'https://ismaque.org/v1',
+          apiKey: configObj.api_key || 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+          maxRetries: parseInt(configObj.max_retries || '2'),
+          timeout: parseInt(configObj.timeout || '30000'),
+          provider: configObj.provider || 'ismaque'
+        };
+
+        console.log('✅ 返回LLM配置:', { 
+          provider: llmConfig.provider, 
+          baseUrl: llmConfig.baseUrl,
+          hasApiKey: !!llmConfig.apiKey
+        });
+
+        return ResponseUtils.success(res, {
+          config: llmConfig,
+          source: 'database',
+          message: 'LLM配置获取成功'
+        });
+      } catch (llmError) {
+        console.error('❌ 获取LLM配置失败:', llmError);
+        
+        // 发生异常时返回默认配置
+        const defaultConfig = {
+          baseUrl: 'https://ismaque.org/v1',
+          apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+          maxRetries: 2,
+          timeout: 30000,
+          provider: 'ismaque'
+        };
+        
+        return ResponseUtils.success(res, {
+          config: defaultConfig,
+          source: 'fallback',
+          message: 'LLM配置获取成功（降级配置）',
+          error: llmError.message
+        });
+      }
+    }
+    
+    // 正常的积分查询
     const points = await pointService.getUserPoints(userId);
     
     ResponseUtils.success(res, {
@@ -372,5 +484,107 @@ router.get('/transactions',
     }
   }
 );
+
+/**
+ * 获取LLM配置信息
+ * GET /api/client/credits/llm-config
+ */
+router.get('/llm-config', getUserId, async (req: Request, res: Response) => {
+  try {
+    console.log('📡 收到客户端LLM配置请求');
+    
+    // 检查表是否存在
+    const tableExists = await prisma.$queryRaw<Array<{count: number}>>`
+      SELECT COUNT(*) as count FROM information_schema.tables 
+      WHERE table_schema = DATABASE() AND table_name = 'llm_config'
+    `;
+    
+    if (!tableExists[0] || tableExists[0].count === 0) {
+      console.warn('⚠️ llm_config表不存在，返回默认配置');
+      const defaultConfig = {
+        baseUrl: 'https://ismaque.org/v1',
+        apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+        maxRetries: 2,
+        timeout: 30000,
+        provider: 'ismaque'
+      };
+      
+      return ResponseUtils.success(res, {
+        config: defaultConfig,
+        source: 'default',
+        message: 'LLM配置获取成功（使用默认配置）'
+      });
+    }
+
+    // 从数据库读取LLM配置
+    const configs = await prisma.$queryRaw<Array<{config_key: string, config_value: string}>>`
+      SELECT config_key, config_value FROM llm_config WHERE is_active = 1
+    `;
+    
+    console.log('📦 数据库配置查询结果:', configs);
+    
+    if (!configs || configs.length === 0) {
+      console.warn('⚠️ 数据库中未找到配置，返回默认配置');
+      const defaultConfig = {
+        baseUrl: 'https://ismaque.org/v1',
+        apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+        maxRetries: 2,
+        timeout: 30000,
+        provider: 'ismaque'
+      };
+      
+      return ResponseUtils.success(res, {
+        config: defaultConfig,
+        source: 'default',
+        message: 'LLM配置获取成功（使用默认配置）'
+      });
+    }
+
+    // 将配置转换为对象格式
+    const configObj: any = {};
+    configs.forEach(config => {
+      configObj[config.config_key] = config.config_value;
+    });
+
+    // 构建返回的配置对象
+    const llmConfig = {
+      baseUrl: configObj.base_url || 'https://ismaque.org/v1',
+      apiKey: configObj.api_key || 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+      maxRetries: parseInt(configObj.max_retries || '2'),
+      timeout: parseInt(configObj.timeout || '30000'),
+      provider: configObj.provider || 'ismaque'
+    };
+
+    console.log('✅ 返回LLM配置:', { 
+      provider: llmConfig.provider, 
+      baseUrl: llmConfig.baseUrl,
+      hasApiKey: !!llmConfig.apiKey
+    });
+
+    ResponseUtils.success(res, {
+      config: llmConfig,
+      source: 'database',
+      message: 'LLM配置获取成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取LLM配置失败:', error);
+    
+    // 发生异常时返回默认配置而不是错误
+    const defaultConfig = {
+      baseUrl: 'https://ismaque.org/v1',
+      apiKey: 'sk-xYuBFrEaKatCu3dqlRsoUx5RiUOuPsk1oDPi0WJEEiK1wloP',
+      maxRetries: 2,
+      timeout: 30000,
+      provider: 'ismaque'
+    };
+    
+    ResponseUtils.success(res, {
+      config: defaultConfig,
+      source: 'fallback',
+      message: 'LLM配置获取成功（降级配置）',
+      error: error.message
+    });
+  }
+});
 
 export default router; 

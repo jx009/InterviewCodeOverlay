@@ -199,12 +199,9 @@ const RechargePage: React.FC = () => {
     setCurrentOrder(null);
     setPaymentCodeUrl('');
     
-    // 切换到订单记录页面
-    setCurrentStep('orders');
-    updateSearchParams('orders');
-    
-    // 刷新订单列表
-    refetchOrders();
+    // 切换到套餐选择页面
+    setCurrentStep('packages');
+    updateSearchParams('packages');
     
     // 可以触发用户数据更新（如果有用户context的话）
     // TODO: 如果有用户积分状态，可以在这里更新

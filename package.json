@@ -1,6 +1,6 @@
 {
-  "name": "interview-coder-v1",
-  "version": "1.0.19",
+  "name": "quizcoze-2025",
+  "version": "2025.08.09",
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "npx rimraf dist dist-electron",
@@ -12,11 +12,12 @@
     "run-prod": "cross-env NODE_ENV=production electron ./dist-electron/main.js",
     "package": "npm run build && electron-builder build",
     "package-mac": "npm run build && electron-builder build --mac",
-    "package-win": "npm run build && electron-builder build --win"
+    "package-win": "npm run build && electron-builder build --win",
+    "package-unsigned": "npm run build && node scripts/build-unsigned.js"
   },
   "build": {
-    "appId": "com.chunginlee.interviewcoder",
-    "productName": "Interview Coder",
+    "appId": "com.chunginlee.quizcoze",
+    "productName": "QuizCoze 2025.08.09",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -50,16 +51,10 @@
       ],
       "artifactName": "Interview-Coder-${arch}.${ext}",
       "icon": "assets/icons/mac/logo_qz.icns",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": "Developer ID Application",
-      "notarize": true,
       "protocols": {
-        "name": "interview-coder-protocol",
+        "name": "quizcoze-protocol",
         "schemes": [
-          "interview-coder"
+          "quizcoze"
         ]
       }
     },
@@ -70,9 +65,9 @@
       "icon": "assets/icons/win/logo_qz.ico",
       "artifactName": "${productName}-Windows-${version}.${ext}",
       "protocols": {
-        "name": "interview-coder-protocol",
+        "name": "quizcoze-protocol",
         "schemes": [
-          "interview-coder"
+          "quizcoze"
         ]
       }
     },
@@ -83,9 +78,9 @@
       "icon": "assets/icons/png/icon-256x256.png",
       "artifactName": "${productName}-Linux-${version}.${ext}",
       "protocols": {
-        "name": "interview-coder-protocol",
+        "name": "quizcoze-protocol",
         "schemes": [
-          "interview-coder"
+          "quizcoze"
         ]
       }
     },
@@ -96,15 +91,6 @@
         "repo": "interview-coder",
         "private": false,
         "releaseType": "release"
-      }
-    ],
-    "extraResources": [
-      {
-        "from": ".env",
-        "to": ".env",
-        "filter": [
-          "**/*"
-        ]
       }
     ],
     "extraMetadata": {
@@ -154,10 +140,12 @@
   },
   "devDependencies": {
     "@electron/typescript-definitions": "^8.14.0",
+    "@esbuild/win32-x64": "^0.25.8",
     "@eslint/css": "^0.6.0",
     "@eslint/js": "^9.24.0",
     "@eslint/json": "^0.11.0",
     "@eslint/markdown": "^6.3.0",
+    "@rollup/rollup-win32-x64-msvc": "^4.45.1",
     "@types/color": "^4.2.0",
     "@types/diff": "^6.0.0",
     "@types/electron-store": "^1.3.1",
@@ -174,7 +162,7 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "^37.2.1",
+    "electron": "37.2.1",
     "electron-builder": "^24.13.3",
     "electron-is-dev": "^3.0.1",
     "eslint": "^8.57.1",

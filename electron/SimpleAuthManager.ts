@@ -59,8 +59,9 @@ export class SimpleAuthManager extends EventEmitter {
   private apiBaseUrl: string
   private apiClient: AxiosInstance
   private configCacheExpiry: number = 0 // 配置缓存过期时间
+  private isAutoReloginInProgress: boolean = false // 防止并发自动重新登录
 
-  constructor(apiBaseUrl: string = 'http://localhost:3001') {
+  constructor(apiBaseUrl: string = 'https://quiz.playoffer.cn') {
     super()
     this.apiBaseUrl = apiBaseUrl
 
@@ -73,8 +74,10 @@ export class SimpleAuthManager extends EventEmitter {
       }
     })
 
-    // 启动时加载本地token
-    this.loadStoredToken()
+    // 启动时加载本地token (异步操作，但不等待以避免阻塞构造函数)
+    this.loadStoredToken().catch(error => 
+      console.error('构造函数中加载token失败:', error)
+    )
   }
 
   /**
@@ -108,7 +111,7 @@ export class SimpleAuthManager extends EventEmitter {
       console.log('🔑 开始保存token到内存和本地...')
       this.token = token
       console.log('🔑 Token已保存到内存')
-      this.saveToken(token)
+      await this.saveToken(token)
       this.setupApiClient()
       console.log('🔑 API客户端已设置认证头')
 
@@ -226,8 +229,25 @@ export class SimpleAuthManager extends EventEmitter {
       console.log('✅ 认证状态验证成功')
       return true
     } catch (error) {
-      console.error('❌ Token验证失败，需要重新登录:', error.message)
-      this.clearAuthData()
+      console.error('❌ Token验证失败:', error.message)
+      
+      // 只有在明确是会话过期的情况下才清除数据，网络错误等情况保留token
+      if (error.message?.includes('已过期') || error.message?.includes('过期')) {
+        console.log('🔄 确认会话过期，尝试自动重新登录')
+        
+        // 尝试自动重新登录
+        const autoReloginSuccess = await this.attemptAutoRelogin()
+        if (autoReloginSuccess) {
+          console.log('✅ 自动重新登录成功')
+          return true
+        } else {
+          console.log('❌ 自动重新登录失败，清除认证数据')
+          this.clearAuthData()
+        }
+      } else {
+        console.log('⚠️ 可能是网络或服务器问题，保留认证数据等待重试')
+      }
+      
       return false
     }
   }
@@ -251,6 +271,172 @@ export class SimpleAuthManager extends EventEmitter {
    */
   public getUserConfig(): UserConfig | null {
     return this.userConfig
+  }
+
+  /**
+   * 🆕 自动重新登录机制
+   * 当检测到登录态丢失时，尝试使用本地存储的凭据自动重新登录
+   */
+  public async attemptAutoRelogin(): Promise<boolean> {
+    if (this.isAutoReloginInProgress) {
+      console.log('⚠️ 自动重新登录已在进行中，跳过')
+      return false
+    }
+
+    this.isAutoReloginInProgress = true
+
+    try {
+      console.log('🔄 开始尝试自动重新登录...')
+      this.emit('auto-relogin-started')
+
+      // 1. 首先尝试从共享会话文件重新加载
+      console.log('📋 尝试从共享会话文件恢复...')
+      await this.loadTokenFromSharedSession()
+      
+      if (this.token) {
+        console.log('✅ 从共享会话文件找到token，验证有效性...')
+        try {
+          await this.verifyToken()
+          console.log('✅ 共享会话token验证成功，自动重新登录完成')
+          this.emit('auto-relogin-success', { method: 'shared-session', user: this.user })
+          return true
+        } catch (error) {
+          console.log('❌ 共享会话token验证失败:', error.message)
+          this.token = null
+        }
+      }
+
+      // 2. 如果共享会话失败，尝试静默的OAuth重新登录
+      console.log('🔄 共享会话恢复失败，尝试静默OAuth重新登录...')
+      
+      // 检查服务器连接
+      const serverOnline = await this.checkServerConnection()
+      if (!serverOnline) {
+        console.log('❌ 服务器无法连接，自动重新登录失败')
+        this.emit('auto-relogin-failed', { reason: 'server-offline' })
+        return false
+      }
+
+      // 尝试静默登录（不显示登录窗口，直接使用可能存在的浏览器cookie）
+      const silentLoginSuccess = await this.attemptSilentLogin()
+      if (silentLoginSuccess) {
+        console.log('✅ 静默登录成功，自动重新登录完成')
+        this.emit('auto-relogin-success', { method: 'silent-login', user: this.user })
+        return true
+      }
+
+      // 3. 如果静默登录也失败，发出需要用户干预的事件
+      console.log('❌ 所有自动重新登录方法都失败，需要用户手动登录')
+      this.emit('auto-relogin-failed', { reason: 'all-methods-failed' })
+      
+      // 显示登录提示
+      this.showReloginPrompt()
+      
+      return false
+
+    } catch (error) {
+      console.error('❌ 自动重新登录过程异常:', error)
+      this.emit('auto-relogin-failed', { reason: 'exception', error: error.message })
+      return false
+    } finally {
+      this.isAutoReloginInProgress = false
+    }
+  }
+
+  /**
+   * 🆕 尝试静默登录（不显示登录窗口）
+   */
+  private async attemptSilentLogin(): Promise<boolean> {
+    try {
+      console.log('🔄 尝试静默登录...')
+      
+      // 创建一个隐藏的浏览器窗口来检查是否有有效的浏览器session
+      const { BrowserWindow } = require('electron')
+      const hiddenWindow = new BrowserWindow({
+        show: false,
+        width: 1,
+        height: 1,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      })
+
+      try {
+        // 加载登录页面但不显示
+        const loginUrl = `${this.apiBaseUrl}/login?mode=silent&client=electron`
+        await hiddenWindow.loadURL(loginUrl)
+
+        // 等待一段时间让页面加载和执行
+        await new Promise(resolve => setTimeout(resolve, 3000))
+
+        // 尝试获取sessionId
+        const sessionId = await hiddenWindow.webContents.executeJavaScript(`
+          localStorage.getItem('sessionId')
+        `)
+
+        if (sessionId && sessionId.length > 10) {
+          console.log('✅ 静默登录获得sessionId，验证有效性...')
+          
+          // 验证sessionId
+          const isValid = await this.quickValidateSessionId(sessionId)
+          if (isValid) {
+            this.token = sessionId
+            await this.saveToken(sessionId)
+            this.setupApiClient()
+            await this.fetchUserInfo()
+            await this.fetchUserConfig()
+            
+            hiddenWindow.close()
+            return true
+          }
+        }
+
+        hiddenWindow.close()
+        return false
+
+      } catch (error) {
+        hiddenWindow.close()
+        throw error
+      }
+
+    } catch (error) {
+      console.log('❌ 静默登录失败:', error.message)
+      return false
+    }
+  }
+
+  /**
+   * 🆕 显示重新登录提示
+   */
+  private showReloginPrompt(): void {
+    const { dialog } = require('electron')
+    
+    console.log('💬 显示重新登录提示弹窗')
+    this.emit('show-relogin-prompt')
+    
+    // 显示用户友好的提示对话框
+    dialog.showMessageBox({
+      type: 'warning',
+      title: '登录状态已失效',
+      message: '您的登录状态已过期，需要重新登录才能继续使用',
+      detail: '点击"立即登录"重新登录，或点击"稍后登录"继续使用基本功能',
+      buttons: ['立即登录', '稍后登录'],
+      defaultId: 0,
+      cancelId: 1
+    }).then((response) => {
+      if (response.response === 0) {
+        // 用户选择立即登录
+        console.log('👤 用户选择立即登录')
+        this.login().catch(error => {
+          console.error('❌ 手动登录失败:', error)
+        })
+      } else {
+        // 用户选择稍后登录
+        console.log('👤 用户选择稍后登录')
+        this.emit('user-delayed-login')
+      }
+    })
   }
 
   /**
@@ -312,7 +498,7 @@ export class SimpleAuthManager extends EventEmitter {
 
     try {
       // 1. 重新加载token（包括检查共享会话）
-      this.loadStoredToken()
+      await this.loadStoredToken()
 
       // 2. 如果有token，验证其有效性
       if (this.token) {
@@ -329,7 +515,7 @@ export class SimpleAuthManager extends EventEmitter {
 
       if (hasWebSession) {
         console.log('✅ 发现Web端会话，重新加载token')
-        this.loadStoredToken()
+        await this.loadStoredToken()
         return await this.isAuthenticated()
       }
 
@@ -349,7 +535,7 @@ export class SimpleAuthManager extends EventEmitter {
     try {
       // 🆕 增强认证没有专门的会话检查API，直接检查共享会话文件
       console.log('🔍 检查共享会话文件...')
-      this.loadTokenFromSharedSession()
+      await this.loadTokenFromSharedSession()
 
       if (this.token) {
         console.log('✅ 从共享会话文件找到sessionId')
@@ -385,7 +571,7 @@ export class SimpleAuthManager extends EventEmitter {
   /**
    * 加载本地存储的token
    */
-  private loadStoredToken(): void {
+  private async loadStoredToken(): Promise<void> {
     try {
       console.log('📋 尝试加载本地token...')
 
@@ -404,7 +590,7 @@ export class SimpleAuthManager extends EventEmitter {
       console.log('📋 配置文件中没有authToken，尝试检查共享会话文件...')
 
       // 2. 如果配置文件没有token，尝试从shared-session.json加载
-      this.loadTokenFromSharedSession()
+      await this.loadTokenFromSharedSession()
 
     } catch (error) {
       console.error('❌ 加载本地token失败:', error)
@@ -414,7 +600,7 @@ export class SimpleAuthManager extends EventEmitter {
   /**
    * 从共享会话文件加载token
    */
-  private loadTokenFromSharedSession(): void {
+  private async loadTokenFromSharedSession(): Promise<void> {
     try {
       const fs = require('fs')
       const path = require('path')
@@ -469,7 +655,7 @@ export class SimpleAuthManager extends EventEmitter {
         this.setupApiClient()
 
         // 将sessionId保存到本地配置以备下次使用
-        configHelper.updateConfig({ authToken: this.token })
+        await this.saveToken(this.token)
 
         console.log('✅ 从共享会话成功加载sessionId')
         console.log('👤 用户:', this.user?.username)
@@ -492,27 +678,49 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 保存token到本地
+   * 保存token到本地 - 增强版本
    */
-  private saveToken(token: string): void {
+  private async saveToken(token: string): Promise<void> {
     try {
       console.log('💾 开始保存token到本地...')
       console.log('💾 Token长度:', token.length)
       console.log('💾 Token前缀:', token.substring(0, 20) + '...')
 
-      configHelper.updateConfig({ authToken: token })
-
-      // 验证保存是否成功
-      const savedConfig = configHelper.loadConfig()
-      if (savedConfig.authToken === token) {
-        console.log('✅ Token保存成功并验证')
-      } else {
-        console.log('❌ Token保存验证失败')
-        console.log('  - 期望:', token.substring(0, 20) + '...')
-        console.log('  - 实际:', savedConfig.authToken ? savedConfig.authToken.substring(0, 20) + '...' : 'null')
+      // 多次尝试保存，确保成功
+      let saveAttempts = 0;
+      const maxAttempts = 3;
+      
+      while (saveAttempts < maxAttempts) {
+        try {
+          configHelper.updateConfig({ authToken: token })
+          
+          // 验证保存是否成功
+          const savedConfig = configHelper.loadConfig()
+          if (savedConfig.authToken === token) {
+            console.log('✅ Token保存成功并验证')
+            return; // 保存成功，退出
+          } else {
+            saveAttempts++;
+            console.log(`❌ Token保存验证失败 (尝试 ${saveAttempts}/${maxAttempts})`)
+            console.log('  - 期望:', token.substring(0, 20) + '...')
+            console.log('  - 实际:', savedConfig.authToken ? savedConfig.authToken.substring(0, 20) + '...' : 'null')
+            
+            if (saveAttempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 100)); // 等待100ms后重试
+            }
+          }
+        } catch (saveError) {
+          saveAttempts++;
+          console.error(`❌ 保存token尝试 ${saveAttempts} 失败:`, saveError)
+          if (saveAttempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 200)); // 等待200ms后重试
+          }
+        }
       }
+      
+      console.error('💥 Token保存最终失败，已用完所有重试次数')
     } catch (error) {
-      console.error('❌ 保存token失败:', error)
+      console.error('❌ 保存token过程异常:', error)
     }
   }
 
@@ -528,7 +736,7 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 🆕 验证sessionId有效性（适配增强认证）
+   * 🆕 验证sessionId有效性（适配增强认证） - 增强容错版本
    */
   private async verifyToken(): Promise<void> {
     if (!this.token) {
@@ -541,36 +749,80 @@ export class SimpleAuthManager extends EventEmitter {
     console.log('🌐 API地址:', `${this.apiBaseUrl}/api/session_status`)
     console.log('📤 请求头:', this.apiClient.defaults.headers.common['X-Session-Id'])
 
-    try {
-      const response = await this.apiClient.get('/api/session_status')
-      console.log('📥 响应状态:', response.status)
-      console.log('📥 响应数据:', response.data)
+    let retryCount = 0;
+    const maxRetries = 2;
 
-      if (response.data && response.data.success && response.data.user) {
-        this.user = response.data.user
-        console.log('✅ SessionId验证成功')
-      } else {
-        console.log('❌ 响应数据格式不正确:', response.data)
-        throw new Error('SessionId验证失败 - 响应数据无效')
-      }
-    } catch (error: any) {
-      console.log('❌ SessionId验证请求失败:')
-      console.log('  - 错误类型:', error.constructor.name)
-      console.log('  - 错误消息:', error.message)
-      if (error.response) {
-        console.log('  - 响应状态:', error.response.status)
-        console.log('  - 响应数据:', error.response.data)
+    while (retryCount <= maxRetries) {
+      try {
+        const response = await this.apiClient.get('/api/session_status')
+        console.log('📥 响应状态:', response.status)
+        console.log('📥 响应数据:', response.data)
 
-        // 🆕 增强认证不支持刷新，401错误直接清除认证
-        if (error.response.status === 401) {
-          console.log('🔄 SessionId已过期，需要重新登录')
-          this.clearAuthData()
+        if (response.data && response.data.success && response.data.user) {
+          this.user = response.data.user
+          console.log('✅ SessionId验证成功')
+          return; // 成功，直接返回
+        } else {
+          console.log('❌ 响应数据格式不正确:', response.data)
+          throw new Error('SessionId验证失败 - 响应数据无效')
         }
-      } else if (error.request) {
-        console.log('  - 请求失败，无响应')
-        console.log('  - 请求详情:', error.request)
+      } catch (error: any) {
+        retryCount++;
+        console.log(`❌ SessionId验证失败 (尝试 ${retryCount}/${maxRetries + 1}):`)
+        console.log('  - 错误类型:', error.constructor.name)
+        console.log('  - 错误消息:', error.message)
+        
+        if (error.response) {
+          console.log('  - 响应状态:', error.response.status)
+          console.log('  - 响应数据:', error.response.data)
+
+          // 只有明确的401认证错误才清除session，其他错误先重试
+          if (error.response.status === 401) {
+            const errorMessage = error.response.data?.message || '';
+            const isSessionError = errorMessage.includes('session') || 
+                                 errorMessage.includes('会话') || 
+                                 errorMessage.includes('过期') ||
+                                 errorMessage.includes('未登录');
+            
+            if (isSessionError) {
+              console.log('🔄 确认是会话过期错误，尝试自动重新登录')
+              
+              // 尝试自动重新登录
+              const autoReloginSuccess = await this.attemptAutoRelogin()
+              if (autoReloginSuccess) {
+                console.log('✅ 自动重新登录成功，重新验证token')
+                return; // 自动登录成功，退出验证函数
+              } else {
+                console.log('❌ 自动重新登录失败，清除认证数据')
+                this.clearAuthData()
+                throw new Error(`SessionId已过期且自动重新登录失败: ${error.message}`)
+              }
+            } else {
+              console.log('⚠️ 401错误但不是会话问题，可能是网络或服务器问题')
+            }
+          }
+          
+          // 5xx服务器错误或网络错误，先重试
+          if (error.response.status >= 500 && retryCount <= maxRetries) {
+            console.log(`⚠️ 服务器错误 (${error.response.status})，等待重试...`)
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
+            continue;
+          }
+        } else if (error.request) {
+          console.log('  - 网络请求失败，无响应')
+          if (retryCount <= maxRetries) {
+            console.log('⚠️ 网络错误，等待重试...')
+            await new Promise(resolve => setTimeout(resolve, 2000 * retryCount))
+            continue;
+          }
+        }
+        
+        // 最后一次重试失败，或者是其他类型错误
+        if (retryCount > maxRetries) {
+          console.log('💥 重试次数已用完，session验证最终失败')
+          throw new Error(`SessionId验证失败: ${error.message}`)
+        }
       }
-      throw new Error(`SessionId验证失败: ${error.message}`)
     }
   }
 
@@ -766,7 +1018,19 @@ export class SimpleAuthManager extends EventEmitter {
                 resolve(sessionId)
               }, 1500);
             } else {
-              console.log('❌ 定期检查：sessionId验证失败，继续等待...')
+              console.log('❌ 定期检查：sessionId验证失败，清除无效sessionId...')
+              // 🔧 修复：清除localStorage中的无效sessionId
+              try {
+                await authWindow.webContents.executeJavaScript(`
+                  localStorage.removeItem('sessionId');
+                  localStorage.removeItem('sessionId_backup');
+                  localStorage.removeItem('lastActivity');
+                  console.log('🗑️ 已清除无效的sessionId');
+                `);
+                console.log('✅ 无效sessionId已清除，继续等待新的登录...')
+              } catch (clearError) {
+                console.log('⚠️ 清除无效sessionId失败:', clearError.message)
+              }
             }
           }
         } catch (error) {
@@ -814,7 +1078,7 @@ export class SimpleAuthManager extends EventEmitter {
         url.includes('?auth=success') ||
         url.includes('#auth-success') ||
         url.includes('/auth-success') ||
-        (url.includes('localhost:3000') && !url.includes('/login') && !url.includes('/register'))
+        (url.includes('quiz.playoffer.cn') && !url.includes('/login') && !url.includes('/register'))
     );
 
     const isBackendRedirect = url.includes('/api/auth/callback');
@@ -908,7 +1172,13 @@ export class SimpleAuthManager extends EventEmitter {
       console.log('🔍 快速验证结果:', isValid ? '有效' : '无效')
       return isValid;
     } catch (error) {
-      console.log('🔍 快速验证失败:', error.message)
+      // 🔧 修复：区分401错误和其他错误
+      if (error.response && error.response.status === 401) {
+        console.log('🔍 快速验证失败: Request failed with status code 401')
+        console.log('🔧 SessionId已过期或无效，需要清除')
+      } else {
+        console.log('🔍 快速验证失败:', error.message)
+      }
       return false;
     }
   }
@@ -941,21 +1211,46 @@ export class SimpleAuthManager extends EventEmitter {
     // 清除本地存储
     configHelper.updateConfig({ authToken: null })
 
-    // 🆕 清除共享会话文件
-    try {
-      const path = require('path')
-      const fs = require('fs')
-      const sharedSessionPath = path.join(__dirname, '..', 'shared-session.json')
-
-      if (fs.existsSync(sharedSessionPath)) {
-        fs.unlinkSync(sharedSessionPath)
-        console.log('🗑️ 共享会话文件已删除')
-      }
-    } catch (error) {
-      console.warn('⚠️ 清除共享会话文件失败:', error)
-    }
+    // 🔧 修复：清除所有可能的共享会话文件位置
+    this.clearSharedSessionFiles()
 
     console.log('🗑️ 认证数据已清除')
+  }
+
+  /**
+   * 🔧 清除所有可能位置的共享会话文件
+   */
+  private clearSharedSessionFiles(): void {
+    const path = require('path')
+    const fs = require('fs')
+    
+    // 所有可能的共享会话文件路径
+    const possiblePaths = [
+      path.join(process.cwd(), 'shared-session.json'),
+      path.join(__dirname, '..', 'shared-session.json'),
+      path.join(__dirname, '..', '..', 'shared-session.json'),
+      path.join(process.resourcesPath || '', '..', 'shared-session.json')
+    ]
+
+    let clearedCount = 0
+    
+    for (const sessionPath of possiblePaths) {
+      try {
+        if (fs.existsSync(sessionPath)) {
+          fs.unlinkSync(sessionPath)
+          console.log(`🗑️ 共享会话文件已删除: ${sessionPath}`)
+          clearedCount++
+        }
+      } catch (error) {
+        console.warn(`⚠️ 删除共享会话文件失败 ${sessionPath}:`, error)
+      }
+    }
+    
+    if (clearedCount === 0) {
+      console.log('ℹ️ 未找到需要清除的共享会话文件')
+    } else {
+      console.log(`✅ 已清除 ${clearedCount} 个共享会话文件`)
+    }
   }
 }
 

@@ -288,7 +288,7 @@ const RechargeQRCode: React.FC<RechargeQRCodeProps> = ({
             onClick={onPaymentSuccess}
             className="w-full py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
           >
-            查看订单记录
+            返回充值主页
           </button>
         )}
       </div>

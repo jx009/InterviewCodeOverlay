@@ -27,40 +27,40 @@ const toastVariants: Record<
   { icon: React.ReactNode; bgColor: string; borderColor: string; textColor: string }
 > = {
   neutral: {
-    icon: <Info className="h-4 w-4 text-blue-600" />,
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
-    textColor: "text-blue-900"
+    icon: <Info className="h-4 w-4 text-blue-400" />,
+    bgColor: "bg-gray-800",
+    borderColor: "border-blue-600",
+    textColor: "text-white"
   },
   info: {
-    icon: <Info className="h-4 w-4 text-blue-600" />,
-    bgColor: "bg-blue-50",
-    borderColor: "border-blue-200", 
-    textColor: "text-blue-900"
+    icon: <Info className="h-4 w-4 text-blue-400" />,
+    bgColor: "bg-gray-800",
+    borderColor: "border-blue-600", 
+    textColor: "text-white"
   },
   success: {
-    icon: <CheckCircle2 className="h-4 w-4 text-green-600" />,
-    bgColor: "bg-green-50",
-    borderColor: "border-green-200",
-    textColor: "text-green-900"
+    icon: <CheckCircle2 className="h-4 w-4 text-green-400" />,
+    bgColor: "bg-gray-800",
+    borderColor: "border-green-600",
+    textColor: "text-white"
   },
   error: {
-    icon: <AlertCircle className="h-4 w-4 text-red-600" />,
-    bgColor: "bg-red-50",
-    borderColor: "border-red-200",
-    textColor: "text-red-900"
+    icon: <AlertCircle className="h-4 w-4 text-red-400" />,
+    bgColor: "bg-gray-800",
+    borderColor: "border-red-600",
+    textColor: "text-white"
   },
   warning: {
-    icon: <AlertCircle className="h-4 w-4 text-amber-600" />,
-    bgColor: "bg-amber-50",
-    borderColor: "border-amber-200",
-    textColor: "text-amber-900"
+    icon: <AlertCircle className="h-4 w-4 text-amber-400" />,
+    bgColor: "bg-gray-800",
+    borderColor: "border-amber-600",
+    textColor: "text-white"
   },
   loading: {
-    icon: <Clock className="h-4 w-4 text-purple-600 animate-spin" />,
-    bgColor: "bg-purple-50",
-    borderColor: "border-purple-200",
-    textColor: "text-purple-900"
+    icon: <Clock className="h-4 w-4 text-purple-400 animate-spin" />,
+    bgColor: "bg-gray-800",
+    borderColor: "border-purple-600",
+    textColor: "text-white"
   }
 }
 

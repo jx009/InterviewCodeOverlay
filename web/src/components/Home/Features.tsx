@@ -25,7 +25,7 @@ const Features: React.FC = () => {
     {
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
         </svg>
       ),
       title: '多语言支持',
@@ -55,7 +55,7 @@ const Features: React.FC = () => {
   };
 
   return (
-    <section className="py-20 bg-gray-900/50">
+    <section className="py-20 bg-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 标题 */}
         <div className="text-center mb-16">

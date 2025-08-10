@@ -25,17 +25,68 @@ export const usePaymentPackages = () => {
       setError(null);
       
       console.log('📦 获取支付套餐列表...');
+      
+      // 优先使用payment API，fallback到recharge API
+      try {
+        const response = await fetch('/api/payment/packages', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.data && data.data.length > 0) {
+          // 使用payment API的数据格式
+          const packages = data.data.map((pkg: any) => ({
+            id: pkg.id,
+            name: pkg.name,
+            description: pkg.description,
+            amount: pkg.amount,
+            points: pkg.points,
+            bonusPoints: pkg.bonusPoints,
+            totalPoints: pkg.points + pkg.bonusPoints,
+            isRecommended: pkg.isRecommended,
+            icon: pkg.icon,
+            label: pkg.label,
+            labelColor: pkg.labelColor,
+            isActive: pkg.isActive,
+            sortOrder: pkg.sortOrder || pkg.id,
+            createdAt: pkg.createdAt || new Date().toISOString(),
+            updatedAt: pkg.updatedAt || new Date().toISOString()
+          }));
+          
+          setPackages(packages);
+          console.log('✅ 获取支付套餐成功 (payment API)，数量:', packages.length);
+          console.log('📊 套餐详细数据:', packages);
+          return;
+        }
+      } catch (paymentApiError) {
+        console.log('⚠️ Payment API调用失败，尝试fallback到recharge API:', paymentApiError);
+      }
+      
+      // Fallback到recharge API
       const response = await rechargeApi.getPackages();
       
       if (response.success && response.data) {
-        // 按sortOrder排序，推荐套餐优先
-        const sortedPackages = response.data.sort((a, b) => {
-          if (a.isRecommended && !b.isRecommended) return -1;
-          if (!a.isRecommended && b.isRecommended) return 1;
-          return a.sortOrder - b.sortOrder;
-        });
-        setPackages(sortedPackages);
-        console.log('✅ 获取支付套餐成功，数量:', sortedPackages.length);
+        // 将RechargePackage转换为PaymentPackage格式
+        const packages = response.data.map(pkg => ({
+          ...pkg,
+          totalPoints: pkg.totalPoints || (pkg.points + pkg.bonusPoints),
+          isActive: true,
+          sortOrder: pkg.id, // 使用id作为排序，实际由后端排序决定
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }));
+        
+        setPackages(packages);
+        console.log('✅ 获取支付套餐成功 (recharge API fallback)，数量:', packages.length);
+        console.log('📊 套餐详细数据:', packages);
       } else {
         const errorMsg = response.message || '获取套餐列表失败';
         console.log('❌ 获取套餐失败:', errorMsg);
@@ -77,6 +128,49 @@ export const useCreateOrder = () => {
       setLoading(true);
       setError(null);
 
+      // 优先使用新的payment API
+      try {
+        const sessionId = localStorage.getItem('sessionId') || '';
+        const response = await fetch('/api/payment/create-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Id': sessionId,
+          },
+          body: JSON.stringify({
+            packageId: data.packageId
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const responseData = await response.json();
+        
+        if (responseData.success && responseData.data) {
+          // 转换payment API的响应格式为CreateOrderResponse格式
+          const convertedResponse: CreateOrderResponse = {
+            success: true,
+            data: {
+              orderNo: responseData.data.orderNo,
+              qrCodeUrl: responseData.data.qrCodeUrl || '',
+              amount: responseData.data.amount,
+              points: 0, // payment API不直接返回points，将在其他地方获取
+              expireTime: responseData.data.expireTime,
+              packageInfo: {
+                name: `套餐-${data.packageId}`,
+                description: '充值套餐'
+              }
+            }
+          };
+          return convertedResponse;
+        }
+      } catch (paymentApiError) {
+        console.log('⚠️ Payment API创建订单失败，尝试fallback到recharge API:', paymentApiError);
+      }
+
+      // Fallback到recharge API
       const response = await rechargeApi.createOrder({
         packageId: data.packageId
       });
@@ -120,6 +214,43 @@ export const useOrderStatus = (orderNo?: string) => {
       setLoading(true);
       setError(null);
 
+      // 优先使用新的payment API
+      try {
+        const sessionId = localStorage.getItem('sessionId') || '';
+        const response = await fetch(`/api/payment/order/${targetOrderNo}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Session-Id': sessionId,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const responseData = await response.json();
+        
+        if (responseData.success && responseData.data) {
+          const orderData = {
+            ...order,
+            orderNo: responseData.data.orderNo,
+            paymentStatus: responseData.data.paymentStatus as PaymentStatus,
+            paymentTime: responseData.data.paymentTime || order?.paymentTime,
+            amount: responseData.data.amount || order?.amount,
+            points: responseData.data.points || order?.points
+          } as PaymentOrder;
+          
+          setOrder(orderData);
+          setTradeState(responseData.data.paymentStatus);
+          setTradeStateDesc(responseData.message || '');
+          return;
+        }
+      } catch (paymentApiError) {
+        console.log('⚠️ Payment API查询订单失败，尝试fallback到recharge API:', paymentApiError);
+      }
+
+      // Fallback到recharge API
       const response = await rechargeApi.getOrderStatus(targetOrderNo);
 
       if (response.success && response.data) {

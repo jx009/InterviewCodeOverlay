@@ -28,7 +28,7 @@ const DisplaySettings: React.FC<DisplaySettingsProps> = ({ onToggleCopyButton })
   };
 
   return (
-    <div className="p-4 bg-black/60 rounded-md">
+    <div className="p-4 opacity-controlled-bg rounded-md">
       <h2 className="text-[15px] font-medium text-white mb-3">显示设置</h2>
       
       <div className="flex items-center justify-between">

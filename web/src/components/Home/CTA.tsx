@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 const CTA: React.FC = () => {
   return (
-    <section className="py-20 bg-gradient-to-r from-blue-900/20 to-purple-900/20">
+    <section className="py-20 bg-black">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
           准备好提升你的笔试表现了吗？
