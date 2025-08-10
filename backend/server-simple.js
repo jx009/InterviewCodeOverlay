@@ -97,7 +97,7 @@ db.getPaymentPackages = async function() {
 };
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3003;
 
 // AI模型数据
 const aiModels = [
@@ -311,7 +311,12 @@ initializeServices();
 
 // 中间件
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3002'],
+  origin: [
+    'http://localhost:3004', 
+    'http://localhost:54321',
+    'http://159.75.174.234:3004',
+    'http://159.75.174.234:54321'
+  ],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Session-Id']
 }));

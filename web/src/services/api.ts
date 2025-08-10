@@ -2,10 +2,10 @@ import axios from 'axios';
 import { SessionProtection } from '../utils/sessionProtection';
 // Import removed - will be added back when needed
 
-// 更新BASE_URL以确保正确连接到后端服务器
+// 更新BASE_URL以确保正确连接到测试服务器
 const BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://quiz.playoffer.cn/api' // 生产环境使用HTTPS服务器地址
-  : 'https://quiz.playoffer.cn/api'; // 开发环境也使用HTTPS服务器地址
+  ? 'http://159.75.174.234:3003/api' // 生产环境使用测试服务器地址
+  : 'http://159.75.174.234:3003/api'; // 开发环境使用测试服务器地址
 
 // Removed unused interfaces
 

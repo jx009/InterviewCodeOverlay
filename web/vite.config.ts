@@ -5,14 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 3004,
     host: true,
     allowedHosts: ['quiz.playoffer.cn', 'localhost'],
     proxy: {
       '/api': {
-        target: 'https://quiz.playoffer.cn',
+        target: 'http://159.75.174.234:3003',
         changeOrigin: true,
-        secure: true
+        secure: false
       }
     }
   },
