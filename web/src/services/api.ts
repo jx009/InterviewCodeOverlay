@@ -2,10 +2,10 @@ import axios from 'axios';
 import { SessionProtection } from '../utils/sessionProtection';
 // Import removed - will be added back when needed
 
-// 更新BASE_URL以确保正确连接到测试服务器
+// 使用Vite代理，开发环境使用相对路径
 const BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'http://159.75.174.234:3003/api' // 生产环境使用测试服务器地址
-  : 'http://159.75.174.234:3003/api'; // 开发环境使用测试服务器地址
+  ? 'http://localhost:3003/api' // 生产环境直接连接
+  : '/api'; // 开发环境使用Vite代理
 
 // Removed unused interfaces
 
