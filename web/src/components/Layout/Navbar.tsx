@@ -64,6 +64,16 @@ const Navbar: React.FC = () => {
               </Link>
             ))}
             
+            {/* 使用文档按钮 */}
+            <a
+              href="https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors duration-200"
+            >
+              使用文档
+            </a>
+            
             {/* 个人按钮 */}
             <button
               onClick={handleProfileClick}
@@ -120,6 +130,14 @@ const Navbar: React.FC = () => {
               {item.name}
             </Link>
           ))}
+          <a
+            href="https://www.yuque.com/shuaidi-1le9i/fgolgo/cw0hvhlxu0w130gq?singleDoc#"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-2 text-base font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors duration-200"
+          >
+            使用文档
+          </a>
           <button
             onClick={handleProfileClick}
             className={`block w-full text-left px-3 py-2 text-base font-medium transition-colors duration-200 ${
