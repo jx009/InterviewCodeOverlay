@@ -191,7 +191,7 @@ router.get('/models', authenticateToken, async (req: AuthenticatedRequest, res: 
     // 直接返回我们配置的模型列表，使用新的映射规则
     const modelMapping = {
       'claude-sonnet-4-20250514': 'claude-4-sonnet',
-      'gemini-2.5-pro-exp-03-25': 'gemini-pro-2.5',
+      'gemini-2.5-pro': 'gemini-pro-2.5',
       'gemini-2.5-flash-preview-04-17': 'gemini-flash-2.5',
       'gpt-4o': 'gpt-4o',
       'gpt-4o-mini': 'gpt-4o-mini',
