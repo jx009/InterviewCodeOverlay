@@ -24,12 +24,12 @@ export class SearchService {
    */
   async searchWithPointsCheck(request: SearchRequest): Promise<SearchResult> {
     const { userId, modelName, questionType, query, metadata } = request;
-    
+
     try {
       // 1. 检查积分是否充足
       console.log(`🔍 检查积分: 用户${userId}, 模型${modelName}, 类型${questionType}`);
       const pointCheck = await pointService.checkSufficientPoints(userId, modelName, questionType);
-      
+
       if (!pointCheck.sufficient) {
         return {
           success: false,
@@ -41,10 +41,10 @@ export class SearchService {
       // 2. 扣除积分
       console.log(`💰 扣除积分: ${pointCheck.requiredPoints}积分`);
       const consumeResult = await pointService.consumePoints(
-        userId, 
-        modelName, 
-        questionType,
-        `搜题: ${query.substring(0, 50)}...`
+          userId,
+          modelName,
+          questionType,
+          `搜题: ${query.substring(0, 50)}...`
       );
 
       if (!consumeResult.success) {
@@ -64,11 +64,11 @@ export class SearchService {
         // 搜题失败，退款积分
         console.error('🔥 搜题失败，开始退款:', searchError);
         const refundResult = await pointService.refundPoints(
-          userId,
-          pointCheck.requiredPoints,
-          `搜题失败退款: ${searchError instanceof Error ? searchError.message : '未知错误'}`
+            userId,
+            pointCheck.requiredPoints,
+            `搜题失败退款: ${searchError instanceof Error ? searchError.message : '未知错误'}`
         );
-        
+
         return {
           success: false,
           message: `搜题失败: ${searchError instanceof Error ? searchError.message : '未知错误'}${refundResult.success ? '，积分已退还' : ''}`,
@@ -101,21 +101,21 @@ export class SearchService {
    * 这个方法应该调用具体的AI模型进行搜题
    */
   private async performActualSearch(
-    modelName: string, 
-    questionType: QuestionType, 
-    query: string, 
-    metadata?: any
+      modelName: string,
+      questionType: QuestionType,
+      query: string,
+      metadata?: any
   ): Promise<any> {
     // 模拟搜题过程
     console.log(`🤖 使用模型 ${modelName} 处理 ${questionType} 类型题目`);
     console.log(`📝 题目内容: ${query}`);
-    
+
     // 这里应该集成实际的AI模型调用逻辑
     // 例如调用OpenAI、Claude、Gemini等API
-    
+
     // 模拟处理时间
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // 模拟不同类型题目的处理结果
     if (questionType === QuestionType.MULTIPLE_CHOICE) {
       return {
@@ -140,9 +140,9 @@ export class SearchService {
    * 预检查搜题成本（不扣除积分）
    */
   async preCheckSearchCost(
-    userId: number, 
-    modelName: string, 
-    questionType: QuestionType
+      userId: number,
+      modelName: string,
+      questionType: QuestionType
   ) {
     try {
       const pointCheck = await pointService.checkSufficientPoints(userId, modelName, questionType);
@@ -171,10 +171,10 @@ export class SearchService {
   async getAvailableModels() {
     try {
       const configs = await pointService.getAllModelConfigs();
-      
+
       // 按模型分组
       const modelGroups: { [key: string]: any } = {};
-      
+
       configs.forEach(config => {
         if (!modelGroups[config.modelName]) {
           modelGroups[config.modelName] = {

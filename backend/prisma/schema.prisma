@@ -195,18 +195,25 @@ model redis_sessions {
 }
 
 model usage_records {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   user_id     Int
-  action      String   @db.VarChar(50)
-  model       String   @db.VarChar(100)
-  provider    String   @db.VarChar(50)
+  action      String    @db.VarChar(50)
+  model       String    @db.VarChar(100)
+  provider    String    @db.VarChar(50)
   tokens_used Int?
-  success     Boolean  @default(true)
-  error_msg   String?  @db.Text
-  created_at  DateTime @default(now())
-  users       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  success     Boolean   @default(true)
+  error_msg   String?   @db.Text
+  start_time  DateTime?
+  end_time    DateTime?
+  duration_ms Int?
+  session_id  String?   @db.VarChar(100)
+  query       String?   @db.Text
+  created_at  DateTime  @default(now())
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id], map: "usage_records_user_id_fkey")
+  @@index([session_id])
+  @@index([start_time])
 }
 
 model user_configs {
