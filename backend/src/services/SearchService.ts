@@ -69,6 +69,13 @@ export class SearchService {
             `搜题失败退款: ${searchError instanceof Error ? searchError.message : '未知错误'}`
         );
 
+        // 更新原始交易的结束时间
+        console.log(`🕒 搜题失败，准备更新交易 ${consumeResult.transactionId} 的结束时间`);
+        const updateResult = await pointService.updateTransactionEndTime(consumeResult.transactionId);
+        if (!updateResult.success) {
+          console.error(`❌ 更新结束时间失败:`, updateResult.message);
+        }
+
         return {
           success: false,
           message: `搜题失败: ${searchError instanceof Error ? searchError.message : '未知错误'}${refundResult.success ? '，积分已退还' : ''}`,
@@ -76,7 +83,14 @@ export class SearchService {
         };
       }
 
-      // 4. 返回成功结果
+      // 4. 更新交易结束时间
+      console.log(`🕒 搜题成功，准备更新交易 ${consumeResult.transactionId} 的结束时间`);
+      const updateResult = await pointService.updateTransactionEndTime(consumeResult.transactionId);
+      if (!updateResult.success) {
+        console.error(`❌ 更新结束时间失败:`, updateResult.message);
+      }
+
+      // 5. 返回成功结果
       return {
         success: true,
         data: searchResult,

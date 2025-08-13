@@ -65,7 +65,9 @@ export class ShortcutsHelper {
     // 多选题快捷键
     globalShortcut.register("CommandOrControl+Shift+Enter", async () => {
       console.log("Ctrl/Cmd + Shift + Enter pressed. Processing as multiple choice questions...")
-      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice()
+      // 生成新的operationId，因为这是独立的快捷键操作
+      const operationId = `shortcut_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice(operationId)
     })
 
     globalShortcut.register("CommandOrControl+R", () => {

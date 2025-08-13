@@ -76,6 +76,7 @@ interface UsageTransaction {
   question_type?: string;
   description?: string;
   created_at: string;
+  end_time?: string;
   username: string;
   email: string;
   operationType: string;
@@ -2827,26 +2828,35 @@ export default function ManagerPage() {
                   ) : (
                     <>
                       <div className="overflow-x-auto">
-                        <table className="w-full table-auto">
+                        <table className="w-full table-fixed min-w-full">
                           <thead>
                             <tr className="bg-gray-700">
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">
                                 用户名
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">
                                 邮箱
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
                                 操作类型
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">
+                                使用模型
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
                                 积分变化
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">
                                 操作后余额
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
+                                花费时间
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-36">
                                 操作时间
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-36">
+                                操作结束时间
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                                 描述
@@ -2879,6 +2889,9 @@ export default function ManagerPage() {
                                     {transaction.operationType}
                                   </span>
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {transaction.model_name || '-'}
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                   <span className={
                                     transaction.amount > 0 ? 'text-green-400' : 'text-red-400'
@@ -2890,7 +2903,29 @@ export default function ManagerPage() {
                                   {transaction.balance_after}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {transaction.end_time && (transaction.operationType === '消费' || transaction.operationType === '编程题' || transaction.operationType === '选择题')
+                                    ? (() => {
+                                        const startTime = new Date(transaction.created_at).getTime();
+                                        const endTime = new Date(transaction.end_time);
+                                        endTime.setHours(endTime.getHours() - 8);
+                                        const durationSeconds = Math.round((endTime.getTime() - startTime) / 1000);
+                                        return `${durationSeconds}秒`;
+                                      })()
+                                    : '-'
+                                  }
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                                   {new Date(transaction.created_at).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {transaction.end_time && (transaction.operationType === '消费' || transaction.operationType === '编程题' || transaction.operationType === '选择题')
+                                    ? (() => {
+                                        const endTime = new Date(transaction.end_time);
+                                        endTime.setHours(endTime.getHours() - 8);
+                                        return endTime.toLocaleString();
+                                      })()
+                                    : '-'
+                                  }
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate">
                                   {transaction.description || '-'}

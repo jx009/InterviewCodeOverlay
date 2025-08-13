@@ -609,22 +609,9 @@ const Solutions: React.FC<SolutionsProps> = ({
       
       // 🆕 流式输出事件监听器
       window.electronAPI.onSolutionStreamChunk((data) => {
-        console.log('📥 收到流式数据块:', {
-          deltaLength: data.delta?.length || 0,
-          fullContentLength: data.fullContent?.length || 0,
-          progress: data.progress,
-          isComplete: data.isComplete
-        })
-        
-        console.log('🔍 当前前端状态:', {
-          isStreaming,
-          streamingContent: streamingContent.substring(0, 50) + '...',
-          solutionData: solutionData?.substring(0, 50) + '...' || 'null'
-        })
 
         // 🆕 处理流式传输开始信号
         if (data.streamingStarted) {
-          console.log('🚀 收到流式传输开始信号，激活流式模式')
           setIsStreaming(true)
           setStreamingContent('')
           setStreamingProgress(0)
@@ -633,7 +620,6 @@ const Solutions: React.FC<SolutionsProps> = ({
 
         if (data.isComplete) {
           // 流式传输完成
-          console.log('✅ 流式传输完成，最终内容长度:', data.fullContent?.length)
           
           // 🔧 保持流式内容显示更长时间，然后逐渐切换到最终状态
           setTimeout(() => {
@@ -646,7 +632,6 @@ const Solutions: React.FC<SolutionsProps> = ({
           // 解析完整内容并设置最终状态
           if (data.fullContent && shouldStartDisplaying(data.fullContent)) {
             const parsed = parseStreamedSolution(data.fullContent)
-            console.log('📊 解析完成的流式内容:', parsed)
             
             // 根据类型设置相应的状态
             if (parsed.type === 'programming') {
@@ -675,7 +660,6 @@ const Solutions: React.FC<SolutionsProps> = ({
           }
         } else if (data.fullContent && shouldStartDisplaying(data.fullContent)) {
           // 接收流式数据块
-          console.log('📝 处理流式数据块，设置流式状态为true')
           setIsStreaming(true)
           setStreamingContent(data.fullContent)
           setStreamingProgress(data.progress || 0)
@@ -683,12 +667,8 @@ const Solutions: React.FC<SolutionsProps> = ({
           // 实时解析内容用于预览
           const parsed = parseStreamedSolution(data.fullContent)
           setStreamingParsedData(parsed)
-          
-          console.log(`📝 流式内容更新: ${data.fullContent.length} 字符, 进度: ${data.progress}%`)
-          console.log(`📄 流式内容预览: "${data.fullContent.substring(0, 100)}..."`)
         } else if (data.fullContent && data.fullContent.length > 0) {
           // 即使内容不满足shouldStartDisplaying，但有内容就开始流式显示
-          console.log('📝 收到流式内容，强制开始流式显示')
           setIsStreaming(true)
           setStreamingContent(data.fullContent)
           setStreamingProgress(data.progress || 0)

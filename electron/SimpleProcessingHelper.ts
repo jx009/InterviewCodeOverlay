@@ -56,7 +56,7 @@ export class SimpleProcessingHelper {
   private currentExtraProcessingAbortController: AbortController | null = null
 
   // 🆕 积分管理相关
-  private pendingCreditOperations: Map<string, { modelName: string; questionType: string; amount: number }> = new Map()
+  private pendingCreditOperations: Map<string, { modelName: string; questionType: string; amount: number; transactionId?: number }> = new Map()
 
   // 🆕 积分缓存
   private userCredits: number | null = null
@@ -215,7 +215,7 @@ export class SimpleProcessingHelper {
    * 核心方法：处理截图（强制多选题模式）
    * 强制登录流程：检查认证 → 获取配置 → 处理AI → 返回结果
    */
-  public async processScreenshotsAsMultipleChoice(): Promise<void> {
+  public async processScreenshotsAsMultipleChoice(operationId?: string): Promise<void> {
     const mainWindow = this.deps.getMainWindow()
     if (!mainWindow) return
 
@@ -269,10 +269,10 @@ export class SimpleProcessingHelper {
     // Step 4: 执行多选题AI处理
     const view = this.deps.getView()
     if (view === "queue") {
-      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage)
+      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage, operationId)
     } else {
       console.log('⚠️ 多选题模式只支持主队列处理')
-      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage)
+      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage, operationId)
     }
   }
 
@@ -363,7 +363,7 @@ export class SimpleProcessingHelper {
   /**
    * 处理主队列截图（强制多选题模式）
    */
-  private async processMainQueueAsMultipleChoice(userConfig: any, language: string): Promise<void> {
+  private async processMainQueueAsMultipleChoice(userConfig: any, language: string, operationId?: string): Promise<void> {
     const mainWindow = this.deps.getMainWindow()
     if (!mainWindow) return
 
@@ -415,7 +415,7 @@ export class SimpleProcessingHelper {
       }
 
       // 处理截图（强制为多选题）
-      const result = await this.processScreenshotsWithAIAsMultipleChoice(validScreenshots, userConfig, language, signal)
+      const result = await this.processScreenshotsWithAIAsMultipleChoice(validScreenshots, userConfig, language, signal, operationId)
 
       if (!result.success) {
         console.log("❌ 多选题AI处理失败:", result.error)
@@ -647,11 +647,12 @@ export class SimpleProcessingHelper {
       screenshots: Array<{ path: string; data: string }>,
       userConfig: any,
       language: string,
-      signal: AbortSignal
+      signal: AbortSignal,
+      providedOperationId?: string
   ) {
-    // 生成唯一操作ID，用于跟踪整个处理过程中的积分消费
-    const operationId = `ai_call_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`📝 创建多选题操作ID: ${operationId}`);
+    // 使用提供的操作ID，如果没有则生成新的
+    const operationId = providedOperationId || `ai_call_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`📝 ${providedOperationId ? '使用提供的' : '创建新的'}多选题操作ID: ${operationId}`);
 
     try {
       const mainWindow = this.deps.getMainWindow()
@@ -732,10 +733,19 @@ export class SimpleProcessingHelper {
         }
 
         // 记录积分操作，便于后续退款
+        console.log('🔍 积分扣除API响应:', deductResult);
+        console.log('🔍 提取transactionId:', deductResult.transactionId);
+        
         this.pendingCreditOperations.set(operationId, {
           modelName,
           questionType,
-          amount: checkResult.requiredCredits || 0
+          amount: checkResult.requiredCredits || 0,
+          transactionId: deductResult.transactionId
+        });
+        
+        console.log('💾 保存操作记录到pendingCreditOperations:', {
+          operationId,
+          transactionId: deductResult.transactionId
         });
 
         console.log(`✅ 多选题积分检查通过，扣除成功，剩余积分: ${deductResult.newCredits || '未知'}`);
@@ -787,12 +797,17 @@ export class SimpleProcessingHelper {
       // 使用专门的多选题解决方案生成逻辑
       const solutionsResult = await this.generateMultipleChoiceSolutionsWithCustomPrompt(userConfig, (problemInfo as any).data, signal)
 
+      console.log('🔍 搜题结果检查 - solutionsResult.success:', solutionsResult.success);
+      console.log('🔍 当前operationId:', operationId);
+      
       if (solutionsResult.success) {
+        console.log('✅ 搜题成功，开始标记积分操作完成...');
         // 🆕 积分操作标记为完成
         try {
           await this.completeCreditsOperation(operationId);
+          console.log('✅ 积分操作完成标记成功');
         } catch (completeError) {
-          console.error("标记积分操作完成失败:", completeError);
+          console.error("❌ 标记积分操作完成失败:", completeError);
           // 继续处理，不中断流程
         }
 
@@ -808,6 +823,9 @@ export class SimpleProcessingHelper {
 
         return { success: true, data: (solutionsResult as any).data }
       } else {
+        console.log('❌ 搜题失败，不会标记积分操作完成');
+        console.log('❌ 搜题失败原因:', solutionsResult.error || '未知原因');
+        
         // 生成解决方案失败，退款积分
         try {
           await this.refundCredits(operationId, 0, "生成多选题解决方案失败: " + ((solutionsResult as any).error || "未知错误"));
@@ -938,10 +956,19 @@ export class SimpleProcessingHelper {
         }
 
         // 记录积分操作，便于后续退款
+        console.log('🔍 积分扣除API响应:', deductResult);
+        console.log('🔍 提取transactionId:', deductResult.transactionId);
+        
         this.pendingCreditOperations.set(operationId, {
           modelName,
           questionType,
-          amount: checkResult.requiredCredits || 0
+          amount: checkResult.requiredCredits || 0,
+          transactionId: deductResult.transactionId
+        });
+        
+        console.log('💾 保存操作记录到pendingCreditOperations:', {
+          operationId,
+          transactionId: deductResult.transactionId
         });
 
         console.log(`✅ 积分检查通过，扣除成功，剩余积分: ${deductResult.newCredits || '未知'}`);
@@ -988,14 +1015,19 @@ export class SimpleProcessingHelper {
         )
       }
 
-      const solutionsResult = await this.generateSolutions(userConfig, language, (problemInfo as any).data, signal)
+      const solutionsResult = await this.generateSolutions(userConfig, language, (problemInfo as any).data, signal, operationId)
 
+      console.log('🔍 搜题结果检查 - solutionsResult.success:', solutionsResult.success);
+      console.log('🔍 当前operationId:', operationId);
+      
       if (solutionsResult.success) {
+        console.log('✅ 搜题成功，开始标记积分操作完成...');
         // 🆕 积分操作标记为完成
         try {
           await this.completeCreditsOperation(operationId);
+          console.log('✅ 积分操作完成标记成功');
         } catch (completeError) {
-          console.error("标记积分操作完成失败:", completeError);
+          console.error("❌ 标记积分操作完成失败:", completeError);
           // 继续处理，不中断流程
         }
 
@@ -1011,6 +1043,9 @@ export class SimpleProcessingHelper {
 
         return { success: true, data: (solutionsResult as any).data }
       } else {
+        console.log('❌ 搜题失败，不会标记积分操作完成');
+        console.log('❌ 搜题失败原因:', solutionsResult.error || '未知原因');
+        
         // 生成解决方案失败，退款积分
         try {
           await this.refundCredits(operationId, 0, "生成解决方案失败: " + ((solutionsResult as any).error || "未知错误"));
@@ -1040,7 +1075,7 @@ export class SimpleProcessingHelper {
   /**
    * 生成解决方案
    */
-  private async generateSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
+  private async generateSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
     try {
       if (!(await this.ensureAIClient())) {
         return {
@@ -1053,7 +1088,7 @@ export class SimpleProcessingHelper {
       if (problemInfo.type === 'multiple_choice') {
         return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal)
       } else {
-        return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal)
+        return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal, parentOperationId)
       }
 
     } catch (error: any) {
@@ -1072,8 +1107,9 @@ export class SimpleProcessingHelper {
   /**
    * 生成编程题解决方案
    */
-  private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
-    const operationId = `prog_${randomUUID()}`;
+  private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
+    const operationId = parentOperationId || `prog_${randomUUID()}`;
+    console.log(`📝 编程题使用操作ID: ${operationId} ${parentOperationId ? '(继承自父级)' : '(新生成)'}`);
     let deductionInfo: {
       success: boolean;
       sufficient?: boolean;
@@ -1089,8 +1125,22 @@ export class SimpleProcessingHelper {
       // 移除硬编码的模型限制，允许使用用户配置的模型
 
       console.log('🎯 使用模型:', model)
-      // 注意：积分检查和扣除已经在processScreenshotsWithAI中完成，这里不需要重复检查
-      console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
+      
+      // 如果没有父级操作ID，说明是独立调用，需要检查和扣除积分
+      if (!parentOperationId) {
+        console.log('💰 独立调用，需要检查并扣除积分');
+        const model = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+        deductionInfo = await this.checkAndDeductCredits(model, 'programming', operationId);
+
+        if (!deductionInfo.success) {
+          return {
+            success: false,
+            error: deductionInfo.message || "积分检查失败"
+          }
+        }
+      } else {
+        console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
+      }
 
       const promptText = `
 请为以下编程题目提供最优解决方案：
@@ -1195,11 +1245,11 @@ ${problemInfo.example_output || "未提供示例输出"}
               chunkIndex: chunkCount
             })
             
-            console.log(`📝 流式数据块 #${chunkCount}: "${delta}" (+${delta.length} 字符, 总计: ${fullContent.length})`)
+            // 流式数据处理
           }
         }
 
-        console.log('✅ 编程题流式AI调用完成，总长度:', fullContent.length)
+        console.log('✅ 编程题AI调用完成')
 
         // 🆕 发送完成信号
         mainWindow.webContents.send('solution-stream-chunk', {
@@ -1218,8 +1268,8 @@ ${problemInfo.example_output || "未提供示例输出"}
           mainWindow.webContents.send('solution-stream-error', error.message || '流式调用失败')
         }
         
-        // AI调用失败，退还积分
-        if (deductionInfo.requiredPoints) {
+        // AI调用失败，退还积分（仅在独立调用时）
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '编程题AI调用失败')
         }
         throw error
@@ -1228,13 +1278,13 @@ ${problemInfo.example_output || "未提供示例输出"}
       // 🆕 流式调用完成后，解析最终内容
       if (!fullContent.trim()) {
         console.error('❌ 流式调用未收到任何内容')
-        if (deductionInfo.requiredPoints) {
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '流式调用未收到内容')
         }
         throw new Error('AI流式调用未返回任何内容')
       }
 
-      console.log('📝 开始解析流式响应内容，长度:', fullContent.length)
+      console.log('📝 开始解析流式响应内容')
 
       // 🆕 解析完整的流式响应内容
       const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
@@ -1291,9 +1341,13 @@ ${problemInfo.example_output || "未提供示例输出"}
         hasSpaceComplexity: !!spaceComplexity
       })
 
-      // 🆕 AI调用成功，完成积分操作
-      await this.completeCreditsOperation(operationId)
-      console.log('💰 编程题积分操作完成')
+      // 🆕 AI调用成功，完成积分操作（仅在独立调用时）
+      if (!parentOperationId) {
+        await this.completeCreditsOperation(operationId)
+        console.log('💰 编程题积分操作完成')
+      } else {
+        console.log('ℹ️ 跳过积分完成标记（将由父级方法处理）')
+      }
 
       return { success: true, data: formattedResponse }
     } catch (error: any) {
@@ -1458,9 +1512,6 @@ ${questionsText}
 
       const responseContent = solutionResponse.choices[0].message.content
       console.log('✅ 选择题AI响应完成')
-      console.log('📝 AI原始响应内容:')
-      console.log('='.repeat(50))
-      console.log(responseContent)
       console.log('='.repeat(50))
 
       // 解析答案
@@ -1746,9 +1797,6 @@ ${questionsText}
         throw new Error('多选题AI响应格式错误：无法提取内容')
       }
       console.log('✅ 多选题AI响应完成')
-      console.log('📝 AI原始响应内容:')
-      console.log('='.repeat(50))
-      console.log(responseContent)
       console.log('='.repeat(50))
 
       // 解析答案 - 支持多选题格式
@@ -2457,7 +2505,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }, { signal })
 
       const responseText = response.choices[0].message.content
-      console.log("编程题AI提取响应:", responseText)
+      // AI响应处理
 
       let jsonText = responseText.trim()
       jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
@@ -2556,7 +2604,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }, { signal })
 
       const responseText = response.choices[0].message.content
-      console.log("选择题AI提取响应:", responseText)
+      // AI响应处理
 
       let jsonText = responseText.trim()
       jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
@@ -2681,7 +2729,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
         this.pendingCreditOperations.set(operationId, {
           modelName,
           questionType,
-          amount: result.deductedAmount
+          amount: result.deductedAmount,
+          transactionId: result.transactionId
         })
 
         return {
@@ -2716,9 +2765,56 @@ ${problemInfo.example_output || "未提供示例输出。"}
    * 完成积分操作（AI调用成功时）
    */
   private async completeCreditsOperation(operationId: string): Promise<void> {
-    // 移除待处理的操作记录，表示操作成功完成
-    this.pendingCreditOperations.delete(operationId)
-    console.log('✅ 积分操作完成:', operationId)
+    try {
+      console.log('🎯 完成积分操作:', operationId)
+      console.log('📋 当前pendingCreditOperations大小:', this.pendingCreditOperations.size)
+      console.log('📋 当前pendingCreditOperations keys:', Array.from(this.pendingCreditOperations.keys()))
+      
+      // 从待处理操作中获取交易ID
+      const operation = this.pendingCreditOperations.get(operationId)
+      console.log('🔍 找到的操作记录:', operation)
+      
+      if (!operation?.transactionId) {
+        console.warn('⚠️ 未找到操作记录或交易ID:', operationId)
+        console.warn('⚠️ 完整操作列表keys:', Array.from(this.pendingCreditOperations.keys()))
+        console.warn('⚠️ 操作记录详情:', operation)
+        return
+      }
+
+      const sessionId = simpleAuthManager.getToken()
+      if (!sessionId) {
+        console.error('❌ 无法获取会话ID，无法更新操作结束时间')
+        return
+      }
+
+      console.log('🔄 更新结束时间，交易ID:', operation.transactionId)
+
+      const BASE_URL = 'http://159.75.174.234:3004'
+      const response = await fetch(`${BASE_URL}/api/client/credits/complete`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': sessionId
+        },
+        body: JSON.stringify({ transactionId: operation.transactionId })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ 更新操作结束时间失败:', response.status, errorText)
+        return
+      }
+
+      const result = await response.json()
+      console.log('✅ 结束时间更新成功')
+
+    } catch (error) {
+      console.error('❌ 更新操作结束时间时发生错误:', error)
+    } finally {
+      // 移除待处理的操作记录，表示操作处理完成（无论成功与否）
+      this.pendingCreditOperations.delete(operationId)
+      console.log('✅ 积分操作处理完成')
+    }
   }
 
   /**
@@ -2772,6 +2868,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
     currentPoints?: number;
     newBalance?: number;
     requiredPoints?: number;
+    transactionId?: number;
     message?: string
   }> {
     try {
@@ -2782,26 +2879,45 @@ ${problemInfo.example_output || "未提供示例输出。"}
 
       console.time('credits-check-and-deduct-api')
       const BASE_URL = 'http://159.75.174.234:3004'
-      const response = await fetch(`${BASE_URL}/api/client/credits/check-and-deduct`, {
+      const url = `${BASE_URL}/api/client/credits/check-and-deduct`
+      const requestBody = {
+        modelName,
+        questionType,
+        operationId
+      }
+      
+      console.log('🔗 调用积分API:', url)
+      console.log('📤 请求体:', requestBody)
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'X-Session-Id': token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          modelName,
-          questionType,
-          operationId
-        })
+        body: JSON.stringify(requestBody)
       })
       console.timeEnd('credits-check-and-deduct-api')
 
+      console.log('📥 响应状态:', response.status, response.statusText)
       const data = await response.json()
+      console.log('📥 原始响应数据:', data)
 
       // 更新本地缓存
       if (data.success && data.newBalance !== undefined) {
         this.userCredits = data.newBalance
         this.lastCreditsFetchTime = Date.now()
+      }
+
+      // 如果扣除成功且有transactionId，存储操作记录
+      if (data.success && data.transactionId) {
+        this.pendingCreditOperations.set(operationId, {
+          modelName,
+          questionType,
+          amount: data.deductedAmount || 0,
+          transactionId: data.transactionId
+        });
+        console.log('💰 保存transactionId:', data.transactionId, '到操作:', operationId);
       }
 
       return {
@@ -2810,6 +2926,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
         currentPoints: data.currentPoints,
         newBalance: data.newBalance,
         requiredPoints: data.requiredPoints,
+        transactionId: data.transactionId,
         message: data.message
       }
     } catch (error) {
@@ -2866,7 +2983,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
         credits: creditResult.newBalance || 0
       })
 
-      // ... [现有的处理逻辑]
+      // 调用多选题AI处理，传递operationId
+      await this.processScreenshotsAsMultipleChoice(operationId)
     } catch (error) {
       console.error("选择题搜索处理错误:", error)
       window.webContents.send('multiple-choice-search-error', { error: '处理失败:' + error.message })
