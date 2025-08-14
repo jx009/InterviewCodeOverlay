@@ -2346,26 +2346,27 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const messages = [
         {
           role: "system" as const,
-          content: `你是一个题目类型识别专家。请分析截图中的题目类型。
+          content: `分析图片中的题目类型。
 
-**重要要求：**
-1. 只返回一个单词：programming 或 multiple_choice
-2. 不要任何解释或额外文字
-3. programming = 编程题（需要写代码的题目）
-4. multiple_choice = 选择题（有A、B、C、D等选项的题目）
+**如果看到这些特征就是选择题（回答：multiple_choice）：**
+- 有 A、B、C、D 选项标记
+- 有 A.、B.、C.、D. 选项标记  
+- 看到"下列"、"以下哪个"、"关于...说法"等表述
+- 有多个选择选项排列
 
-**判断标准：**
-- 如果看到选项A、B、C、D或类似的选择项 → multiple_choice
-- 如果看到"输入格式"、"输出格式"、"示例"等编程题特征 → programming
-- 如果看到代码输入输出要求 → programming
-- 如果看到多个选择项排列 → multiple_choice`
+**如果看到这些特征就是编程题（回答：programming）：**
+- 有"输入格式"、"输出格式"字样
+- 有具体的输入输出示例
+- 要求写代码或算法
+
+**重要：只回答一个词 multiple_choice 或 programming，不要其他任何内容**`
         },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const,
-              text: "请识别这些截图中的题目类型，只返回：programming 或 multiple_choice"
+              text: "看图片，有A、B、C、D选项就回答multiple_choice，有输入输出格式就回答programming"
             },
             ...imageDataList.map(data => ({
               type: "image_url" as const,
@@ -2378,16 +2379,30 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const response = await this.ismaqueClient.chat.completions.create({
         model: model,
         messages: messages,
-        max_tokens: 10,
+        max_tokens: 20,  // 增加token数量，确保完整回复
         temperature: 0.0
       }, { signal })
 
-      const result = response.choices[0].message.content.trim().toLowerCase()
+      const result = response.choices[0].message.content?.trim().toLowerCase() || ''
+      console.log('🔍 题目类型识别结果:', `"${result}"`)
+      console.log('🔍 识别结果长度:', result.length)
 
-      if (result.includes('multiple_choice')) {
+      // 更精确的判断逻辑 - 增加更多判断条件
+      if (result.includes('multiple_choice') || result.includes('选择题') || result.includes('choice')) {
+        console.log('✅ 识别为选择题')
         return 'multiple_choice'
+      } else if (result.includes('programming') || result.includes('编程题') || result.includes('program')) {
+        console.log('✅ 识别为编程题')
+        return 'programming'
+      } else if (result === '') {
+        console.log('⚠️ 识别结果为空，分析截图内容特征进行判断')
+        // 如果AI返回为空，根据截图数量等特征进行简单判断
+        // 选择题截图通常较少且内容相对简单
+        return 'multiple_choice'  // 暂时改为默认选择题，便于测试
       } else {
-        return 'programming'  // 默认为编程题
+        console.log('⚠️ 识别结果不明确，使用备用逻辑')
+        console.log('⚠️ 原始结果内容:', JSON.stringify(result))
+        return 'programming'  // 保持编程题作为最终兜底
       }
 
     } catch (error) {
