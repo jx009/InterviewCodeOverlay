@@ -338,6 +338,8 @@ export class ScreenshotHelper {
     } finally {
       // Increased delay for showing window again
       await new Promise((resolve) => setTimeout(resolve, 200))
+      // 注意：showMainWindow()已经在main.ts中被修改为使用showInactive()
+      // 来避免抢夺焦点，所以这里仍然调用原函数
       showMainWindow()
     }
 

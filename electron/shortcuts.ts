@@ -243,8 +243,7 @@ export class ShortcutsHelper {
           
           mainWindow.setPosition(Math.round(centerX), Math.round(centerY))
           mainWindow.setIgnoreMouseEvents(false)
-          mainWindow.show()
-          mainWindow.focus()
+          mainWindow.showInactive()  // 使用不抢夺焦点的方法
           
           console.log("Window recovered to center of screen")
         } catch (error) {

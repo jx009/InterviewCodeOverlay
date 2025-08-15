@@ -36,7 +36,7 @@ export class PointService {
 
       // 模型名称映射，兼容旧名称
       const modelNameMapping: { [key: string]: string } = {
-        'gemini-2.5-pro-exp-03-25': 'gemini-2.5-pro',
+        'gemini-2.5-pro': 'gemini-2.5-pro',
         'gemini-2.5-pro-deepsearch': 'gemini-2.5-pro'
       };
       const actualModelName = modelNameMapping[modelName] || modelName;
@@ -97,7 +97,7 @@ export class PointService {
 
         // 2. 模型名称映射，兼容旧名称
         const modelNameMapping: { [key: string]: string } = {
-          'gemini-2.5-pro-exp-03-25': 'gemini-2.5-pro',
+          'gemini-2.5-pro': 'gemini-2.5-pro',
           'gemini-2.5-pro-deepsearch': 'gemini-2.5-pro'
         };
         const actualModelName = modelNameMapping[modelName] || modelName;
