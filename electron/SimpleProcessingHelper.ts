@@ -1100,7 +1100,7 @@ export class SimpleProcessingHelper {
 
       // 根据题目类型选择处理方式
       if (problemInfo.type === 'multiple_choice') {
-        return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal)
+        return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal, parentOperationId)
       } else {
         return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal, parentOperationId)
       }
@@ -1435,8 +1435,9 @@ ${problemInfo.example_output || "未提供示例输出"}
   /**
    * 生成选择题解决方案（支持多题）
    */
-  private async generateMultipleChoiceSolutions(userConfig: any, problemInfo: any, signal: AbortSignal) {
-    const operationId = `mcq_${randomUUID()}`;
+  private async generateMultipleChoiceSolutions(userConfig: any, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
+    const operationId = parentOperationId || `mcq_${randomUUID()}`;
+    console.log(`📝 选择题使用操作ID: ${operationId} ${parentOperationId ? '(继承自父级)' : '(新生成)'}`);
     let deductionInfo: {
       success: boolean;
       sufficient?: boolean;
@@ -1447,13 +1448,20 @@ ${problemInfo.example_output || "未提供示例输出"}
     } | null = null;
     try {
       const model = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
-      deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
+      
+      // 如果没有父级操作ID，说明是独立调用，需要检查和扣除积分
+      if (!parentOperationId) {
+        console.log('💰 独立调用，需要检查并扣除积分');
+        deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
 
-      if (!deductionInfo.success) {
-        return {
-          success: false,
-          error: deductionInfo.message || "积分检查失败"
+        if (!deductionInfo.success) {
+          return {
+            success: false,
+            error: deductionInfo.message || "积分检查失败"
+          }
         }
+      } else {
+        console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
       }
 
       console.log('🎯 开始生成选择题解决方案...')
@@ -1694,15 +1702,29 @@ ${questionsText}
         thoughts: thoughts
       }
 
-      // 🆕 AI调用成功，完成积分操作
-      await this.completeCreditsOperation(operationId)
-      console.log('💰 选择题积分操作完成')
+      // 🆕 AI调用成功，完成积分操作（仅在独立调用时）
+      if (!parentOperationId) {
+        await this.completeCreditsOperation(operationId)
+        console.log('💰 选择题积分操作完成')
+      } else {
+        console.log('ℹ️ 跳过积分操作完成（由上层方法处理）')
+      }
 
       console.log('✅ 选择题解决方案生成完成')
       console.log('📊 最终响应:', JSON.stringify(formattedResponse, null, 2))
 
       return { success: true, data: formattedResponse }
     } catch (error: any) {
+      // 如果发生错误且是独立调用（有积分扣除），需要退款
+      if (deductionInfo && !parentOperationId) {
+        try {
+          console.log('🔄 选择题处理失败，尝试退款积分...');
+          await this.completeCreditsOperation(operationId);
+        } catch (refundError) {
+          console.error('退款失败:', refundError);
+        }
+      }
+      
       if (error.name === 'AbortError') {
         return {
           success: false,
