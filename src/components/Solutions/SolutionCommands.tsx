@@ -135,24 +135,27 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
                   className="flex items-center gap-2 cursor-pointer rounded px-2 py-1.5 hover:bg-white/10 transition-colors"
                   onClick={async () => {
                     try {
+                      // 🆕 使用专门的调试处理器
+                      console.log('🔧 触发调试功能...')
+                      
                       const result =
-                        await window.electronAPI.triggerProcessScreenshots()
+                        await window.electronAPI.triggerDebugScreenshots()
                       if (!result.success) {
                         console.error(
-                          "Failed to process screenshots:",
+                          "Failed to process debug screenshots:",
                           result.error
                         )
                         showToast(
                           "错误",
-                          "处理截图失败",
+                          "调试处理失败",
                           "error"
                         )
                       }
                     } catch (error) {
-                      console.error("Error processing screenshots:", error)
+                      console.error("Error processing debug screenshots:", error)
                       showToast(
                         "错误",
-                        "处理截图失败",
+                        "调试处理失败",
                         "error"
                       )
                     }

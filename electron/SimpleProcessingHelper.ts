@@ -110,7 +110,7 @@ export class SimpleProcessingHelper {
         return this.getDefaultLLMConfig()
       }
 
-      const BASE_URL = 'http://159.75.174.234:3004'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       console.log("🔍 正在获取LLM配置，URL:", `${BASE_URL}/api/client/credits?llm-config=true`)
 
       const response = await fetch(`${BASE_URL}/api/client/credits?llm-config=true`, {
@@ -710,7 +710,7 @@ export class SimpleProcessingHelper {
           };
         }
 
-        const BASE_URL = 'http://159.75.174.234:3004';
+        const BASE_URL = 'https://quiz.playoffer.cn';
 
         // 1. 检查积分
         const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
@@ -933,7 +933,7 @@ export class SimpleProcessingHelper {
           };
         }
 
-        const BASE_URL = 'http://159.75.174.234:3004';
+        const BASE_URL = 'https://quiz.playoffer.cn';
 
         // 1. 检查积分
         const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
@@ -1248,17 +1248,17 @@ ${problemInfo.example_output || "未提供示例输出"}
           }
 
           // 尝试不同的字段路径，适配不同模型的响应格式
-          const delta = chunk.choices[0]?.delta?.content || 
-                       chunk.choices[0]?.message?.content ||
-                       chunk.choices[0]?.text ||
-                       chunk.delta?.content ||
-                       chunk.content ||
+          const delta = (chunk as any).choices[0]?.delta?.content || 
+                       (chunk as any).choices[0]?.message?.content ||
+                       (chunk as any).choices[0]?.text ||
+                       (chunk as any).delta?.content ||
+                       (chunk as any).content ||
                        ''
           console.log('🔍 流式chunk完整结构:', {
             chunk: JSON.stringify(chunk, null, 2).substring(0, 500),
-            hasChoices: !!chunk.choices?.[0],
-            hasDelta: !!chunk.choices?.[0]?.delta,
-            hasContent: !!chunk.choices?.[0]?.delta?.content,
+            hasChoices: !!(chunk as any).choices?.[0],
+            hasDelta: !!(chunk as any).choices?.[0]?.delta,
+            hasContent: !!(chunk as any).choices?.[0]?.delta?.content,
             deltaLength: delta.length,
             delta: delta.substring(0, 100) + (delta.length > 100 ? '...' : '')
           })
@@ -1282,7 +1282,7 @@ ${problemInfo.example_output || "未提供示例输出"}
         } else {
           // 非流式处理逻辑 (用于gemini模型)
           console.log('📄 处理非流式响应')
-          fullContent = response.choices[0]?.message?.content || ''
+          fullContent = (response as any).choices[0]?.message?.content || ''
           console.log('🔍 非流式响应内容长度:', fullContent.length)
           
           // 模拟流式效果，分段发送到前端
@@ -2083,7 +2083,7 @@ ${questionsText}
   /**
    * 处理额外队列截图（调试功能）
    */
-  private async processExtraQueue(userConfig: any, language: string): Promise<void> {
+  public async processExtraQueue(userConfig: any, language: string): Promise<void> {
     const mainWindow = this.deps.getMainWindow()
     if (!mainWindow) return
 
@@ -2102,6 +2102,26 @@ ${questionsText}
       console.log("❌ 额外截图文件不存在")
       mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS)
       return
+    }
+
+    // 🆕 调试功能积分扣除
+    const debuggingModel = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+    let operationId: string | undefined;
+    
+    try {
+      const deductResult = await this.deductCredits(debuggingModel, 'programming');
+      if (deductResult.success) {
+        operationId = deductResult.operationId;
+        console.log('✅ 调试功能积分扣除成功，操作ID:', operationId);
+      } else {
+        console.error('❌ 调试功能积分扣除失败:', deductResult.error);
+        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_ERROR, "积分不足，无法使用调试功能");
+        return;
+      }
+    } catch (creditError) {
+      console.error('❌ 调试功能积分扣除异常:', creditError);
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_ERROR, "积分扣除异常，无法使用调试功能");
+      return;
     }
 
     mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_START)
@@ -2149,22 +2169,53 @@ ${questionsText}
           validScreenshots,
           userConfig,
           language,
-          signal
+          signal,
+          operationId
       )
 
       if (result.success) {
+        // 🆕 调试成功，标记积分操作完成
+        if (operationId) {
+          try {
+            await this.completeCreditsOperation(operationId);
+            console.log('✅ 调试功能积分操作完成标记成功');
+          } catch (completeError) {
+            console.error("❌ 标记调试积分操作完成失败:", completeError);
+          }
+        }
+        
         this.deps.setHasDebugged(true)
         mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.DEBUG_SUCCESS,
             result.data
         )
       } else {
+        // 🆕 调试失败，退款积分
+        if (operationId) {
+          try {
+            await this.refundCredits(operationId, 0, "调试处理失败: " + (result.error || "未知错误"));
+            console.log('✅ 调试功能积分退款成功');
+          } catch (refundError) {
+            console.error("❌ 调试积分退款失败:", refundError);
+          }
+        }
+        
         mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
             result.error
         )
       }
     } catch (error: any) {
+      // 🆕 异常情况退款积分
+      if (operationId) {
+        try {
+          await this.refundCredits(operationId, 0, "调试处理异常: " + (error.message || "未知错误"));
+          console.log('✅ 调试功能异常积分退款成功');
+        } catch (refundError) {
+          console.error("❌ 调试异常积分退款失败:", refundError);
+        }
+      }
+      
       if (error.name === 'AbortError') {
         mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
@@ -2188,7 +2239,8 @@ ${questionsText}
       screenshots: Array<{ path: string; data: string }>,
       userConfig: any,
       language: string,
-      signal: AbortSignal
+      signal: AbortSignal,
+      operationId?: string
   ) {
     try {
       const problemInfo = this.deps.getProblemInfo()
@@ -2367,6 +2419,19 @@ ${problemInfo.example_output || "未提供示例输出。"}
         time_complexity: timeComplexity,
         space_complexity: spaceComplexity,
         modifications: modifications
+      }
+
+      // 🆕 调试历史记录保存（暂时禁用，需要实现saveToHistory方法）
+      if (operationId && problemInfo) {
+        console.log('📝 调试会话信息记录:', {
+          operationId,
+          question: problemInfo.problem_statement || "调试截图分析", 
+          model: userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514',
+          language: language,
+          hasResponse: !!response
+        });
+        // TODO: 实现历史记录保存功能
+        // await this.saveToHistory(operationId, { ... })
       }
 
       return { success: true, data: response }
@@ -2822,7 +2887,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
 
         return {
           success: true,
-          operationId: result.operationId,
+          operationId: operationId,  // 使用我们生成的operationId，而不是result.operationId
           deductedAmount: result.deductedAmount
         }
       } else {
@@ -2840,7 +2905,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
   private async refundCredits(operationId: string, amount: number, reason: string) {
     const token = simpleAuthManager.getToken();
     if (!token) return; // 如果没有token，无法退款
-    const BASE_URL = 'http://159.75.174.234:3004';
+    const BASE_URL = 'https://quiz.playoffer.cn';
     await fetch(`${BASE_URL}/api/client/credits/refund`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
@@ -2876,7 +2941,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
 
       console.log('🔄 更新结束时间，交易ID:', operation.transactionId)
 
-      const BASE_URL = 'http://159.75.174.234:3004'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       const response = await fetch(`${BASE_URL}/api/client/credits/complete`, {
         method: 'PUT',
         headers: {
@@ -2918,7 +2983,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const token = simpleAuthManager.getToken()
       if (!token) return null
 
-      const BASE_URL = 'http://159.75.174.234:3004'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       const response = await fetch(`${BASE_URL}/api/client/credits`, {
         method: 'GET',
         headers: {
@@ -2965,7 +3030,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
 
       console.time('credits-check-and-deduct-api')
-      const BASE_URL = 'http://159.75.174.234:3004'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       const url = `${BASE_URL}/api/client/credits/check-and-deduct`
       const requestBody = {
         modelName,

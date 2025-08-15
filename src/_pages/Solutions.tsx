@@ -566,18 +566,24 @@ const Solutions: React.FC<SolutionsProps> = ({
         
         // 获取当前 solution 数据
         const solution = queryClient.getQueryData(["solution"]) as any
+        // 🆕 同时检查调试数据
+        const debugSolution = queryClient.getQueryData(["new_solution"]) as any
+        
+        // 🆕 优先使用调试数据，如果没有则使用普通解决方案数据
+        const currentSolution = debugSolution || solution
+        const isDebugCode = !!debugSolution
         
         // 检查是否有编程题代码
-        if (solution?.code && typeof solution.code === "string") {
-          console.log("✅ Found code, copying to clipboard via main process...")
+        if (currentSolution?.code && typeof currentSolution.code === "string") {
+          console.log(`✅ Found ${isDebugCode ? 'debug' : 'normal'} code, copying to clipboard via main process...`)
           
           // 使用主进程的clipboard API
-          window.electronAPI.copyCodeToClipboard(solution.code).then((result) => {
+          window.electronAPI.copyCodeToClipboard(currentSolution.code).then((result) => {
             if (result.success) {
               console.log("✅ Code copied successfully via main process")
               showToast(
                 "复制成功",
-                "代码已复制到剪贴板",
+                `${isDebugCode ? '调试' : ''}代码已复制到剪贴板`,
                 "success"
               )
             } else {
@@ -598,9 +604,11 @@ const Solutions: React.FC<SolutionsProps> = ({
           })
         } else {
           console.log("❌ No valid code found to copy")
+          console.log("  - Normal solution:", !!solution?.code)
+          console.log("  - Debug solution:", !!debugSolution?.code)
           showToast(
             "复制失败",
-            "没有找到可复制的代码",
+            "没有找到可复制的代码。请先搜题或调试生成代码。",
             "error"
           )
         }

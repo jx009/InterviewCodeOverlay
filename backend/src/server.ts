@@ -57,7 +57,7 @@ async function startServer() {
     const corsOptions = {
       origin: process.env.CORS_ORIGIN?.split(',') || [
         'https://quiz.playoffer.cn',
-        'http://159.75.174.234:3004', 
+        'http://159.75.174.234:3004',
         'http://localhost:3004',
         'http://localhost:54321',
         `http://localhost:${WEB_PORT}`,

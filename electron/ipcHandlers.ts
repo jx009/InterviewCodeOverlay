@@ -46,7 +46,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://159.75.174.234:3004/api/client/credits', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits', {
         method: 'GET',
         headers: {
           'X-Session-Id': sessionId,
@@ -78,7 +78,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://159.75.174.234:3004/api/client/credits/check', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/check', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -112,7 +112,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://159.75.174.234:3004/api/client/credits/deduct', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/deduct', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -151,7 +151,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: '无session信息' }
       }
 
-      const response = await fetch('http://159.75.174.234:3004/api/client/credits/refund', {
+      const response = await fetch('https://quiz.playoffer.cn/api/client/credits/refund', {
         method: 'POST',
         headers: {
           'X-Session-Id': sessionId,
@@ -612,6 +612,35 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // 🆕 专门的调试处理器
+  ipcMain.handle("trigger-debug-screenshots", async () => {
+    try {
+      console.log('🔧 触发调试功能...')
+      const processingHelper = deps.processingHelper
+      if (!processingHelper) {
+        return { error: "Processing helper not available" }
+      }
+
+      // 强制获取用户配置
+      await simpleAuthManager.refreshUserConfig(true)
+      const userConfig = simpleAuthManager.getUserConfig()
+
+      if (!userConfig) {
+        return { error: "User configuration not available" }
+      }
+
+      const finalLanguage = userConfig.language || 'python'
+      
+      // 直接调用调试队列处理
+      await processingHelper.processExtraQueue(userConfig, finalLanguage)
+      
+      return { success: true }
+    } catch (error) {
+      console.error("Error processing debug screenshots:", error)
+      return { error: "Failed to process debug screenshots" }
+    }
+  })
+
   // Reset handlers
   ipcMain.handle("trigger-reset", () => {
     try {
@@ -722,7 +751,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 // 积分管理 (独立导出，在main.ts中单独注册)
 export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
   console.log('Initializing credits IPC handlers')
-  const BASE_URL = 'http://159.75.174.234:3004'
+  const BASE_URL = 'https://quiz.playoffer.cn'
 
   const makeAuthenticatedRequest = async (endpoint: string, options: any = {}) => {
     const token = simpleAuthManager.getToken()

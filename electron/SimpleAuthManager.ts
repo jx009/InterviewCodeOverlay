@@ -61,7 +61,7 @@ export class SimpleAuthManager extends EventEmitter {
   private configCacheExpiry: number = 0 // 配置缓存过期时间
   private isAutoReloginInProgress: boolean = false // 防止并发自动重新登录
 
-  constructor(apiBaseUrl: string = 'http://159.75.174.234:3004') {
+  constructor(apiBaseUrl: string = 'https://quiz.playoffer.cn') {
     super()
     this.apiBaseUrl = apiBaseUrl
 

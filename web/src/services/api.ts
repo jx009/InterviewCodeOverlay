@@ -3,8 +3,8 @@ import { SessionProtection } from '../utils/sessionProtection';
 // Import removed - will be added back when needed
 
 // 使用Vite代理，开发环境使用相对路径
-const BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'http://localhost:3003/api' // 生产环境直接连接
+const BASE_URL = process.env.NODE_ENV === 'production'
+    ? 'http://localhost:3003/api' // 生产环境直接连接
   : '/api'; // 开发环境使用Vite代理
 
 // Removed unused interfaces
@@ -64,7 +64,7 @@ const fetchTokenFromSession = async (sessionId: string, baseURL: string): Promis
         },
         credentials: 'include'
       });
-      
+
       if (sessionResponse.ok) {
         const sessionData = await sessionResponse.json();
         if (sessionData.success && sessionData.token) {
@@ -92,12 +92,12 @@ api.interceptors.request.use(
     // 使用SessionProtection获取sessionId，包含自动恢复功能
     const sessionId = SessionProtection.getSessionId();
     let token = localStorage.getItem('token');
-    
+
     // 如果有sessionId但没有token，尝试通过会话状态获取token（避免并发获取）
     if (sessionId && !token && !isTokenFetching) {
       token = await fetchTokenFromSession(sessionId, config.baseURL || BASE_URL);
     }
-    
+
     // 添加调试信息
     console.log(`🔍 请求拦截器检查: ${config.method?.toUpperCase()} ${config.url}`, {
       hasSessionId: !!sessionId,
@@ -105,15 +105,15 @@ api.interceptors.request.use(
       hasToken: !!token,
       sessionInfo: SessionProtection.getSessionInfo()
     });
-    
+
     if (sessionId) {
       config.headers['X-Session-Id'] = sessionId;
     }
-    
+
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     return config;
   },
   (error) => {
@@ -133,21 +133,21 @@ api.interceptors.response.use(
         hasSessionId: !!currentSessionId,
         sessionIdPrefix: currentSessionId ? currentSessionId.substring(0, 10) + '...' : '无'
       });
-      
+
       // 检查是否需要跳转到登录页面
       const currentPath = window.location.pathname;
-      
+
       // 排除某些不需要强制跳转的特殊路径
       const isLoginPage = currentPath === '/login';
       const isPublicPath = ['/login', '/forgot-password'].includes(currentPath);
       // 充值页面也阻止自动跳转，让页面自己的逻辑处理
       const isRechargePage = currentPath === '/recharge';
-      
+
       // 检查是否是真的会话过期（而不是其他401错误）
-      const isSessionExpired = error.response?.data?.message?.includes('会话') || 
+      const isSessionExpired = error.response?.data?.message?.includes('会话') ||
                               error.response?.data?.message?.includes('过期') ||
                               error.response?.data?.message?.includes('未登录');
-      
+
       console.log('🔍 401错误分析:', {
         isSessionExpired,
         errorMessage: error.response?.data?.message,
@@ -155,18 +155,18 @@ api.interceptors.response.use(
         isPublicPath,
         isRechargePage
       });
-      
+
              // 仅当确实是会话过期且不是公开页面时才清除localStorage和跳转
        if (isSessionExpired && !isPublicPath && !isRechargePage) {
          console.log('💥 确认会话过期，清除认证信息');
-         
+
          // 使用SessionProtection清除认证信息
          SessionProtection.clearSessionId();
          localStorage.removeItem('token');
-         
+
          // 保存当前URL，以便登录后可以跳回
          sessionStorage.setItem('redirectAfterLogin', window.location.pathname + window.location.search);
-         
+
          // 只有非登录页面才跳转
          if (!isLoginPage) {
            console.log('🔄 认证失效，跳转到登录页面...');
@@ -201,11 +201,11 @@ export const authApi = {
   },
 
   // 用户注册
-  enhancedRegister: async (userData: { 
-    token: string; 
-    verify_code: string; 
-    email: string; 
-    password: string; 
+  enhancedRegister: async (userData: {
+    token: string;
+    verify_code: string;
+    email: string;
+    password: string;
     username: string;
     inviterId?: string; // 邀请人ID（可选）
   }) => {
@@ -268,9 +268,9 @@ export const authApi = {
 
   // 密码重置 - 重置密码
   resetPassword: async (resetToken: string, newPassword: string) => {
-    const response = await api.post('/reset_password', { 
-      token: resetToken, 
-      password: newPassword 
+    const response = await api.post('/reset_password', {
+      token: resetToken,
+      password: newPassword
     });
     return response.data;
   },
@@ -421,9 +421,9 @@ export const inviteApi = {
   },
 
   // 获取邀请注册记录
-  getInviteRegistrations: async (params: { 
-    page?: number; 
-    limit?: number; 
+  getInviteRegistrations: async (params: {
+    page?: number;
+    limit?: number;
     userId?: string;
     startDate?: string;
     endDate?: string;
@@ -436,9 +436,9 @@ export const inviteApi = {
   },
 
   // 获取邀请用户充值记录
-  getInviteRecharges: async (params: { 
-    page?: number; 
-    limit?: number; 
+  getInviteRecharges: async (params: {
+    page?: number;
+    limit?: number;
     userId?: string;
     startDate?: string;
     endDate?: string;
@@ -451,7 +451,7 @@ export const inviteApi = {
   },
 
   // 获取邀请统计数据
-  getInviteStats: async (params: { 
+  getInviteStats: async (params: {
     userId?: string;
     startDate?: string;
     endDate?: string;
