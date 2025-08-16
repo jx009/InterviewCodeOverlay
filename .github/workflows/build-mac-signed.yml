@@ -22,7 +22,9 @@ jobs:
     - name: Clean install
       run: |
         rm -rf node_modules package-lock.json
-        npm install --force
+        npm config set target_platform darwin
+        npm config set target_arch ${{ runner.arch }}
+        npm install --force --no-optional
       
     - name: Import Code-Signing Certificates
       if: env.CSC_LINK != ''
