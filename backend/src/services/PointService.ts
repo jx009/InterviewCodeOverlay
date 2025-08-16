@@ -34,8 +34,15 @@ export class PointService {
         };
       }
 
+      // 模型名称映射，兼容旧名称
+      const modelNameMapping: { [key: string]: string } = {
+        'gemini-2.5-pro': 'gemini-2.5-pro',
+        'gemini-2.5-pro-deepsearch': 'gemini-2.5-pro'
+      };
+      const actualModelName = modelNameMapping[modelName] || modelName;
+
       // 获取模型配置
-      const config = await this.getModelConfig(modelName, questionType);
+      const config = await this.getModelConfig(actualModelName, questionType);
       if (!config) {
         return {
           sufficient: false,
@@ -88,8 +95,15 @@ export class PointService {
           throw new Error('用户不存在');
         }
 
-        // 2. 获取模型配置
-        const config = await this.getModelConfig(modelName, questionType);
+        // 2. 模型名称映射，兼容旧名称
+        const modelNameMapping: { [key: string]: string } = {
+          'gemini-2.5-pro': 'gemini-2.5-pro',
+          'gemini-2.5-pro-deepsearch': 'gemini-2.5-pro'
+        };
+        const actualModelName = modelNameMapping[modelName] || modelName;
+
+        // 3. 获取模型配置
+        const config = await this.getModelConfig(actualModelName, questionType);
         if (!config) {
           throw new Error(`未找到模型 ${modelName} 的 ${questionType} 类型配置`);
         }
@@ -244,7 +258,8 @@ export class PointService {
           modelName: true,
           questionType: true,
           description: true,
-          createdAt: true
+          createdAt: true,
+          endTime: true
         }
       });
     } catch (error) {
@@ -479,6 +494,36 @@ export class PointService {
         totalPoints: 0,
         totalTransactions: 0,
         recentTransactions: []
+      };
+    }
+  }
+
+  /**
+   * 更新积分交易的操作结束时间
+   */
+  async updateTransactionEndTime(
+    transactionId: number,
+    endTime: Date = new Date()
+  ): Promise<{success: boolean, message: string}> {
+    try {
+      console.log(`🕒 准备更新交易 ${transactionId} 的结束时间:`, endTime);
+      
+      const result = await prisma.pointTransaction.update({
+        where: { id: transactionId },
+        data: { endTime }
+      });
+
+      console.log(`✅ 成功更新交易 ${transactionId} 的结束时间:`, result);
+
+      return {
+        success: true,
+        message: '操作结束时间更新成功'
+      };
+    } catch (error) {
+      console.error('更新操作结束时间失败:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '更新操作结束时间失败'
       };
     }
   }

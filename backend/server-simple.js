@@ -97,7 +97,7 @@ db.getPaymentPackages = async function() {
 };
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3003;
 
 // AI模型数据
 const aiModels = [
@@ -311,7 +311,12 @@ initializeServices();
 
 // 中间件
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3002'],
+  origin: [
+    'http://localhost:3004', 
+    'http://localhost:54321',
+    'http://159.75.174.234:3004',
+    'http://159.75.174.234:54321'
+  ],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Session-Id']
 }));
@@ -1836,6 +1841,7 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
 
     // 创建积分交易记录到数据库
     console.log('💰 创建积分交易记录到数据库...')
+    let transactionId = null;
     try {
       const transaction = await db.prisma.pointTransaction.create({
         data: {
@@ -1848,7 +1854,14 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
           description: `搜题操作 [${operationId || `ai_call_${Date.now()}`}]: 使用${modelName}模型处理${questionType === 'multiple_choice' ? '选择题' : '编程题'}`,
         }
       });
-      console.log('✅ 积分交易记录创建成功 - 事务ID:', transaction.id)
+      
+      // 确保transactionId一定被设置
+      if (transaction && transaction.id) {
+        transactionId = transaction.id;
+        console.log('✅ 积分交易记录创建成功 - 事务ID:', transaction.id, '已设置transactionId:', transactionId);
+      } else {
+        console.error('❌ 创建的交易对象异常:', transaction);
+      }
     } catch (dbError) {
       console.error('❌ 创建积分交易记录失败:', dbError)
       // 注意：这里不抛出错误，避免影响积分扣除的主流程
@@ -1866,16 +1879,86 @@ app.post('/api/client/credits/deduct', authenticateSession, async (req, res) => 
     }
 
     console.log('✅ 积分扣除成功:', transactionData)
+    
+    // 关键检查：确保transactionId正确设置
+    console.log('🔍 最终检查transactionId值:', transactionId, '类型:', typeof transactionId);
+    if (!transactionId) {
+      console.error('❌ 警告：transactionId为空，这会导致end_time无法更新！');
+    }
 
-    res.json({
+    const response = {
       success: true,
       previousCredits: currentCredits,
       newCredits,
       deductedAmount: requiredCredits,
-      operationId: transactionData.operationId
-    })
+      operationId: transactionData.operationId,
+      transactionId: transactionId  // 添加事务ID - 这是关键字段！
+    }
+    
+    console.log('📤 发送完整响应（重点检查transactionId）:', JSON.stringify(response, null, 2))
+    res.json(response)
   } catch (error) {
     console.error('积分扣除失败:', error)
+    res.status(500).json({ error: '服务器错误' })
+  }
+})
+
+// 更新积分交易的操作结束时间
+app.put('/api/client/credits/complete', authenticateSession, async (req, res) => {
+  try {
+    console.log('🎯 收到完成API请求')
+    console.log('📋 请求体:', req.body)
+    console.log('👤 用户信息:', req.user)
+    
+    const userId = req.user.userId
+    const { transactionId } = req.body
+
+    if (!transactionId) {
+      console.log('❌ 缺少交易ID')
+      return res.status(400).json({ error: '缺少交易ID' })
+    }
+
+    console.log('🔄 更新操作结束时间，用户ID:', userId, '交易ID:', transactionId)
+
+    // 验证交易是否属于当前用户
+    const transaction = await db.prisma.pointTransaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        userId: true,
+        transactionType: true
+      }
+    })
+    
+    if (!transaction) {
+      console.log('❌ 交易记录不存在:', transactionId)
+      return res.status(404).json({ error: '交易记录不存在' })
+    }
+    
+    if (transaction.userId !== userId) {
+      console.log('❌ 用户权限验证失败:', { transactionUserId: transaction.userId, currentUserId: userId })
+      return res.status(403).json({ error: '无权操作此交易' })
+    }
+    
+    if (transaction.transactionType !== 'CONSUME') {
+      console.log('❌ 交易类型验证失败:', transaction.transactionType)
+      return res.status(400).json({ error: '只有消费类型的交易才能更新结束时间' })
+    }
+
+    // 更新结束时间 - 使用原生SQL
+    await db.prisma.$executeRaw`
+      UPDATE point_transactions SET end_time = NOW() WHERE id = ${transactionId}
+    `
+
+    console.log('✅ 操作结束时间更新成功，交易ID:', transactionId)
+
+    res.json({
+      success: true,
+      transactionId,
+      endTime: new Date().toISOString(),
+      message: '操作结束时间更新成功'
+    })
+  } catch (error) {
+    console.error('❌ 更新操作结束时间失败:', error)
     res.status(500).json({ error: '服务器错误' })
   }
 })
@@ -1994,9 +2077,10 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
     await db.updateUserCredits(userId, newCredits)
 
     // 🆕 记录积分交易到数据库
+    let transactionId = null;
     try {
       const description = `搜题操作 [${operationId}]: 使用${modelName}模型处理${questionType === 'multiple_choice' ? '选择题' : '编程题'}`
-      await db.recordPointTransaction({
+      const transaction = await db.recordPointTransaction({
         userId,
         transactionType: 'CONSUME',
         amount: -requiredCredits,
@@ -2005,7 +2089,11 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
         questionType: questionType.toUpperCase(),
         description
       })
-      console.log('✅ 积分交易记录已保存到数据库')
+      console.log('🔍 数据库返回的transaction对象:', transaction);
+      console.log('🔍 transaction.id值:', transaction.id, '类型:', typeof transaction.id);
+      transactionId = transaction.id;
+      console.log('🔍 赋值后的transactionId:', transactionId, '类型:', typeof transactionId);
+      console.log('✅ 积分交易记录已保存到数据库，交易ID:', transactionId)
     } catch (recordError) {
       console.error('❌ 记录积分交易失败:', recordError)
       // 不中断主流程，只记录错误
@@ -2019,15 +2107,23 @@ app.post('/api/client/credits/check-and-deduct', authenticateSession, async (req
     })
     console.timeEnd('credits-check-and-deduct')
 
-    res.json({
+    console.log('🔍 检查transactionId值:', transactionId, '类型:', typeof transactionId);
+    
+    const response = {
       success: true,
       sufficient: true,
       currentPoints: currentCredits,
       newBalance: newCredits,
       deductedAmount: requiredCredits,
       operationId,
+      transactionId: transactionId,
       message: `成功扣除 ${requiredCredits} 积分，余额: ${newCredits}`
-    })
+    };
+    
+    console.log('🔧 添加transactionId到响应:', transactionId);
+    console.log('📤 发送完整响应:', JSON.stringify(response, null, 2));
+    
+    res.json(response)
   } catch (error) {
     console.error('检查并扣除积分失败:', error)
     console.timeEnd('credits-check-and-deduct')
@@ -4083,34 +4179,87 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
       console.log('🔍 调试信息 - 枚举访问失败:', e.message);
     }
 
-    const transactions = await db.prisma.pointTransaction.findMany({
-      skip,
-      take,
-      where: {
-        ...where,
-        ...(userEmail ? { user: userWhere } : {})
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
+    // 使用原生SQL查询以确保包含end_time字段
+    let sqlQuery = `
+      SELECT 
+        pt.id, pt.user_id as userId, pt.transaction_type as transactionType,
+        pt.amount, pt.balance_after as balanceAfter, pt.model_name as modelName,
+        pt.question_type as questionType, pt.description, pt.metadata,
+        pt.created_at as createdAt, pt.end_time as endTime,
+        u.username, u.email
+      FROM point_transactions pt
+      LEFT JOIN users u ON pt.user_id = u.id
+      WHERE 1=1
+    `;
+    
+    const queryParams = [];
+    
+    if (transactionType && transactionType !== 'all') {
+      const dbTransactionType = transactionType.toUpperCase();
+      sqlQuery += ` AND pt.transaction_type = ?`;
+      queryParams.push(dbTransactionType);
+    }
+    
+    if (startDate) {
+      sqlQuery += ` AND pt.created_at >= ?`;
+      queryParams.push(new Date(startDate));
+    }
+    
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      sqlQuery += ` AND pt.created_at <= ?`;
+      queryParams.push(endDateTime);
+    }
+    
+    if (userEmail) {
+      sqlQuery += ` AND u.email LIKE ?`;
+      queryParams.push(`%${userEmail}%`);
+    }
+    
+    sqlQuery += ` ORDER BY pt.created_at DESC LIMIT ? OFFSET ?`;
+    queryParams.push(take, skip);
+    
+    const transactions = await db.prisma.$queryRawUnsafe(sqlQuery, ...queryParams);
+    
     console.log(`✅ 查询到 ${transactions.length} 条交易记录`);
     console.log('交易记录样本:', transactions[0]);
-
-    const total = await db.prisma.pointTransaction.count({
-      where: {
-        ...where,
-        ...(userEmail ? { user: userWhere } : {})
-      }
-    });
+    
+    // 计算总数
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM point_transactions pt
+      LEFT JOIN users u ON pt.user_id = u.id
+      WHERE 1=1
+    `;
+    
+    const countParams = [];
+    
+    if (transactionType && transactionType !== 'all') {
+      const dbTransactionType = transactionType.toUpperCase();
+      countQuery += ` AND pt.transaction_type = ?`;
+      countParams.push(dbTransactionType);
+    }
+    
+    if (startDate) {
+      countQuery += ` AND pt.created_at >= ?`;
+      countParams.push(new Date(startDate));
+    }
+    
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      countQuery += ` AND pt.created_at <= ?`;
+      countParams.push(endDateTime);
+    }
+    
+    if (userEmail) {
+      countQuery += ` AND u.email LIKE ?`;
+      countParams.push(`%${userEmail}%`);
+    }
+    
+    const countResult = await db.prisma.$queryRawUnsafe(countQuery, ...countParams);
+    const total = Number(countResult[0].total);
 
     // 转换字段名为前端期望的格式
     const formattedTransactions = transactions.map(tx => ({
@@ -4124,14 +4273,22 @@ app.get('/api/admin/usage-stats/transactions', verifySessionId, async (req, res)
       description: tx.description,
       metadata: tx.metadata,
       created_at: tx.createdAt,
-      username: tx.user?.username || '',
-      email: tx.user?.email || '',
+      end_time: tx.endTime, // 从原生SQL查询直接获取
+      username: tx.username || '',
+      email: tx.email || '',
       operationType: tx.transactionType === 'CONSUME' && tx.questionType === 'PROGRAMMING' ? '编程题' :
           tx.transactionType === 'CONSUME' && tx.questionType === 'MULTIPLE_CHOICE' ? '选择题' :
               tx.transactionType === 'CONSUME' ? '消费' :
                   tx.transactionType === 'RECHARGE' ? '充值' :
                       tx.transactionType === 'REWARD' ? '奖励' :
-                          tx.transactionType === 'REFUND' ? '退款' : tx.transactionType
+                          tx.transactionType === 'REFUND' ? '退款' : 
+                          // 处理小写的情况
+                          tx.transactionType === 'consume' && tx.questionType === 'programming' ? '编程题' :
+                          tx.transactionType === 'consume' && tx.questionType === 'multiple_choice' ? '选择题' :
+                          tx.transactionType === 'consume' ? '消费' :
+                          tx.transactionType === 'recharge' ? '充值' :
+                          tx.transactionType === 'reward' ? '奖励' :
+                          tx.transactionType === 'refund' ? '退款' : tx.transactionType
     }));
 
     console.log('格式化后的交易记录样本:', formattedTransactions[0]);

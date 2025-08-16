@@ -65,7 +65,9 @@ export class ShortcutsHelper {
     // 多选题快捷键
     globalShortcut.register("CommandOrControl+Shift+Enter", async () => {
       console.log("Ctrl/Cmd + Shift + Enter pressed. Processing as multiple choice questions...")
-      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice()
+      // 生成新的operationId，因为这是独立的快捷键操作
+      const operationId = `shortcut_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice(operationId)
     })
 
     globalShortcut.register("CommandOrControl+R", () => {
@@ -241,8 +243,7 @@ export class ShortcutsHelper {
           
           mainWindow.setPosition(Math.round(centerX), Math.round(centerY))
           mainWindow.setIgnoreMouseEvents(false)
-          mainWindow.show()
-          mainWindow.focus()
+          mainWindow.showInactive()  // 使用不抢夺焦点的方法
           
           console.log("Window recovered to center of screen")
         } catch (error) {
@@ -286,6 +287,29 @@ export class ShortcutsHelper {
       console.log("✅ CommandOrControl+J shortcut registered successfully")
     } else {
       console.error("❌ Failed to register CommandOrControl+J shortcut")
+    }
+
+    // 🆕 水平滚动快捷键
+    const scrollLeftSuccess = globalShortcut.register("CommandOrControl+Shift+Left", () => {
+      console.log("🔥 Command/Ctrl + Shift + Left pressed. Scrolling code left...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("scroll-code-horizontal", { direction: "left" })
+      }
+    })
+
+    const scrollRightSuccess = globalShortcut.register("CommandOrControl+Shift+Right", () => {
+      console.log("🔥 Command/Ctrl + Shift + Right pressed. Scrolling code right...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("scroll-code-horizontal", { direction: "right" })
+      }
+    })
+
+    if (scrollLeftSuccess && scrollRightSuccess) {
+      console.log("✅ 水平滚动快捷键注册成功 (Ctrl+Shift+Left/Right)")
+    } else {
+      console.error("❌ 水平滚动快捷键注册失败")
     }
     
     // Unregister shortcuts when quitting

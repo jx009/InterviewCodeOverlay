@@ -26,15 +26,15 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const { showToast } = useToast();
-  
+
   // 🆕 使用增强认证状态
-  const { 
-    authenticated, 
-    user, 
-    loading: authLoading, 
-    login, 
+  const {
+    authenticated,
+    user,
+    loading: authLoading,
+    login,
     logout: webLogout,
-    connectionStatus 
+    connectionStatus
   } = useWebAuth();
 
   // 🆕 增强认证登出处理
@@ -45,7 +45,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
       console.log('📤 Calling webLogout 函数...');
       const result = await webLogout();
       console.log('📥 webLogout 响应:', result);
-      
+
       if (result.success) {
         console.log('✅ Logout successful');
         showToast('登出成功', '已成功退出登录', 'success');
@@ -64,7 +64,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
     try {
       showToast('正在登录...', '将打开Web登录页面', 'loading');
       const result = await login();
-      
+
       if (result.success) {
         showToast('登录成功', '欢迎回来！', 'success');
       } else {
@@ -80,7 +80,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
   const handleLanguageSelect = async (lang: string) => {
     setLanguage(lang);
     setDropdownOpen(false);
-    
+
     // Save language preference to web-side configuration
     try {
       const response = await fetch('https://quiz.playoffer.cn/api/config', {
@@ -91,11 +91,11 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
         },
         body: JSON.stringify({ language: lang })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update language configuration');
       }
-      
+
       console.log(`Language preference saved to web configuration: ${lang}`);
     } catch (error) {
       console.error('Failed to save language preference:', error);
@@ -110,7 +110,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
   const currentLangObj = LANGUAGES.find(lang => lang.value === currentLanguage) || LANGUAGES[0];
 
   return (
-    <div 
+    <div
       className="top-area absolute top-0 left-0 right-0 z-50 pointer-events-auto"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
@@ -134,7 +134,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
                   <ChevronDown className="h-4 w-4 text-white/70" />
                 )}
               </button>
-              
+
               {dropdownOpen && (
                 <div className="absolute z-10 mt-1 w-full rounded-md opacity-controlled-bg border border-white/10 shadow-lg">
                   <div className="py-1">
@@ -156,7 +156,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
               )}
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {/* 🆕 用户信息显示 */}
             {authenticated && user && (
@@ -165,7 +165,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
                 <span className="text-xs text-white/90">欢迎，{user.username}</span>
               </div>
             )}
-            
+
             {/* 🆕 连接状态指示 */}
             {!connectionStatus.connected && !connectionStatus.checking && (
               <div className="flex items-center space-x-1 px-2 py-1 rounded-md bg-red-500/20">
@@ -173,7 +173,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
                 <span className="text-xs text-red-400">离线</span>
               </div>
             )}
-            
+
             <Button
               variant="ghost"
               size="sm"
@@ -184,7 +184,7 @@ export function Header({ currentLanguage, setLanguage, onOpenSettings }: HeaderP
               <Settings className="h-4 w-4 mr-1" />
               <span className="text-xs">设置</span>
             </Button>
-            
+
             {/* 🆕 根据认证状态显示登录或登出按钮 */}
             {authenticated ? (
               <Button

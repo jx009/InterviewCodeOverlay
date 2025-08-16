@@ -1,0 +1,90 @@
+name: Build macOS Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'Target architecture'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+        - both
+        - x64
+        - arm64
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Build macOS (both architectures)
+        if: github.event.inputs.architecture == 'both'
+        run: |
+          echo "Building for both x64 and arm64..."
+          npm run package-mac
+
+      - name: Build macOS (x64 only)
+        if: github.event.inputs.architecture == 'x64'
+        run: |
+          echo "Building for x64 only..."
+          npx electron-builder --mac --x64 --publish never
+
+      - name: Build macOS (arm64 only)
+        if: github.event.inputs.architecture == 'arm64'
+        run: |
+          echo "Building for arm64 only..."
+          npx electron-builder --mac --arm64 --publish never
+
+      - name: List build outputs
+        run: |
+          echo "Build outputs:"
+          ls -la release/ || echo "No release directory found"
+
+      - name: Upload macOS builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds-${{ github.event.inputs.architecture }}
+          path: |
+            release/*.dmg
+            release/*.zip
+          retention-days: 7
+
+      - name: Show download instructions
+        run: |
+          echo "🎉 macOS build completed successfully!"
+          echo ""
+          echo "📥 To download the built files:"
+          echo "1. Go to the Actions tab in your GitHub repository"
+          echo "2. Click on this workflow run"
+          echo "3. Scroll down to 'Artifacts' section"
+          echo "4. Download 'macos-builds-${{ github.event.inputs.architecture }}'"
+          echo ""
+          echo "📁 The artifact will contain:"
+          if [[ "${{ github.event.inputs.architecture }}" == "both" ]]; then
+            echo "  - Interview-Coder-x64.dmg (Intel Mac)"
+            echo "  - Interview-Coder-arm64.dmg (Apple Silicon Mac)"
+            echo "  - Interview-Coder-x64.zip (Intel Mac)"
+            echo "  - Interview-Coder-arm64.zip (Apple Silicon Mac)"
+          elif [[ "${{ github.event.inputs.architecture }}" == "x64" ]]; then
+            echo "  - Interview-Coder-x64.dmg (Intel Mac)"
+            echo "  - Interview-Coder-x64.zip (Intel Mac)"
+          else
+            echo "  - Interview-Coder-arm64.dmg (Apple Silicon Mac)"
+            echo "  - Interview-Coder-arm64.zip (Apple Silicon Mac)"
+          fi

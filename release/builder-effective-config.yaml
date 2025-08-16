@@ -2,7 +2,7 @@ directories:
   output: release
   buildResources: assets
 appId: com.chunginlee.quizcoze
-productName: QuizCoze 2025.08.09
+productName: QuizCoze 2025.08.17
 files:
   - filter:
       - dist/**/*

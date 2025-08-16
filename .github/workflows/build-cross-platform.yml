@@ -1,0 +1,187 @@
+name: Cross-Platform Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub Release'
+        required: false
+        default: false
+        type: boolean
+      version_tag:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: false
+        default: ''
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Get version
+        id: get_version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          elif [[ "${{ github.event.inputs.version_tag }}" != "" ]]; then
+            VERSION="${{ github.event.inputs.version_tag }}"
+          else
+            VERSION="v$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Build for specific platform
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "darwin" ]]; then
+            if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+              npx electron-builder --mac --arm64 --publish never
+            else
+              npx electron-builder --mac --x64 --publish never
+            fi
+          elif [[ "${{ matrix.platform }}" == "win32" ]]; then
+            npx electron-builder --win --x64 --publish never
+          else
+            npx electron-builder --linux --x64 --publish never
+          fi
+
+      - name: List build outputs
+        shell: bash
+        run: |
+          echo "Build outputs in release directory:"
+          ls -la release/ || echo "No release directory found"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+          retention-days: 5
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List all artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f -name "*" | sort
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy and rename files
+          find artifacts -name "*.dmg" -exec cp {} release-assets/ \;
+          find artifacts -name "*.zip" -exec cp {} release-assets/ \;
+          find artifacts -name "*.exe" -exec cp {} release-assets/ \;
+          find artifacts -name "*.AppImage" -exec cp {} release-assets/ \;
+          
+          # List final assets
+          echo "Release assets:"
+          ls -la release-assets/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.build.outputs.version }}
+          name: Release ${{ needs.build.outputs.version }}
+          draft: false
+          prerelease: false
+          files: release-assets/*
+          body: |
+            ## 🚀 Release ${{ needs.build.outputs.version }}
+            
+            ### 📦 下载说明
+            
+            - **macOS (Intel)**: 下载 `*x64*.dmg` 或 `*x64*.zip`
+            - **macOS (Apple Silicon)**: 下载 `*arm64*.dmg` 或 `*arm64*.zip`
+            - **Windows**: 下载 `*.exe`
+            - **Linux**: 下载 `*.AppImage`
+            
+            ### 🛠️ 安装说明
+            
+            **macOS:**
+            1. 下载对应架构的文件
+            2. 双击 `.dmg` 文件或解压 `.zip` 文件
+            3. 将应用拖拽到 Applications 文件夹
+            4. 首次启动时，可能需要在"系统偏好设置 > 安全性与隐私"中允许运行
+            
+            **Windows:**
+            1. 下载 `.exe` 文件
+            2. 双击运行安装程序
+            3. 如遇到 Windows Defender 警告，点击"更多信息"然后"仍要运行"
+            
+            **Linux:**
+            1. 下载 `.AppImage` 文件
+            2. 添加执行权限：`chmod +x *.AppImage`
+            3. 直接运行：`./Interview-Coder-*.AppImage`
+            
+            ### 🔧 系统要求
+            
+            - **macOS**: 10.15 (Catalina) 或更高版本
+            - **Windows**: Windows 10 或更高版本
+            - **Linux**: 支持 AppImage 的现代 Linux 发行版
+            
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

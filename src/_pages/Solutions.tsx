@@ -13,6 +13,7 @@ import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
 import { useLanguageConfig } from "../hooks/useLanguageConfig"
 import { parseStreamedSolution, shouldStartDisplaying } from "../utils/streamParser"
+import { isMacOS } from "../utils/platform"
 
 export const ContentSection = ({
   title,
@@ -138,7 +139,7 @@ const SolutionSection = ({
           </div>
         </div>
       ) : (
-        <div className="w-full relative pointer-events-none">
+        <div className="w-full relative pointer-events-none overflow-x-auto">
           {showCopyButton && (
             <button
               onClick={copyToClipboard}
@@ -171,11 +172,14 @@ const SolutionSection = ({
               }
               style={dracula}
               customStyle={{
-                maxWidth: "100%",
+                maxWidth: "none",
+                width: "100%",
+                minWidth: "600px",
                 margin: 0,
                 padding: "1rem",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
+                whiteSpace: "pre",
+                overflowX: "auto",
+                overflowY: "visible",
                 backgroundColor: "rgba(22, 27, 34, 0.5)",
                 userSelect: "none",
                 // 🆕 流式模式的视觉效果
@@ -184,7 +188,7 @@ const SolutionSection = ({
                   animation: "pulse 1.5s ease-in-out infinite"
                 })
               }}
-              wrapLongLines={true}
+              wrapLongLines={false}
               className={`pointer-events-none ${isStreaming ? 'streaming-code' : ''}`}
             >
               {displayContent as string}
@@ -566,18 +570,24 @@ const Solutions: React.FC<SolutionsProps> = ({
         
         // 获取当前 solution 数据
         const solution = queryClient.getQueryData(["solution"]) as any
+        // 🆕 同时检查调试数据
+        const debugSolution = queryClient.getQueryData(["new_solution"]) as any
+        
+        // 🆕 优先使用调试数据，如果没有则使用普通解决方案数据
+        const currentSolution = debugSolution || solution
+        const isDebugCode = !!debugSolution
         
         // 检查是否有编程题代码
-        if (solution?.code && typeof solution.code === "string") {
-          console.log("✅ Found code, copying to clipboard via main process...")
+        if (currentSolution?.code && typeof currentSolution.code === "string") {
+          console.log(`✅ Found ${isDebugCode ? 'debug' : 'normal'} code, copying to clipboard via main process...`)
           
           // 使用主进程的clipboard API
-          window.electronAPI.copyCodeToClipboard(solution.code).then((result) => {
+          window.electronAPI.copyCodeToClipboard(currentSolution.code).then((result) => {
             if (result.success) {
               console.log("✅ Code copied successfully via main process")
               showToast(
                 "复制成功",
-                "代码已复制到剪贴板",
+                `${isDebugCode ? '调试' : ''}代码已复制到剪贴板`,
                 "success"
               )
             } else {
@@ -598,9 +608,11 @@ const Solutions: React.FC<SolutionsProps> = ({
           })
         } else {
           console.log("❌ No valid code found to copy")
+          console.log("  - Normal solution:", !!solution?.code)
+          console.log("  - Debug solution:", !!debugSolution?.code)
           showToast(
             "复制失败",
-            "没有找到可复制的代码",
+            "没有找到可复制的代码。请先搜题或调试生成代码。",
             "error"
           )
         }
@@ -609,22 +621,9 @@ const Solutions: React.FC<SolutionsProps> = ({
       
       // 🆕 流式输出事件监听器
       window.electronAPI.onSolutionStreamChunk((data) => {
-        console.log('📥 收到流式数据块:', {
-          deltaLength: data.delta?.length || 0,
-          fullContentLength: data.fullContent?.length || 0,
-          progress: data.progress,
-          isComplete: data.isComplete
-        })
-        
-        console.log('🔍 当前前端状态:', {
-          isStreaming,
-          streamingContent: streamingContent.substring(0, 50) + '...',
-          solutionData: solutionData?.substring(0, 50) + '...' || 'null'
-        })
 
         // 🆕 处理流式传输开始信号
         if (data.streamingStarted) {
-          console.log('🚀 收到流式传输开始信号，激活流式模式')
           setIsStreaming(true)
           setStreamingContent('')
           setStreamingProgress(0)
@@ -633,7 +632,6 @@ const Solutions: React.FC<SolutionsProps> = ({
 
         if (data.isComplete) {
           // 流式传输完成
-          console.log('✅ 流式传输完成，最终内容长度:', data.fullContent?.length)
           
           // 🔧 保持流式内容显示更长时间，然后逐渐切换到最终状态
           setTimeout(() => {
@@ -646,7 +644,6 @@ const Solutions: React.FC<SolutionsProps> = ({
           // 解析完整内容并设置最终状态
           if (data.fullContent && shouldStartDisplaying(data.fullContent)) {
             const parsed = parseStreamedSolution(data.fullContent)
-            console.log('📊 解析完成的流式内容:', parsed)
             
             // 根据类型设置相应的状态
             if (parsed.type === 'programming') {
@@ -675,7 +672,6 @@ const Solutions: React.FC<SolutionsProps> = ({
           }
         } else if (data.fullContent && shouldStartDisplaying(data.fullContent)) {
           // 接收流式数据块
-          console.log('📝 处理流式数据块，设置流式状态为true')
           setIsStreaming(true)
           setStreamingContent(data.fullContent)
           setStreamingProgress(data.progress || 0)
@@ -683,12 +679,8 @@ const Solutions: React.FC<SolutionsProps> = ({
           // 实时解析内容用于预览
           const parsed = parseStreamedSolution(data.fullContent)
           setStreamingParsedData(parsed)
-          
-          console.log(`📝 流式内容更新: ${data.fullContent.length} 字符, 进度: ${data.progress}%`)
-          console.log(`📄 流式内容预览: "${data.fullContent.substring(0, 100)}..."`)
         } else if (data.fullContent && data.fullContent.length > 0) {
           // 即使内容不满足shouldStartDisplaying，但有内容就开始流式显示
-          console.log('📝 收到流式内容，强制开始流式显示')
           setIsStreaming(true)
           setStreamingContent(data.fullContent)
           setStreamingProgress(data.progress || 0)
@@ -705,6 +697,42 @@ const Solutions: React.FC<SolutionsProps> = ({
         showToast("流式处理失败", error, "error")
       }),
     ]
+
+    // 🆕 监听全局快捷键事件（来自主进程）
+    const handleHorizontalScroll = (data: { direction: string }) => {
+      console.log('🔄 收到水平滚动事件，完整数据:', data)
+      console.log('🔄 direction:', data?.direction)
+      console.log('🔄 data type:', typeof data)
+      
+      if (!data || !data.direction) {
+        console.error('❌ 滚动数据无效:', data)
+        return
+      }
+      
+      // 查找代码容器并滚动
+      const codeContainers = document.querySelectorAll('pre, code')
+      console.log('📦 找到代码容器数量:', codeContainers.length)
+      
+      codeContainers.forEach((container) => {
+        if (container instanceof HTMLElement && container.scrollWidth > container.clientWidth) {
+          const scrollAmount = 100
+          const currentScroll = container.scrollLeft
+          
+          if (data.direction === 'left') {
+            container.scrollLeft = Math.max(0, currentScroll - scrollAmount)
+            console.log(`⬅️ 左滚动: ${currentScroll} -> ${container.scrollLeft}`)
+          } else if (data.direction === 'right') {
+            const maxScroll = container.scrollWidth - container.clientWidth
+            container.scrollLeft = Math.min(maxScroll, currentScroll + scrollAmount)
+            console.log(`➡️ 右滚动: ${currentScroll} -> ${container.scrollLeft}`)
+          }
+        }
+      })
+    }
+
+    // 监听来自主进程的水平滚动事件
+    const unsubscribeScrolling = window.electronAPI.onScrollCodeHorizontal(handleHorizontalScroll)
+    cleanupFunctions.push(unsubscribeScrolling)
 
     return () => {
       resizeObserver.disconnect()
@@ -892,7 +920,7 @@ const Solutions: React.FC<SolutionsProps> = ({
                     {(solutionData || (isStreaming && streamingContent)) && (
                       <>
                         <SolutionSection
-                          title="解决方案"
+                          title={`解决方案 (${COMMAND_KEY} + Shift + ← → 水平滚动)`}
                           content={solutionData}
                           isLoading={!solutionData && !isStreaming}
                           currentLanguage={currentLanguage}

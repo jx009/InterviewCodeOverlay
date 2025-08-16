@@ -250,13 +250,15 @@ router.post('/deduct',
       );
       
       if (result.success) {
-        ResponseUtils.success(res, {
+        const response = {
           success: true,
           newCredits: result.newBalance,
           transactionId: result.transactionId,
           operationId,
           message: result.message
-        });
+        };
+        console.log('🔧 积分扣除API响应:', response);
+        ResponseUtils.success(res, response);
       } else {
         ResponseUtils.error(res, result.message);
       }
@@ -586,5 +588,70 @@ router.get('/llm-config', getUserId, async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * 更新积分交易的操作结束时间
+ * PUT /api/client/credits/complete
+ * Body: { transactionId: number }
+ */
+router.put('/complete', 
+  authMiddleware, 
+  getUserId,
+  [
+    body('transactionId').isInt({ min: 1 }).withMessage('交易ID必须是正整数'),
+    validateRequest
+  ],
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      if (!userId) {
+        return ResponseUtils.unauthorized(res, '用户ID无效');
+      }
+      
+      const { transactionId } = req.body;
+      console.log('🚀 收到完成API请求 - UserId:', userId, 'TransactionId:', transactionId);
+      
+      // 验证交易是否属于当前用户
+      const transaction = await prisma.pointTransaction.findUnique({
+        where: { id: transactionId },
+        select: { userId: true, transactionType: true }
+      });
+      
+      if (!transaction) {
+        return ResponseUtils.error(res, '交易记录不存在', 404);
+      }
+      
+      if (transaction.userId !== userId) {
+        return ResponseUtils.forbidden(res, '无权操作此交易');
+      }
+      
+      // 只有消费类型的交易才需要记录结束时间
+      if (transaction.transactionType !== 'CONSUME') {
+        return ResponseUtils.error(res, '只有消费类型的交易才能更新结束时间', 400);
+      }
+      
+      console.log('💾 开始更新交易结束时间...');
+      const result = await pointService.updateTransactionEndTime(transactionId);
+      console.log('✅ 更新交易结束时间结果:', result);
+      
+      if (result.success) {
+        const responseData = {
+          success: true,
+          transactionId,
+          endTime: new Date().toISOString(),
+          message: result.message
+        };
+        console.log('🎉 操作结束时间更新成功，响应数据:', responseData);
+        ResponseUtils.success(res, responseData);
+      } else {
+        console.error('❌ 更新操作结束时间失败:', result.message);
+        ResponseUtils.error(res, result.message);
+      }
+    } catch (error) {
+      console.error('更新操作结束时间失败:', error);
+      ResponseUtils.internalError(res, '更新操作结束时间失败');
+    }
+  }
+);
 
 export default router; 

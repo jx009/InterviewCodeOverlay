@@ -157,6 +157,8 @@ const electronAPI = {
   triggerScreenshot: () => ipcRenderer.invoke("trigger-screenshot"),
   triggerProcessScreenshots: () =>
     ipcRenderer.invoke("trigger-process-screenshots"),
+  triggerDebugScreenshots: () =>
+    ipcRenderer.invoke("trigger-debug-screenshots"),
   triggerReset: () => ipcRenderer.invoke("trigger-reset"),
   triggerMoveLeft: () => ipcRenderer.invoke("trigger-move-left"),
   triggerMoveRight: () => ipcRenderer.invoke("trigger-move-right"),
@@ -369,6 +371,18 @@ const electronAPI = {
 
   // 🆕 取消流式传输
   cancelStreaming: () => ipcRenderer.invoke("cancel-streaming"),
+
+  // 🆕 水平滚动事件监听
+  onScrollCodeHorizontal: (callback: (data: { direction: string }) => void) => {
+    const subscription = (_: any, data: { direction: string }) => {
+      console.log('📨 Preload received scroll event:', data)
+      callback(data)
+    }
+    ipcRenderer.on("scroll-code-horizontal", subscription)
+    return () => {
+      ipcRenderer.removeListener("scroll-code-horizontal", subscription)
+    }
+  },
 }
 
 // Before exposing the API

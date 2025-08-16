@@ -612,6 +612,35 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   })
 
+  // 🆕 专门的调试处理器
+  ipcMain.handle("trigger-debug-screenshots", async () => {
+    try {
+      console.log('🔧 触发调试功能...')
+      const processingHelper = deps.processingHelper
+      if (!processingHelper) {
+        return { error: "Processing helper not available" }
+      }
+
+      // 强制获取用户配置
+      await simpleAuthManager.refreshUserConfig(true)
+      const userConfig = simpleAuthManager.getUserConfig()
+
+      if (!userConfig) {
+        return { error: "User configuration not available" }
+      }
+
+      const finalLanguage = userConfig.language || 'python'
+      
+      // 直接调用调试队列处理
+      await processingHelper.processExtraQueue(userConfig, finalLanguage)
+      
+      return { success: true }
+    } catch (error) {
+      console.error("Error processing debug screenshots:", error)
+      return { error: "Failed to process debug screenshots" }
+    }
+  })
+
   // Reset handlers
   ipcMain.handle("trigger-reset", () => {
     try {

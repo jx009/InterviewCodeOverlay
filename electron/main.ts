@@ -316,7 +316,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
-    type: "panel",
+    type: "toolbar",
     paintWhenInitiallyHidden: true,
     titleBarStyle: "hidden",
     enableLargerThanScreen: true,
@@ -324,6 +324,9 @@ async function createWindow(): Promise<void> {
   }
 
   state.mainWindow = new BrowserWindow(windowSettings)
+
+  // 🆕 强制确保不在任务栏显示
+  state.mainWindow.setSkipTaskbar(true)
 
   // 不在这里设置全局穿透，而是通过IPC消息来控制
   // state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -509,9 +512,8 @@ async function createWindow(): Promise<void> {
   const clientSettings = configHelper.getClientSettings();
   console.log(`Initial background opacity from config: ${savedBackgroundOpacity}`);
   
-  // Force window to be visible initially
-  state.mainWindow.show();
-  state.mainWindow.focus();
+  // Force window to be visible initially (without stealing focus)
+  state.mainWindow.showInactive();
   state.isWindowVisible = true;
   
   // 发送初始背景透明度到前端
@@ -644,9 +646,13 @@ function hideMainWindow(): void {
     state.windowPosition = { x: bounds.x, y: bounds.y };
     state.windowSize = { width: bounds.width, height: bounds.height };
     state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    state.mainWindow.hide();
+    
+    // 使用不抢夺焦点的方式隐藏窗口
+    state.mainWindow.setOpacity(0);
+    state.mainWindow.setSkipTaskbar(true);
+    
     state.isWindowVisible = false;
-    console.log('Window hidden');
+    console.log('Window hidden (opacity method)');
   }
 }
 
@@ -684,13 +690,20 @@ function showMainWindow(): void {
         visibleOnFullScreen: true
       });
       state.mainWindow.setContentProtection(true);
-      state.mainWindow.show();
+      
+      // 使用不抢夺焦点的方式显示窗口
+      state.mainWindow.setOpacity(1);
+      state.mainWindow.setSkipTaskbar(true);
+      // 使用 showInactive() 而不是 show() 来避免抢夺焦点
+      state.mainWindow.showInactive();
+      
       state.isWindowVisible = true;
-      console.log(`Window shown at position (${state.currentX}, ${state.currentY})`);
+      console.log(`Window shown (inactive) at position (${state.currentX}, ${state.currentY})`);
     } catch (error) {
       console.error('Error showing main window:', error)
-      // 简单回退方案
-      state.mainWindow.show()
+      // 简单回退方案 - 也使用不抢夺焦点的方法
+      state.mainWindow.setOpacity(1)
+      state.mainWindow.showInactive()
       state.isWindowVisible = true
     }
   }
@@ -738,7 +751,8 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
   // 确保窗口可见且响应
   if (!state.isWindowVisible || !state.mainWindow.isVisible()) {
     console.log("Window was hidden, making it visible for movement")
-    state.mainWindow.show()
+    state.mainWindow.showInactive()  // 使用不抢夺焦点的方法
+    state.mainWindow.setSkipTaskbar(true)  // 确保不在任务栏显示
     state.mainWindow.setIgnoreMouseEvents(false)
     state.isWindowVisible = true
   }

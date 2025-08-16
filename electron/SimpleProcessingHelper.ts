@@ -38,6 +38,20 @@ type CreditResult = {
 }
 
 /**
+ * 模型映射函数 - 在解决方案生成时将Gemini重定向到Claude 4
+ */
+function mapToActualModel(displayModel: string, questionType?: string): string {
+  // 编程题、选择题、多选题、调试功能的解决方案生成时才映射Gemini到Claude 4
+  // 图片识别和题目提取的固定模型不映射
+  if ((questionType === 'programming' || questionType === 'multiple_choice' || questionType === 'debugging') && 
+      (displayModel === 'gemini-2.5-pro' || displayModel === 'gemini-2.5-flash-preview-04-17')) {
+    console.log(`🔀 ${questionType}解决方案API调用映射: ${displayModel} -> claude-sonnet-4-20250514`)
+    return 'claude-sonnet-4-20250514'
+  }
+  return displayModel
+}
+
+/**
  * 简化的AI处理助手 - 采用Cursor式设计
  * 核心原则：
  * 1. 强制用户认证（必须登录才能使用）
@@ -56,7 +70,7 @@ export class SimpleProcessingHelper {
   private currentExtraProcessingAbortController: AbortController | null = null
 
   // 🆕 积分管理相关
-  private pendingCreditOperations: Map<string, { modelName: string; questionType: string; amount: number }> = new Map()
+  private pendingCreditOperations: Map<string, { modelName: string; questionType: string; amount: number; transactionId?: number }> = new Map()
 
   // 🆕 积分缓存
   private userCredits: number | null = null
@@ -215,7 +229,7 @@ export class SimpleProcessingHelper {
    * 核心方法：处理截图（强制多选题模式）
    * 强制登录流程：检查认证 → 获取配置 → 处理AI → 返回结果
    */
-  public async processScreenshotsAsMultipleChoice(): Promise<void> {
+  public async processScreenshotsAsMultipleChoice(operationId?: string): Promise<void> {
     const mainWindow = this.deps.getMainWindow()
     if (!mainWindow) return
 
@@ -269,10 +283,10 @@ export class SimpleProcessingHelper {
     // Step 4: 执行多选题AI处理
     const view = this.deps.getView()
     if (view === "queue") {
-      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage)
+      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage, operationId)
     } else {
       console.log('⚠️ 多选题模式只支持主队列处理')
-      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage)
+      await this.processMainQueueAsMultipleChoice(userConfig, finalLanguage, operationId)
     }
   }
 
@@ -363,7 +377,7 @@ export class SimpleProcessingHelper {
   /**
    * 处理主队列截图（强制多选题模式）
    */
-  private async processMainQueueAsMultipleChoice(userConfig: any, language: string): Promise<void> {
+  private async processMainQueueAsMultipleChoice(userConfig: any, language: string, operationId?: string): Promise<void> {
     const mainWindow = this.deps.getMainWindow()
     if (!mainWindow) return
 
@@ -415,7 +429,7 @@ export class SimpleProcessingHelper {
       }
 
       // 处理截图（强制为多选题）
-      const result = await this.processScreenshotsWithAIAsMultipleChoice(validScreenshots, userConfig, language, signal)
+      const result = await this.processScreenshotsWithAIAsMultipleChoice(validScreenshots, userConfig, language, signal, operationId)
 
       if (!result.success) {
         console.log("❌ 多选题AI处理失败:", result.error)
@@ -647,11 +661,12 @@ export class SimpleProcessingHelper {
       screenshots: Array<{ path: string; data: string }>,
       userConfig: any,
       language: string,
-      signal: AbortSignal
+      signal: AbortSignal,
+      providedOperationId?: string
   ) {
-    // 生成唯一操作ID，用于跟踪整个处理过程中的积分消费
-    const operationId = `ai_call_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`📝 创建多选题操作ID: ${operationId}`);
+    // 使用提供的操作ID，如果没有则生成新的
+    const operationId = providedOperationId || `ai_call_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`📝 ${providedOperationId ? '使用提供的' : '创建新的'}多选题操作ID: ${operationId}`);
 
     try {
       const mainWindow = this.deps.getMainWindow()
@@ -732,10 +747,19 @@ export class SimpleProcessingHelper {
         }
 
         // 记录积分操作，便于后续退款
+        console.log('🔍 积分扣除API响应:', deductResult);
+        console.log('🔍 提取transactionId:', deductResult.transactionId);
+        
         this.pendingCreditOperations.set(operationId, {
           modelName,
           questionType,
-          amount: checkResult.requiredCredits || 0
+          amount: checkResult.requiredCredits || 0,
+          transactionId: deductResult.transactionId
+        });
+        
+        console.log('💾 保存操作记录到pendingCreditOperations:', {
+          operationId,
+          transactionId: deductResult.transactionId
         });
 
         console.log(`✅ 多选题积分检查通过，扣除成功，剩余积分: ${deductResult.newCredits || '未知'}`);
@@ -787,12 +811,17 @@ export class SimpleProcessingHelper {
       // 使用专门的多选题解决方案生成逻辑
       const solutionsResult = await this.generateMultipleChoiceSolutionsWithCustomPrompt(userConfig, (problemInfo as any).data, signal)
 
+      console.log('🔍 搜题结果检查 - solutionsResult.success:', solutionsResult.success);
+      console.log('🔍 当前operationId:', operationId);
+      
       if (solutionsResult.success) {
+        console.log('✅ 搜题成功，开始标记积分操作完成...');
         // 🆕 积分操作标记为完成
         try {
           await this.completeCreditsOperation(operationId);
+          console.log('✅ 积分操作完成标记成功');
         } catch (completeError) {
-          console.error("标记积分操作完成失败:", completeError);
+          console.error("❌ 标记积分操作完成失败:", completeError);
           // 继续处理，不中断流程
         }
 
@@ -808,6 +837,9 @@ export class SimpleProcessingHelper {
 
         return { success: true, data: (solutionsResult as any).data }
       } else {
+        console.log('❌ 搜题失败，不会标记积分操作完成');
+        console.log('❌ 搜题失败原因:', solutionsResult.error || '未知原因');
+        
         // 生成解决方案失败，退款积分
         try {
           await this.refundCredits(operationId, 0, "生成多选题解决方案失败: " + ((solutionsResult as any).error || "未知错误"));
@@ -938,10 +970,19 @@ export class SimpleProcessingHelper {
         }
 
         // 记录积分操作，便于后续退款
+        console.log('🔍 积分扣除API响应:', deductResult);
+        console.log('🔍 提取transactionId:', deductResult.transactionId);
+        
         this.pendingCreditOperations.set(operationId, {
           modelName,
           questionType,
-          amount: checkResult.requiredCredits || 0
+          amount: checkResult.requiredCredits || 0,
+          transactionId: deductResult.transactionId
+        });
+        
+        console.log('💾 保存操作记录到pendingCreditOperations:', {
+          operationId,
+          transactionId: deductResult.transactionId
         });
 
         console.log(`✅ 积分检查通过，扣除成功，剩余积分: ${deductResult.newCredits || '未知'}`);
@@ -988,14 +1029,19 @@ export class SimpleProcessingHelper {
         )
       }
 
-      const solutionsResult = await this.generateSolutions(userConfig, language, (problemInfo as any).data, signal)
+      const solutionsResult = await this.generateSolutions(userConfig, language, (problemInfo as any).data, signal, operationId)
 
+      console.log('🔍 搜题结果检查 - solutionsResult.success:', solutionsResult.success);
+      console.log('🔍 当前operationId:', operationId);
+      
       if (solutionsResult.success) {
+        console.log('✅ 搜题成功，开始标记积分操作完成...');
         // 🆕 积分操作标记为完成
         try {
           await this.completeCreditsOperation(operationId);
+          console.log('✅ 积分操作完成标记成功');
         } catch (completeError) {
-          console.error("标记积分操作完成失败:", completeError);
+          console.error("❌ 标记积分操作完成失败:", completeError);
           // 继续处理，不中断流程
         }
 
@@ -1011,6 +1057,9 @@ export class SimpleProcessingHelper {
 
         return { success: true, data: (solutionsResult as any).data }
       } else {
+        console.log('❌ 搜题失败，不会标记积分操作完成');
+        console.log('❌ 搜题失败原因:', solutionsResult.error || '未知原因');
+        
         // 生成解决方案失败，退款积分
         try {
           await this.refundCredits(operationId, 0, "生成解决方案失败: " + ((solutionsResult as any).error || "未知错误"));
@@ -1040,7 +1089,7 @@ export class SimpleProcessingHelper {
   /**
    * 生成解决方案
    */
-  private async generateSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
+  private async generateSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
     try {
       if (!(await this.ensureAIClient())) {
         return {
@@ -1051,9 +1100,9 @@ export class SimpleProcessingHelper {
 
       // 根据题目类型选择处理方式
       if (problemInfo.type === 'multiple_choice') {
-        return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal)
+        return await this.generateMultipleChoiceSolutions(userConfig, problemInfo, signal, parentOperationId)
       } else {
-        return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal)
+        return await this.generateProgrammingSolutions(userConfig, language, problemInfo, signal, parentOperationId)
       }
 
     } catch (error: any) {
@@ -1072,8 +1121,9 @@ export class SimpleProcessingHelper {
   /**
    * 生成编程题解决方案
    */
-  private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal) {
-    const operationId = `prog_${randomUUID()}`;
+  private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
+    const operationId = parentOperationId || `prog_${randomUUID()}`;
+    console.log(`📝 编程题使用操作ID: ${operationId} ${parentOperationId ? '(继承自父级)' : '(新生成)'}`);
     let deductionInfo: {
       success: boolean;
       sufficient?: boolean;
@@ -1089,8 +1139,22 @@ export class SimpleProcessingHelper {
       // 移除硬编码的模型限制，允许使用用户配置的模型
 
       console.log('🎯 使用模型:', model)
-      // 注意：积分检查和扣除已经在processScreenshotsWithAI中完成，这里不需要重复检查
-      console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
+      
+      // 如果没有父级操作ID，说明是独立调用，需要检查和扣除积分
+      if (!parentOperationId) {
+        console.log('💰 独立调用，需要检查并扣除积分');
+        const model = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+        deductionInfo = await this.checkAndDeductCredits(model, 'programming', operationId);
+
+        if (!deductionInfo.success) {
+          return {
+            success: false,
+            error: deductionInfo.message || "积分检查失败"
+          }
+        }
+      } else {
+        console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
+      }
 
       const promptText = `
 请为以下编程题目提供最优解决方案：
@@ -1141,47 +1205,64 @@ ${problemInfo.example_output || "未提供示例输出"}
       // 🆕 使用流式调用替代批式调用
       console.log('🌊 开始流式AI调用...')
       let fullContent = ''
+      let chunkCount = 0  // 移到外层作用域
       
       try {
-        // 创建流式AI调用
-        const stream = await this.ismaqueClient.chat.completions.create({
-          model: model,
+        // 创建AI调用（统一使用流式输出）
+        const response = await this.ismaqueClient.chat.completions.create({
+          model: mapToActualModel(model, 'programming'),  // 编程题映射
           messages: [
             { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。" },
             { role: "user", content: promptText }
           ],
           max_tokens: 6000,
           temperature: 0.1,
-          stream: true  // 🆕 启用流式输出
+          stream: true  // 编程题统一使用流式输出
         }, { signal })
 
-        console.log('✅ 编程题流式AI调用启动成功')
+        const isStreamEnabled = true
+        console.log(`✅ 编程题AI调用启动成功 (${isStreamEnabled ? '流式' : '非流式'} 模式)`)
 
-        // 🆕 处理流式数据
-        const mainWindow = this.deps.getMainWindow()
-        if (!mainWindow) {
-          throw new Error('主窗口不可用')
-        }
+        if (isStreamEnabled) {
+          // 流式处理逻辑
+          const mainWindow = this.deps.getMainWindow()
+          if (!mainWindow) {
+            throw new Error('主窗口不可用')
+          }
 
-        // 🆕 发送流式传输开始信号
-        mainWindow.webContents.send('solution-stream-chunk', {
-          delta: '',
-          fullContent: '',
-          progress: 0,
-          isComplete: false,
-          chunkIndex: 0,
-          streamingStarted: true  // 标识流式传输开始
-        })
-        console.log('🚀 流式传输开始信号已发送')
+          // 🆕 发送流式传输开始信号
+          mainWindow.webContents.send('solution-stream-chunk', {
+            delta: '',
+            fullContent: '',
+            progress: 0,
+            isComplete: false,
+            chunkIndex: 0,
+            streamingStarted: true  // 标识流式传输开始
+          })
+          console.log('🚀 流式传输开始信号已发送')
 
-        // 🆕 流式数据处理循环
-        let chunkCount = 0
-        for await (const chunk of stream) {
+          // 🆕 流式数据处理循环
+          for await (const chunk of response) {
           if (signal.aborted) {
             throw new Error('操作已取消')
           }
 
-          const delta = chunk.choices[0]?.delta?.content || ''
+          // 尝试不同的字段路径，适配不同模型的响应格式
+          const delta = (chunk as any).choices[0]?.delta?.content || 
+                       (chunk as any).choices[0]?.message?.content ||
+                       (chunk as any).choices[0]?.text ||
+                       (chunk as any).delta?.content ||
+                       (chunk as any).content ||
+                       ''
+          console.log('🔍 流式chunk完整结构:', {
+            chunk: JSON.stringify(chunk, null, 2).substring(0, 500),
+            hasChoices: !!(chunk as any).choices?.[0],
+            hasDelta: !!(chunk as any).choices?.[0]?.delta,
+            hasContent: !!(chunk as any).choices?.[0]?.delta?.content,
+            deltaLength: delta.length,
+            delta: delta.substring(0, 100) + (delta.length > 100 ? '...' : '')
+          })
+          
           if (delta) {
             fullContent += delta
             chunkCount++
@@ -1195,19 +1276,54 @@ ${problemInfo.example_output || "未提供示例输出"}
               chunkIndex: chunkCount
             })
             
-            console.log(`📝 流式数据块 #${chunkCount}: "${delta}" (+${delta.length} 字符, 总计: ${fullContent.length})`)
+            // 流式数据处理
+          }
+          }
+        } else {
+          // 非流式处理逻辑 (用于gemini模型)
+          console.log('📄 处理非流式响应')
+          fullContent = (response as any).choices[0]?.message?.content || ''
+          console.log('🔍 非流式响应内容长度:', fullContent.length)
+          
+          // 模拟流式效果，分段发送到前端
+          const mainWindow = this.deps.getMainWindow()
+          if (mainWindow && fullContent) {
+            const chunkSize = 50
+            for (let i = 0; i < fullContent.length; i += chunkSize) {
+              const chunk = fullContent.substring(i, i + chunkSize)
+              const progress = Math.min(90, (i / fullContent.length) * 90)
+              
+              mainWindow.webContents.send('solution-stream-chunk', {
+                delta: chunk,
+                fullContent: fullContent.substring(0, i + chunkSize),
+                progress: progress,
+                isComplete: false
+              })
+              
+              // 小延迟模拟流式效果
+              await new Promise(resolve => setTimeout(resolve, 10))
+            }
           }
         }
 
-        console.log('✅ 编程题流式AI调用完成，总长度:', fullContent.length)
+        console.log('✅ 编程题AI调用完成')
+        console.log('🔍 AI调用统计:', {
+          mode: isStreamEnabled ? '流式' : '非流式',
+          totalChunks: isStreamEnabled ? chunkCount : 0,
+          fullContentLength: fullContent.length,
+          contentPreview: fullContent.substring(0, 200) + (fullContent.length > 200 ? '...' : '')
+        })
 
         // 🆕 发送完成信号
-        mainWindow.webContents.send('solution-stream-chunk', {
-          delta: '',
-          fullContent: fullContent,
-          progress: 100,
-          isComplete: true
-        })
+        const mainWindow = this.deps.getMainWindow()
+        if (mainWindow) {
+          mainWindow.webContents.send('solution-stream-chunk', {
+            delta: '',
+            fullContent: fullContent,
+            progress: 100,
+            isComplete: true
+          })
+        }
 
       } catch (error) {
         console.error('❌ 编程题流式AI调用失败:', error)
@@ -1218,8 +1334,8 @@ ${problemInfo.example_output || "未提供示例输出"}
           mainWindow.webContents.send('solution-stream-error', error.message || '流式调用失败')
         }
         
-        // AI调用失败，退还积分
-        if (deductionInfo.requiredPoints) {
+        // AI调用失败，退还积分（仅在独立调用时）
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '编程题AI调用失败')
         }
         throw error
@@ -1228,13 +1344,13 @@ ${problemInfo.example_output || "未提供示例输出"}
       // 🆕 流式调用完成后，解析最终内容
       if (!fullContent.trim()) {
         console.error('❌ 流式调用未收到任何内容')
-        if (deductionInfo.requiredPoints) {
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '流式调用未收到内容')
         }
         throw new Error('AI流式调用未返回任何内容')
       }
 
-      console.log('📝 开始解析流式响应内容，长度:', fullContent.length)
+      console.log('📝 开始解析流式响应内容')
 
       // 🆕 解析完整的流式响应内容
       const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
@@ -1291,9 +1407,13 @@ ${problemInfo.example_output || "未提供示例输出"}
         hasSpaceComplexity: !!spaceComplexity
       })
 
-      // 🆕 AI调用成功，完成积分操作
-      await this.completeCreditsOperation(operationId)
-      console.log('💰 编程题积分操作完成')
+      // 🆕 AI调用成功，完成积分操作（仅在独立调用时）
+      if (!parentOperationId) {
+        await this.completeCreditsOperation(operationId)
+        console.log('💰 编程题积分操作完成')
+      } else {
+        console.log('ℹ️ 跳过积分完成标记（将由父级方法处理）')
+      }
 
       return { success: true, data: formattedResponse }
     } catch (error: any) {
@@ -1315,8 +1435,9 @@ ${problemInfo.example_output || "未提供示例输出"}
   /**
    * 生成选择题解决方案（支持多题）
    */
-  private async generateMultipleChoiceSolutions(userConfig: any, problemInfo: any, signal: AbortSignal) {
-    const operationId = `mcq_${randomUUID()}`;
+  private async generateMultipleChoiceSolutions(userConfig: any, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
+    const operationId = parentOperationId || `mcq_${randomUUID()}`;
+    console.log(`📝 选择题使用操作ID: ${operationId} ${parentOperationId ? '(继承自父级)' : '(新生成)'}`);
     let deductionInfo: {
       success: boolean;
       sufficient?: boolean;
@@ -1327,13 +1448,20 @@ ${problemInfo.example_output || "未提供示例输出"}
     } | null = null;
     try {
       const model = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
-      deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
+      
+      // 如果没有父级操作ID，说明是独立调用，需要检查和扣除积分
+      if (!parentOperationId) {
+        console.log('💰 独立调用，需要检查并扣除积分');
+        deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
 
-      if (!deductionInfo.success) {
-        return {
-          success: false,
-          error: deductionInfo.message || "积分检查失败"
+        if (!deductionInfo.success) {
+          return {
+            success: false,
+            error: deductionInfo.message || "积分检查失败"
+          }
         }
+      } else {
+        console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
       }
 
       console.log('🎯 开始生成选择题解决方案...')
@@ -1393,7 +1521,7 @@ ${questionsText}
       let solutionResponse
       try {
         solutionResponse = await this.ismaqueClient.chat.completions.create({
-          model: model,
+          model: mapToActualModel(model, 'multiple_choice'),  // 选择题不映射
           messages: [
             { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。" },
             { role: "user", content: promptText }
@@ -1420,7 +1548,7 @@ ${questionsText}
             console.log('✅ 选择题JSON解析成功')
           } catch (parseError) {
             console.error('❌ 选择题JSON解析失败:', parseError)
-            if (deductionInfo.requiredPoints) {
+            if (deductionInfo && deductionInfo.requiredPoints) {
               await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI响应JSON解析失败')
             }
             throw new Error('选择题AI响应格式错误：无法解析JSON响应')
@@ -1429,7 +1557,7 @@ ${questionsText}
       } catch (error) {
         console.error('❌ 选择题AI调用失败:', error)
         // AI调用失败，退还积分
-        if (deductionInfo.requiredPoints) {
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI调用失败')
         }
         throw error
@@ -1442,7 +1570,7 @@ ${questionsText}
           hasChoices: !!solutionResponse?.choices,
           choicesLength: solutionResponse?.choices?.length
         })
-        if (deductionInfo.requiredPoints) {
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI响应格式错误')
         }
         throw new Error('选择题AI响应格式错误：缺少choices数据')
@@ -1450,7 +1578,7 @@ ${questionsText}
 
       if (!solutionResponse.choices[0]?.message?.content) {
         console.error('❌ 选择题AI响应缺少内容:', solutionResponse.choices[0])
-        if (deductionInfo.requiredPoints) {
+        if (deductionInfo && deductionInfo.requiredPoints) {
           await this.refundCredits(operationId, deductionInfo.requiredPoints, '选择题AI响应缺少内容')
         }
         throw new Error('选择题AI响应格式错误：缺少message内容')
@@ -1458,9 +1586,6 @@ ${questionsText}
 
       const responseContent = solutionResponse.choices[0].message.content
       console.log('✅ 选择题AI响应完成')
-      console.log('📝 AI原始响应内容:')
-      console.log('='.repeat(50))
-      console.log(responseContent)
       console.log('='.repeat(50))
 
       // 解析答案
@@ -1577,15 +1702,29 @@ ${questionsText}
         thoughts: thoughts
       }
 
-      // 🆕 AI调用成功，完成积分操作
-      await this.completeCreditsOperation(operationId)
-      console.log('💰 选择题积分操作完成')
+      // 🆕 AI调用成功，完成积分操作（仅在独立调用时）
+      if (!parentOperationId) {
+        await this.completeCreditsOperation(operationId)
+        console.log('💰 选择题积分操作完成')
+      } else {
+        console.log('ℹ️ 跳过积分操作完成（由上层方法处理）')
+      }
 
       console.log('✅ 选择题解决方案生成完成')
       console.log('📊 最终响应:', JSON.stringify(formattedResponse, null, 2))
 
       return { success: true, data: formattedResponse }
     } catch (error: any) {
+      // 如果发生错误且是独立调用（有积分扣除），需要退款
+      if (deductionInfo && !parentOperationId) {
+        try {
+          console.log('🔄 选择题处理失败，尝试退款积分...');
+          await this.completeCreditsOperation(operationId);
+        } catch (refundError) {
+          console.error('退款失败:', refundError);
+        }
+      }
+      
       if (error.name === 'AbortError') {
         return {
           success: false,
@@ -1667,7 +1806,7 @@ ${questionsText}
       let solutionResponse
       try {
         solutionResponse = await this.ismaqueClient.chat.completions.create({
-          model: model,
+          model: mapToActualModel(model, 'multiple_choice'),  // 多选题不映射
           messages: [
             { role: "system", content: "你是一位专业的多选题分析助手。用户已确认这些都是多选题，每道题可能有多个正确答案。请严格按照要求的格式输出答案，将所有正确选项的字母连续写在一起（如ABC、BD等）。绝不能只选择一个选项，要找出所有正确答案。" },
             { role: "user", content: promptText }
@@ -1746,9 +1885,6 @@ ${questionsText}
         throw new Error('多选题AI响应格式错误：无法提取内容')
       }
       console.log('✅ 多选题AI响应完成')
-      console.log('📝 AI原始响应内容:')
-      console.log('='.repeat(50))
-      console.log(responseContent)
       console.log('='.repeat(50))
 
       // 解析答案 - 支持多选题格式
@@ -1969,7 +2105,7 @@ ${questionsText}
   /**
    * 处理额外队列截图（调试功能）
    */
-  private async processExtraQueue(userConfig: any, language: string): Promise<void> {
+  public async processExtraQueue(userConfig: any, language: string): Promise<void> {
     const mainWindow = this.deps.getMainWindow()
     if (!mainWindow) return
 
@@ -1988,6 +2124,26 @@ ${questionsText}
       console.log("❌ 额外截图文件不存在")
       mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS)
       return
+    }
+
+    // 🆕 调试功能积分扣除
+    const debuggingModel = userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+    let operationId: string | undefined;
+    
+    try {
+      const deductResult = await this.deductCredits(debuggingModel, 'programming');
+      if (deductResult.success) {
+        operationId = deductResult.operationId;
+        console.log('✅ 调试功能积分扣除成功，操作ID:', operationId);
+      } else {
+        console.error('❌ 调试功能积分扣除失败:', deductResult.error);
+        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_ERROR, "积分不足，无法使用调试功能");
+        return;
+      }
+    } catch (creditError) {
+      console.error('❌ 调试功能积分扣除异常:', creditError);
+      mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_ERROR, "积分扣除异常，无法使用调试功能");
+      return;
     }
 
     mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.DEBUG_START)
@@ -2035,22 +2191,53 @@ ${questionsText}
           validScreenshots,
           userConfig,
           language,
-          signal
+          signal,
+          operationId
       )
 
       if (result.success) {
+        // 🆕 调试成功，标记积分操作完成
+        if (operationId) {
+          try {
+            await this.completeCreditsOperation(operationId);
+            console.log('✅ 调试功能积分操作完成标记成功');
+          } catch (completeError) {
+            console.error("❌ 标记调试积分操作完成失败:", completeError);
+          }
+        }
+        
         this.deps.setHasDebugged(true)
         mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.DEBUG_SUCCESS,
             result.data
         )
       } else {
+        // 🆕 调试失败，退款积分
+        if (operationId) {
+          try {
+            await this.refundCredits(operationId, 0, "调试处理失败: " + (result.error || "未知错误"));
+            console.log('✅ 调试功能积分退款成功');
+          } catch (refundError) {
+            console.error("❌ 调试积分退款失败:", refundError);
+          }
+        }
+        
         mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
             result.error
         )
       }
     } catch (error: any) {
+      // 🆕 异常情况退款积分
+      if (operationId) {
+        try {
+          await this.refundCredits(operationId, 0, "调试处理异常: " + (error.message || "未知错误"));
+          console.log('✅ 调试功能异常积分退款成功');
+        } catch (refundError) {
+          console.error("❌ 调试异常积分退款失败:", refundError);
+        }
+      }
+      
       if (error.name === 'AbortError') {
         mainWindow.webContents.send(
             this.deps.PROCESSING_EVENTS.DEBUG_ERROR,
@@ -2074,7 +2261,8 @@ ${questionsText}
       screenshots: Array<{ path: string; data: string }>,
       userConfig: any,
       language: string,
-      signal: AbortSignal
+      signal: AbortSignal,
+      operationId?: string
   ) {
     try {
       const problemInfo = this.deps.getProblemInfo()
@@ -2150,7 +2338,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
 
       let debugResponse = await this.ismaqueClient.chat.completions.create({
-        model: debuggingModel,
+        model: mapToActualModel(debuggingModel, 'debugging'),  // 调试功能映射
         messages: messages,
         max_tokens: 4000,
         temperature: 0.2
@@ -2255,6 +2443,19 @@ ${problemInfo.example_output || "未提供示例输出。"}
         modifications: modifications
       }
 
+      // 🆕 调试历史记录保存（暂时禁用，需要实现saveToHistory方法）
+      if (operationId && problemInfo) {
+        console.log('📝 调试会话信息记录:', {
+          operationId,
+          question: problemInfo.problem_statement || "调试截图分析", 
+          model: userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514',
+          language: language,
+          hasResponse: !!response
+        });
+        // TODO: 实现历史记录保存功能
+        // await this.saveToHistory(operationId, { ... })
+      }
+
       return { success: true, data: response }
 
     } catch (error: any) {
@@ -2291,33 +2492,27 @@ ${problemInfo.example_output || "未提供示例输出。"}
         throw new Error("AI客户端初始化失败，无法识别题目类型")
       }
 
-      // 固定使用 gemini-2.5-flash-preview-04-17 进行截图识别
-      const model = 'gemini-2.5-flash-preview-04-17'
+      // 固定使用 gpt-4o 进行截图识别
+      const model = 'gpt-4o'
       console.log('🔍 使用固定模型进行截图识别:', model)
 
       const messages = [
         {
           role: "system" as const,
-          content: `你是一个题目类型识别专家。请分析截图中的题目类型。
+          content: `你是题目类型识别助手。请查看图片并识别题目类型：
 
-**重要要求：**
-1. 只返回一个单词：programming 或 multiple_choice
-2. 不要任何解释或额外文字
-3. programming = 编程题（需要写代码的题目）
-4. multiple_choice = 选择题（有A、B、C、D等选项的题目）
+规则：
+- 如果图片中有A、B、C、D选项标记，回答：multiple_choice
+- 如果图片中没有A、B、C、D选项标记，回答：programming
 
-**判断标准：**
-- 如果看到选项A、B、C、D或类似的选择项 → multiple_choice
-- 如果看到"输入格式"、"输出格式"、"示例"等编程题特征 → programming
-- 如果看到代码输入输出要求 → programming
-- 如果看到多个选择项排列 → multiple_choice`
+注意：只能回答 multiple_choice 或 programming，不要添加任何其他文字、标点或解释。`
         },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const,
-              text: "请识别这些截图中的题目类型，只返回：programming 或 multiple_choice"
+              text: "看图片是否有A、B、C、D选项。有选项=multiple_choice，无选项=programming"
             },
             ...imageDataList.map(data => ({
               type: "image_url" as const,
@@ -2328,18 +2523,38 @@ ${problemInfo.example_output || "未提供示例输出。"}
       ]
 
       const response = await this.ismaqueClient.chat.completions.create({
-        model: model,
+        model: model,  // 题目识别不映射，使用原模型
         messages: messages,
-        max_tokens: 10,
+        max_tokens: 20,  // 增加token数量，确保完整回复
         temperature: 0.0
       }, { signal })
 
-      const result = response.choices[0].message.content.trim().toLowerCase()
+      const result = response.choices[0].message.content?.trim().toLowerCase() || ''
+      console.log('🔍 题目类型识别结果:', `"${result}"`)
+      console.log('🔍 识别结果长度:', result.length)
 
-      if (result.includes('multiple_choice')) {
+      // 更精确的判断逻辑 - 增加更多匹配条件
+      if (result.includes('multiple_choice') || result.includes('multiple') || result.includes('choice') || 
+          result.includes('选择题') || result.includes('选择')) {
+        console.log('✅ 识别为选择题')
         return 'multiple_choice'
+      } else if (result.includes('programming') || result.includes('program') || result.includes('编程题') || 
+                 result.includes('编程') || result.includes('code')) {
+        console.log('✅ 识别为编程题')  
+        return 'programming'
+      } else if (result === '' || result.length === 0) {
+        console.log('⚠️ 识别结果为空，使用默认策略')
+        // 恢复默认为编程题
+        return 'programming'
       } else {
-        return 'programming'  // 默认为编程题
+        console.log('⚠️ 识别结果不明确，使用备用逻辑')
+        console.log('⚠️ 原始结果内容:', JSON.stringify(result))
+        // 如果结果包含任何字母，尝试简单判断
+        if (result.toLowerCase().includes('m') || result.toLowerCase().includes('c')) {
+          console.log('⚠️ 结果可能包含multiple_choice相关字符，判断为选择题')
+          return 'multiple_choice'
+        }
+        return 'programming'  // 最终兜底
       }
 
     } catch (error) {
@@ -2450,14 +2665,14 @@ ${problemInfo.example_output || "未提供示例输出。"}
       ]
 
       const response = await this.ismaqueClient.chat.completions.create({
-        model: model,
+        model: model,  // 编程题信息提取不映射，使用写死的模型
         messages: messages,
         max_tokens: 6000,
         temperature: 0.0
       }, { signal })
 
       const responseText = response.choices[0].message.content
-      console.log("编程题AI提取响应:", responseText)
+      // AI响应处理
 
       let jsonText = responseText.trim()
       jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
@@ -2549,15 +2764,17 @@ ${problemInfo.example_output || "未提供示例输出。"}
       ]
 
       const response = await this.ismaqueClient.chat.completions.create({
-        model: model,
+        model: model,  // 选择题信息提取使用固定模型，不映射
         messages: messages,
         max_tokens: 6000,
         temperature: 0.1
       }, { signal })
 
       const responseText = response.choices[0].message.content
-      console.log("选择题AI提取响应:", responseText)
-
+      console.log('🔍 选择题AI原始响应长度:', responseText?.length)
+      console.log('🔍 选择题AI原始响应前500字符:', responseText?.substring(0, 500))
+      
+      // AI响应处理
       let jsonText = responseText.trim()
       jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
@@ -2568,7 +2785,12 @@ ${problemInfo.example_output || "未提供示例输出。"}
         jsonText = jsonText.substring(jsonStart, jsonEnd + 1)
       }
 
+      console.log('🔍 处理后的选择题JSON文本长度:', jsonText.length)
+      console.log('🔍 处理后的选择题JSON文本:', jsonText)
+
       const problemInfo = JSON.parse(jsonText)
+      console.log('🔍 解析后的选择题信息:', JSON.stringify(problemInfo, null, 2))
+      console.log('🔍 multiple_choice_questions数组长度:', problemInfo.multiple_choice_questions?.length || 0)
 
       return {
         success: true,
@@ -2681,12 +2903,13 @@ ${problemInfo.example_output || "未提供示例输出。"}
         this.pendingCreditOperations.set(operationId, {
           modelName,
           questionType,
-          amount: result.deductedAmount
+          amount: result.deductedAmount,
+          transactionId: result.transactionId
         })
 
         return {
           success: true,
-          operationId: result.operationId,
+          operationId: operationId,  // 使用我们生成的operationId，而不是result.operationId
           deductedAmount: result.deductedAmount
         }
       } else {
@@ -2716,9 +2939,56 @@ ${problemInfo.example_output || "未提供示例输出。"}
    * 完成积分操作（AI调用成功时）
    */
   private async completeCreditsOperation(operationId: string): Promise<void> {
-    // 移除待处理的操作记录，表示操作成功完成
-    this.pendingCreditOperations.delete(operationId)
-    console.log('✅ 积分操作完成:', operationId)
+    try {
+      console.log('🎯 完成积分操作:', operationId)
+      console.log('📋 当前pendingCreditOperations大小:', this.pendingCreditOperations.size)
+      console.log('📋 当前pendingCreditOperations keys:', Array.from(this.pendingCreditOperations.keys()))
+      
+      // 从待处理操作中获取交易ID
+      const operation = this.pendingCreditOperations.get(operationId)
+      console.log('🔍 找到的操作记录:', operation)
+      
+      if (!operation?.transactionId) {
+        console.warn('⚠️ 未找到操作记录或交易ID:', operationId)
+        console.warn('⚠️ 完整操作列表keys:', Array.from(this.pendingCreditOperations.keys()))
+        console.warn('⚠️ 操作记录详情:', operation)
+        return
+      }
+
+      const sessionId = simpleAuthManager.getToken()
+      if (!sessionId) {
+        console.error('❌ 无法获取会话ID，无法更新操作结束时间')
+        return
+      }
+
+      console.log('🔄 更新结束时间，交易ID:', operation.transactionId)
+
+      const BASE_URL = 'https://quiz.playoffer.cn'
+      const response = await fetch(`${BASE_URL}/api/client/credits/complete`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': sessionId
+        },
+        body: JSON.stringify({ transactionId: operation.transactionId })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ 更新操作结束时间失败:', response.status, errorText)
+        return
+      }
+
+      const result = await response.json()
+      console.log('✅ 结束时间更新成功')
+
+    } catch (error) {
+      console.error('❌ 更新操作结束时间时发生错误:', error)
+    } finally {
+      // 移除待处理的操作记录，表示操作处理完成（无论成功与否）
+      this.pendingCreditOperations.delete(operationId)
+      console.log('✅ 积分操作处理完成')
+    }
   }
 
   /**
@@ -2772,6 +3042,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
     currentPoints?: number;
     newBalance?: number;
     requiredPoints?: number;
+    transactionId?: number;
     message?: string
   }> {
     try {
@@ -2782,26 +3053,45 @@ ${problemInfo.example_output || "未提供示例输出。"}
 
       console.time('credits-check-and-deduct-api')
       const BASE_URL = 'https://quiz.playoffer.cn'
-      const response = await fetch(`${BASE_URL}/api/client/credits/check-and-deduct`, {
+      const url = `${BASE_URL}/api/client/credits/check-and-deduct`
+      const requestBody = {
+        modelName,
+        questionType,
+        operationId
+      }
+      
+      console.log('🔗 调用积分API:', url)
+      console.log('📤 请求体:', requestBody)
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'X-Session-Id': token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          modelName,
-          questionType,
-          operationId
-        })
+        body: JSON.stringify(requestBody)
       })
       console.timeEnd('credits-check-and-deduct-api')
 
+      console.log('📥 响应状态:', response.status, response.statusText)
       const data = await response.json()
+      console.log('📥 原始响应数据:', data)
 
       // 更新本地缓存
       if (data.success && data.newBalance !== undefined) {
         this.userCredits = data.newBalance
         this.lastCreditsFetchTime = Date.now()
+      }
+
+      // 如果扣除成功且有transactionId，存储操作记录
+      if (data.success && data.transactionId) {
+        this.pendingCreditOperations.set(operationId, {
+          modelName,
+          questionType,
+          amount: data.deductedAmount || 0,
+          transactionId: data.transactionId
+        });
+        console.log('💰 保存transactionId:', data.transactionId, '到操作:', operationId);
       }
 
       return {
@@ -2810,6 +3100,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
         currentPoints: data.currentPoints,
         newBalance: data.newBalance,
         requiredPoints: data.requiredPoints,
+        transactionId: data.transactionId,
         message: data.message
       }
     } catch (error) {
@@ -2866,7 +3157,8 @@ ${problemInfo.example_output || "未提供示例输出。"}
         credits: creditResult.newBalance || 0
       })
 
-      // ... [现有的处理逻辑]
+      // 调用多选题AI处理，传递operationId
+      await this.processScreenshotsAsMultipleChoice(operationId)
     } catch (error) {
       console.error("选择题搜索处理错误:", error)
       window.webContents.send('multiple-choice-search-error', { error: '处理失败:' + error.message })

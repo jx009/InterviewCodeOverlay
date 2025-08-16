@@ -35,8 +35,8 @@ async function startServer() {
       console.warn('⚠️ 邮件服务配置验证失败，但不影响启动:', error);
     }
     
-    const PORT = process.env.PORT || 3001;
-    const WEB_PORT = process.env.WEB_PORT || 3000;
+    const PORT = process.env.PORT || 3003;
+    const WEB_PORT = process.env.WEB_PORT || 3004;
 
     // 基础中间件
     app.use(helmet({
@@ -57,9 +57,11 @@ async function startServer() {
     const corsOptions = {
       origin: process.env.CORS_ORIGIN?.split(',') || [
         'https://quiz.playoffer.cn',
-        'http://localhost:3000', 
+        'http://159.75.174.234:3004',
+        'http://localhost:3004',
         'http://localhost:54321',
-        `http://localhost:${WEB_PORT}`
+        `http://localhost:${WEB_PORT}`,
+        `http://159.75.174.234:${WEB_PORT}`
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

@@ -28,13 +28,13 @@ class Database {
     if (!existingUser) {
       console.log('🌱 创建默认测试用户...');
       const hashedPassword = await bcrypt.hash('123456', 10);
-      
+
       await this.createUser({
         username: '123456',
         email: '123456@test.com',
         password: hashedPassword
       });
-      
+
       console.log('✅ 默认测试用户创建成功 (用户名/密码: 123456)');
     } else {
       // 🆕 确保测试用户有足够的积分进行测试
@@ -49,13 +49,13 @@ class Database {
     if (!existingAdmin) {
       console.log('🌱 创建默认管理员用户...');
       const hashedPassword = await bcrypt.hash('admin123456', 10);
-      
+
       await this.createUser({
         username: 'admin',
         email: 'admin@test.com',
         password: hashedPassword
       });
-      
+
       console.log('✅ 默认管理员用户创建成功 (用户名: admin, 邮箱: admin@test.com, 密码: admin123456)');
     } else {
       // 🆕 确保管理员用户有足够的积分
@@ -70,7 +70,7 @@ class Database {
   async createUser(userData) {
     try {
       const { username, email, password } = userData;
-      
+
       const user = await this.prisma.user.create({
         data: {
           username,
@@ -86,7 +86,7 @@ class Database {
           config: true
         }
       });
-      
+
       return user;
     } catch (error) {
       throw error;
@@ -220,7 +220,7 @@ class Database {
           where: { userId: parseInt(userId) }
         })
       ]);
-      
+
       return {
         transactions,
         total,
@@ -361,7 +361,7 @@ class Database {
   async validateRefreshToken(token) {
     try {
       const session = await this.prisma.userSession.findUnique({
-        where: { 
+        where: {
           refreshToken: token,
           isActive: true
         },
@@ -427,7 +427,7 @@ class Database {
   async verifyEmailCode(token, code) {
     try {
       const verification = await this.prisma.emailVerificationCode.findUnique({
-        where: { 
+        where: {
           token,
           isUsed: false
         }
@@ -450,7 +450,7 @@ class Database {
   }
 
   // 🔥 积分系统相关方法
-  
+
   // 获取所有模型积分配置
   async getAllModelPointConfigs() {
     try {
@@ -483,7 +483,7 @@ class Database {
   async upsertModelPointConfig(configData) {
     try {
       const { modelName, questionType, cost, description, isActive = true } = configData;
-      
+
       return await this.prisma.modelPointConfig.upsert({
         where: {
           unique_model_question_type: {
@@ -530,12 +530,12 @@ class Database {
   async batchUpsertModelPointConfigs(configs) {
     try {
       const results = [];
-      
+
       for (const config of configs) {
         const result = await this.upsertModelPointConfig(config);
         results.push(result);
       }
-      
+
       return results;
     } catch (error) {
       throw error;
@@ -552,7 +552,7 @@ class Database {
       }
 
       console.log('🌱 创建默认积分配置...');
-      
+
       const defaultConfigs = [
         {
           modelName: 'gpt-4',
