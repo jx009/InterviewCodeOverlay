@@ -317,7 +317,6 @@ async function createWindow(): Promise<void> {
     focusable: true,
     skipTaskbar: true,
     type: "toolbar",
-    visibleOnAllWorkspaces: true,
     paintWhenInitiallyHidden: true,
     titleBarStyle: "hidden",
     enableLargerThanScreen: true,
