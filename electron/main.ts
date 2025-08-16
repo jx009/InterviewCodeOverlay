@@ -331,6 +331,16 @@ async function createWindow(): Promise<void> {
   // 🆕 强制设置窗口为最高级别，确保覆盖全屏应用
   state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
   state.mainWindow.setVisibleOnAllWorkspaces(true)
+  
+  // 🆕 额外的全屏覆盖设置
+  if (process.platform === 'darwin') {
+    // macOS 特殊处理：设置为悬浮窗口
+    state.mainWindow.setAlwaysOnTop(true, "floating" as any)
+    // 强制设置为最高级别
+    setTimeout(() => {
+      state.mainWindow?.setAlwaysOnTop(true, "screen-saver" as any)
+    }, 1000)
+  }
 
   // 不在这里设置全局穿透，而是通过IPC消息来控制
   // state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -528,11 +538,33 @@ async function createWindow(): Promise<void> {
     }
   }, 1000); // 等待前端加载完成
   
-  // Ensure window is always on top and visible on all workspaces
-  state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
-  state.mainWindow.setVisibleOnAllWorkspaces(true, {
-    visibleOnFullScreen: true
-  });
+  // 🆕 强制设置最高级别覆盖
+  const ensureAlwaysOnTop = () => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
+      state.mainWindow.setVisibleOnAllWorkspaces(true)
+      if (process.platform === 'darwin') {
+        // macOS 额外设置
+        state.mainWindow.setAlwaysOnTop(true, "modal-panel" as any)
+      }
+    }
+  }
+  
+  // 立即设置
+  ensureAlwaysOnTop()
+  
+  // 添加窗口事件监听，确保始终保持最高级别
+  state.mainWindow.on('focus', () => {
+    ensureAlwaysOnTop()
+  })
+  
+  state.mainWindow.on('blur', () => {
+    // 即使失去焦点也保持最高级别
+    setTimeout(ensureAlwaysOnTop, 100)
+  })
+  
+  // 定期重新设置（确保覆盖全屏应用）
+  setInterval(ensureAlwaysOnTop, 5000)
   
   console.log(`Window created and shown. Visible: ${state.isWindowVisible}, Position: (${state.currentX}, ${state.currentY})`);
   
