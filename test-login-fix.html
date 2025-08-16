@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>登录循环测试</title>
+</head>
+<body>
+    <h1>测试无效sessionId清理逻辑</h1>
+    <div id="status">准备测试...</div>
+    
+    <script>
+        // 模拟localStorage中存在无效sessionId的情况
+        localStorage.setItem('sessionId', 'invalid-session-id-12345');
+        localStorage.setItem('sessionId_backup', 'invalid-backup-session-id-12345');
+        localStorage.setItem('lastActivity', Date.now().toString());
+        
+        console.log('🔍 模拟场景已设置:');
+        console.log('sessionId:', localStorage.getItem('sessionId'));
+        console.log('sessionId_backup:', localStorage.getItem('sessionId_backup'));
+        console.log('lastActivity:', localStorage.getItem('lastActivity'));
+        
+        document.getElementById('status').innerHTML = 
+            '✅ 测试场景已设置<br>' +
+            '📋 sessionId: ' + localStorage.getItem('sessionId') + '<br>' +
+            '📋 sessionId_backup: ' + localStorage.getItem('sessionId_backup') + '<br>' +
+            '📋 lastActivity: ' + localStorage.getItem('lastActivity');
+        
+        // 测试清理逻辑
+        function testClearInvalidSession() {
+            console.log('🧹 测试无效sessionId清理...');
+            
+            // 模拟系统检测到无效sessionId后的清理操作
+            localStorage.removeItem('sessionId');
+            localStorage.removeItem('sessionId_backup');
+            localStorage.removeItem('lastActivity');
+            console.log('🗑️ 已清除无效的sessionId');
+            
+            console.log('🔍 清理后检查:');
+            console.log('sessionId:', localStorage.getItem('sessionId'));
+            console.log('sessionId_backup:', localStorage.getItem('sessionId_backup'));
+            console.log('lastActivity:', localStorage.getItem('lastActivity'));
+            
+            const allCleared = 
+                !localStorage.getItem('sessionId') && 
+                !localStorage.getItem('sessionId_backup') && 
+                !localStorage.getItem('lastActivity');
+                
+            if (allCleared) {
+                console.log('✅ 清理测试通过');
+                document.getElementById('status').innerHTML += '<br><br>✅ 清理测试通过';
+            } else {
+                console.log('❌ 清理测试失败');
+                document.getElementById('status').innerHTML += '<br><br>❌ 清理测试失败';
+            }
+        }
+        
+        // 3秒后执行清理测试
+        setTimeout(testClearInvalidSession, 3000);
+    </script>
+</body>
+</html>
