@@ -9,6 +9,7 @@ import { Screenshot } from "../types/screenshots"
 import { ComplexitySection, ContentSection } from "./Solutions"
 import { useToast } from "../contexts/toast"
 import { useLanguageConfig } from "../hooks/useLanguageConfig"
+import { isMacOS, COMMAND_KEY } from "../utils/platform"
 
 const CodeSection = ({
   title,
@@ -58,7 +59,7 @@ const CodeSection = ({
           </div>
         </div>
       ) : (
-        <div className="w-full relative pointer-events-none">
+        <div className="w-full relative pointer-events-none overflow-x-auto">
           {showCopyButton && (
             <button
               onClick={copyToClipboard}
@@ -90,15 +91,18 @@ const CodeSection = ({
               }
               style={dracula}
               customStyle={{
-                maxWidth: "100%",
+                maxWidth: "none",
+                width: "100%",
+                minWidth: "600px",
                 margin: 0,
                 padding: "1rem",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
+                whiteSpace: "pre",
+                overflowX: "auto",
+                overflowY: "visible",
                 backgroundColor: "rgba(22, 27, 34, 0.5)",
                 userSelect: "none" // 禁止选择文本
               }}
-              wrapLongLines={true}
+              wrapLongLines={false}
               className="pointer-events-none"
             >
               {code as string}
@@ -262,6 +266,34 @@ const Debug: React.FC<DebugProps> = ({
       })
     ]
 
+    // 🆕 监听全局快捷键事件（来自主进程）
+    const handleHorizontalScroll = (data: { direction: string }) => {
+      console.log('🔄 [Debug] 收到水平滚动事件:', data.direction)
+      
+      // 查找代码容器并滚动
+      const codeContainers = document.querySelectorAll('pre, code')
+      
+      codeContainers.forEach((container) => {
+        if (container instanceof HTMLElement && container.scrollWidth > container.clientWidth) {
+          const scrollAmount = 100
+          const currentScroll = container.scrollLeft
+          
+          if (data.direction === 'left') {
+            container.scrollLeft = Math.max(0, currentScroll - scrollAmount)
+            console.log(`⬅️ [Debug] 左滚动: ${currentScroll} -> ${container.scrollLeft}`)
+          } else if (data.direction === 'right') {
+            const maxScroll = container.scrollWidth - container.clientWidth
+            container.scrollLeft = Math.min(maxScroll, currentScroll + scrollAmount)
+            console.log(`➡️ [Debug] 右滚动: ${currentScroll} -> ${container.scrollLeft}`)
+          }
+        }
+      })
+    }
+
+    // 监听来自主进程的水平滚动事件
+    const unsubscribeScrolling = window.electronAPI.onScrollCodeHorizontal(handleHorizontalScroll)
+    cleanupFunctions.push(unsubscribeScrolling)
+
     // Set up resize observer
     const updateDimensions = () => {
       if (contentRef.current) {
@@ -365,7 +397,7 @@ const Debug: React.FC<DebugProps> = ({
 
             {/* Code Section */}
             <CodeSection
-              title="Original Code"
+              title={`原始代码 (${COMMAND_KEY} + Shift + ← → 水平滚动)`}
               code={newCode}
               isLoading={!newCode}
               currentLanguage={currentLanguage}

@@ -316,7 +316,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
-    type: "panel",
+    type: "toolbar",
     paintWhenInitiallyHidden: true,
     titleBarStyle: "hidden",
     enableLargerThanScreen: true,
@@ -324,6 +324,9 @@ async function createWindow(): Promise<void> {
   }
 
   state.mainWindow = new BrowserWindow(windowSettings)
+
+  // 🆕 强制确保不在任务栏显示
+  state.mainWindow.setSkipTaskbar(true)
 
   // 不在这里设置全局穿透，而是通过IPC消息来控制
   // state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -690,7 +693,7 @@ function showMainWindow(): void {
       
       // 使用不抢夺焦点的方式显示窗口
       state.mainWindow.setOpacity(1);
-      state.mainWindow.setSkipTaskbar(false);
+      state.mainWindow.setSkipTaskbar(true);
       // 使用 showInactive() 而不是 show() 来避免抢夺焦点
       state.mainWindow.showInactive();
       
@@ -749,6 +752,7 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
   if (!state.isWindowVisible || !state.mainWindow.isVisible()) {
     console.log("Window was hidden, making it visible for movement")
     state.mainWindow.showInactive()  // 使用不抢夺焦点的方法
+    state.mainWindow.setSkipTaskbar(true)  // 确保不在任务栏显示
     state.mainWindow.setIgnoreMouseEvents(false)
     state.isWindowVisible = true
   }

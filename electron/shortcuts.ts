@@ -288,6 +288,29 @@ export class ShortcutsHelper {
     } else {
       console.error("❌ Failed to register CommandOrControl+J shortcut")
     }
+
+    // 🆕 水平滚动快捷键
+    const scrollLeftSuccess = globalShortcut.register("CommandOrControl+Shift+Left", () => {
+      console.log("🔥 Command/Ctrl + Shift + Left pressed. Scrolling code left...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("scroll-code-horizontal", { direction: "left" })
+      }
+    })
+
+    const scrollRightSuccess = globalShortcut.register("CommandOrControl+Shift+Right", () => {
+      console.log("🔥 Command/Ctrl + Shift + Right pressed. Scrolling code right...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("scroll-code-horizontal", { direction: "right" })
+      }
+    })
+
+    if (scrollLeftSuccess && scrollRightSuccess) {
+      console.log("✅ 水平滚动快捷键注册成功 (Ctrl+Shift+Left/Right)")
+    } else {
+      console.error("❌ 水平滚动快捷键注册失败")
+    }
     
     // Unregister shortcuts when quitting
     app.on("will-quit", () => {

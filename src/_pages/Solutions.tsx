@@ -13,6 +13,7 @@ import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
 import { useLanguageConfig } from "../hooks/useLanguageConfig"
 import { parseStreamedSolution, shouldStartDisplaying } from "../utils/streamParser"
+import { isMacOS } from "../utils/platform"
 
 export const ContentSection = ({
   title,
@@ -138,7 +139,7 @@ const SolutionSection = ({
           </div>
         </div>
       ) : (
-        <div className="w-full relative pointer-events-none">
+        <div className="w-full relative pointer-events-none overflow-x-auto">
           {showCopyButton && (
             <button
               onClick={copyToClipboard}
@@ -171,11 +172,14 @@ const SolutionSection = ({
               }
               style={dracula}
               customStyle={{
-                maxWidth: "100%",
+                maxWidth: "none",
+                width: "100%",
+                minWidth: "600px",
                 margin: 0,
                 padding: "1rem",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
+                whiteSpace: "pre",
+                overflowX: "auto",
+                overflowY: "visible",
                 backgroundColor: "rgba(22, 27, 34, 0.5)",
                 userSelect: "none",
                 // 🆕 流式模式的视觉效果
@@ -184,7 +188,7 @@ const SolutionSection = ({
                   animation: "pulse 1.5s ease-in-out infinite"
                 })
               }}
-              wrapLongLines={true}
+              wrapLongLines={false}
               className={`pointer-events-none ${isStreaming ? 'streaming-code' : ''}`}
             >
               {displayContent as string}
@@ -694,6 +698,42 @@ const Solutions: React.FC<SolutionsProps> = ({
       }),
     ]
 
+    // 🆕 监听全局快捷键事件（来自主进程）
+    const handleHorizontalScroll = (data: { direction: string }) => {
+      console.log('🔄 收到水平滚动事件，完整数据:', data)
+      console.log('🔄 direction:', data?.direction)
+      console.log('🔄 data type:', typeof data)
+      
+      if (!data || !data.direction) {
+        console.error('❌ 滚动数据无效:', data)
+        return
+      }
+      
+      // 查找代码容器并滚动
+      const codeContainers = document.querySelectorAll('pre, code')
+      console.log('📦 找到代码容器数量:', codeContainers.length)
+      
+      codeContainers.forEach((container) => {
+        if (container instanceof HTMLElement && container.scrollWidth > container.clientWidth) {
+          const scrollAmount = 100
+          const currentScroll = container.scrollLeft
+          
+          if (data.direction === 'left') {
+            container.scrollLeft = Math.max(0, currentScroll - scrollAmount)
+            console.log(`⬅️ 左滚动: ${currentScroll} -> ${container.scrollLeft}`)
+          } else if (data.direction === 'right') {
+            const maxScroll = container.scrollWidth - container.clientWidth
+            container.scrollLeft = Math.min(maxScroll, currentScroll + scrollAmount)
+            console.log(`➡️ 右滚动: ${currentScroll} -> ${container.scrollLeft}`)
+          }
+        }
+      })
+    }
+
+    // 监听来自主进程的水平滚动事件
+    const unsubscribeScrolling = window.electronAPI.onScrollCodeHorizontal(handleHorizontalScroll)
+    cleanupFunctions.push(unsubscribeScrolling)
+
     return () => {
       resizeObserver.disconnect()
       cleanupFunctions.forEach((cleanup) => cleanup())
@@ -880,7 +920,7 @@ const Solutions: React.FC<SolutionsProps> = ({
                     {(solutionData || (isStreaming && streamingContent)) && (
                       <>
                         <SolutionSection
-                          title="解决方案"
+                          title={`解决方案 (${COMMAND_KEY} + Shift + ← → 水平滚动)`}
                           content={solutionData}
                           isLoading={!solutionData && !isStreaming}
                           currentLanguage={currentLanguage}
