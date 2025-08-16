@@ -12,7 +12,7 @@ import Debug from "./Debug"
 import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
 import { useLanguageConfig } from "../hooks/useLanguageConfig"
-import { parseStreamedSolution, shouldStartDisplaying } from "../utils/streamParser"
+import { parseStreamedSolution, shouldStartDisplaying } from "@/utils/streamParser"
 import { isMacOS } from "../utils/platform"
 
 export const ContentSection = ({
