@@ -23,11 +23,27 @@ jobs:
         
     - name: Clean install
       run: |
-        rm -rf node_modules package-lock.json
-        npm config set target_platform darwin
-        npm config set target_arch ${{ runner.arch }}
-        npm install --force --no-optional
+        rm -rf node_modules package-lock.json .npmrc
+        npm config delete platform
+        npm config delete arch
+        npm install --force --no-audit --no-fund
+        
+    - name: Install platform packages for universal build
+      run: |
+        npm install @rollup/rollup-darwin-arm64 --save-dev --force || true
+        npm install @rollup/rollup-darwin-x64 --save-dev --force || true
+        npm install @esbuild/darwin-arm64 --save-dev --force || true
+        npm install @esbuild/darwin-x64 --save-dev --force || true
       
+    - name: Debug file structure
+      run: |
+        echo "=== Checking file structure ==="
+        ls -la src/
+        ls -la src/_pages/
+        ls -la src/utils/
+        echo "=== Checking streamParser import ==="
+        grep -n "streamParser" src/_pages/Solutions.tsx || true
+        
     - name: Build app
       run: npm run build
       
