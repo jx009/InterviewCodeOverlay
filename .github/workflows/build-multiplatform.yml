@@ -26,9 +26,12 @@ jobs:
         node-version: '18'
         
     - name: Clean install
+      shell: bash
       run: |
         rm -rf node_modules package-lock.json
-        npm install --force
+        npm config set target_platform ${{ runner.os == 'macOS' && 'darwin' || runner.os == 'Windows' && 'win32' || 'linux' }}
+        npm config set target_arch ${{ runner.arch }}
+        npm install --force --no-optional
       
     - name: Build app
       run: npm run build
