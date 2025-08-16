@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>清理localStorage</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff; 
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background: #2a2a2a; 
+            padding: 20px; 
+            border-radius: 8px; 
+        }
+        .status { 
+            margin: 10px 0; 
+            padding: 10px; 
+            border-radius: 4px; 
+        }
+        .success { background: #2d5a2d; }
+        .info { background: #2d4a5a; }
+        .warning { background: #5a4a2d; }
+        button { 
+            background: #007acc; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { background: #005a99; }
+        .danger { background: #cc3333; }
+        .danger:hover { background: #aa1111; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 强制清理登录状态</h1>
+        <div id="status"></div>
+        
+        <h2>当前localStorage状态:</h2>
+        <div id="current-status"></div>
+        
+        <h2>操作:</h2>
+        <button onclick="checkStatus()">🔍 检查当前状态</button>
+        <button onclick="clearAllAuth()" class="danger">🗑️ 清除所有认证数据</button>
+        <button onclick="testClean()">✅ 测试清理效果</button>
+        
+        <h2>说明:</h2>
+        <div class="info status">
+            <p>如果你看到"正在跳转到仪表盘"而不是登录表单，说明localStorage中还有认证数据。</p>
+            <p>点击"清除所有认证数据"按钮，然后重新打开登录页面。</p>
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
+        }
+        
+        function updateCurrentStatus() {
+            const currentDiv = document.getElementById('current-status');
+            const sessionId = localStorage.getItem('sessionId');
+            const sessionIdBackup = localStorage.getItem('sessionId_backup');
+            const lastActivity = localStorage.getItem('lastActivity');
+            const token = localStorage.getItem('token');
+            
+            let html = '<div class="status info">';
+            html += '<p><strong>sessionId:</strong> ' + (sessionId ? sessionId.substring(0, 20) + '...' : '未设置') + '</p>';
+            html += '<p><strong>sessionId_backup:</strong> ' + (sessionIdBackup ? sessionIdBackup.substring(0, 20) + '...' : '未设置') + '</p>';
+            html += '<p><strong>lastActivity:</strong> ' + (lastActivity || '未设置') + '</p>';
+            html += '<p><strong>token:</strong> ' + (token ? token.substring(0, 20) + '...' : '未设置') + '</p>';
+            html += '</div>';
+            
+            currentDiv.innerHTML = html;
+        }
+        
+        function checkStatus() {
+            updateCurrentStatus();
+            
+            const sessionId = localStorage.getItem('sessionId');
+            const sessionIdBackup = localStorage.getItem('sessionId_backup');
+            
+            if (sessionId || sessionIdBackup) {
+                updateStatus('⚠️ 发现认证数据！这就是为什么你看到"正在跳转到仪表盘"的原因。', 'warning');
+            } else {
+                updateStatus('✅ 没有发现认证数据，应该能正常显示登录表单。', 'success');
+            }
+        }
+        
+        function clearAllAuth() {
+            console.log('🗑️ 开始清除所有认证数据...');
+            
+            // 清除所有可能的认证相关数据
+            const keysToRemove = [
+                'sessionId',
+                'sessionId_backup', 
+                'lastActivity',
+                'token',
+                'user',
+                'authToken',
+                'refresh_token',
+                'access_token'
+            ];
+            
+            let removedCount = 0;
+            keysToRemove.forEach(key => {
+                if (localStorage.getItem(key)) {
+                    localStorage.removeItem(key);
+                    console.log('🗑️ 已删除:', key);
+                    removedCount++;
+                }
+            });
+            
+            // 清除所有cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            updateStatus('✅ 已清除 ' + removedCount + ' 个认证数据项和所有cookies。现在刷新页面应该能看到登录表单了！', 'success');
+            updateCurrentStatus();
+            
+            console.log('✅ 认证数据清理完成');
+        }
+        
+        function testClean() {
+            checkStatus();
+            const sessionId = localStorage.getItem('sessionId');
+            const sessionIdBackup = localStorage.getItem('sessionId_backup');
+            
+            if (!sessionId && !sessionIdBackup) {
+                updateStatus('✅ 清理成功！现在可以关闭此页面，重新打开登录页面了。', 'success');
+            } else {
+                updateStatus('❌ 还有残留数据，请点击"清除所有认证数据"按钮。', 'warning');
+            }
+        }
+        
+        // 页面加载时自动检查状态
+        window.onload = function() {
+            checkStatus();
+        };
+    </script>
+</body>
+</html>
