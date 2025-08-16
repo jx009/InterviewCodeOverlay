@@ -299,7 +299,6 @@ async function createWindow(): Promise<void> {
     x: state.currentX,
     y: 50,
     alwaysOnTop: true,
-    level: "screen-saver",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -331,7 +330,7 @@ async function createWindow(): Promise<void> {
   state.mainWindow.setSkipTaskbar(true)
   
   // 🆕 强制设置窗口为最高级别，确保覆盖全屏应用
-  state.mainWindow.setAlwaysOnTop(true, "screen-saver")
+  state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
   state.mainWindow.setVisibleOnAllWorkspaces(true)
 
   // 不在这里设置全局穿透，而是通过IPC消息来控制
