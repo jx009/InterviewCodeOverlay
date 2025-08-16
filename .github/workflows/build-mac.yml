@@ -35,6 +35,15 @@ jobs:
         npm install @esbuild/darwin-arm64 --save-dev --force || true
         npm install @esbuild/darwin-x64 --save-dev --force || true
       
+    - name: Debug file structure
+      run: |
+        echo "=== Checking file structure ==="
+        ls -la src/
+        ls -la src/_pages/
+        ls -la src/utils/
+        echo "=== Checking streamParser import ==="
+        grep -n "streamParser" src/_pages/Solutions.tsx || true
+        
     - name: Build app
       run: npm run build
       
