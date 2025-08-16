@@ -316,7 +316,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
-    type: "toolbar",
+    type: process.platform === 'darwin' ? "panel" : "toolbar",
     paintWhenInitiallyHidden: true,
     titleBarStyle: "hidden",
     enableLargerThanScreen: true,
@@ -329,17 +329,14 @@ async function createWindow(): Promise<void> {
   state.mainWindow.setSkipTaskbar(true)
   
   // 🆕 强制设置窗口为最高级别，确保覆盖全屏应用
-  state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
-  state.mainWindow.setVisibleOnAllWorkspaces(true)
-  
-  // 🆕 额外的全屏覆盖设置
   if (process.platform === 'darwin') {
-    // macOS 特殊处理：设置为悬浮窗口
-    state.mainWindow.setAlwaysOnTop(true, "floating" as any)
-    // 强制设置为最高级别
-    setTimeout(() => {
-      state.mainWindow?.setAlwaysOnTop(true, "screen-saver" as any)
-    }, 1000)
+    // macOS 使用 pop-up-menu 级别
+    state.mainWindow.setAlwaysOnTop(true, "pop-up-menu" as any)
+    state.mainWindow.setVisibleOnAllWorkspaces(true)
+    console.log("🔝 初始化时设置窗口为 pop-up-menu 级别")
+  } else {
+    state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
+    state.mainWindow.setVisibleOnAllWorkspaces(true)
   }
 
   // 不在这里设置全局穿透，而是通过IPC消息来控制
@@ -538,14 +535,17 @@ async function createWindow(): Promise<void> {
     }
   }, 1000); // 等待前端加载完成
   
-  // 🆕 强制设置最高级别覆盖
+  // 🆕 强制设置最高级别覆盖 - 使用最强级别
   const ensureAlwaysOnTop = () => {
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
-      state.mainWindow.setVisibleOnAllWorkspaces(true)
       if (process.platform === 'darwin') {
-        // macOS 额外设置
-        state.mainWindow.setAlwaysOnTop(true, "modal-panel" as any)
+        // macOS 使用 pop-up-menu 级别 - 这是唯一能覆盖全屏的级别
+        state.mainWindow.setAlwaysOnTop(true, "pop-up-menu" as any)
+        state.mainWindow.setVisibleOnAllWorkspaces(true)
+        console.log("🔝 设置窗口为 pop-up-menu 级别")
+      } else {
+        state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
+        state.mainWindow.setVisibleOnAllWorkspaces(true)
       }
     }
   }
