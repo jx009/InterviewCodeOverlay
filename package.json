@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.chunginlee.quizcoze",
-    "productName": "QuizCoze-2025.08.16",
+    "productName": "QuizCoze 2025.08.16",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -35,6 +35,10 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
+      "identity": null,
+      "type": "development",
+      "entitlements": null,
+      "entitlementsInherit": null,
       "target": [
         {
           "target": "dmg",

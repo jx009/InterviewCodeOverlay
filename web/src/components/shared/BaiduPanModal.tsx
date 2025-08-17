@@ -10,6 +10,20 @@ const BaiduPanModal: React.FC<BaiduPanModalProps> = ({ isOpen, onClose, platform
   if (!isOpen) return null;
 
   const platformText = platform === 'windows' ? 'Windows版' : 'macOS版';
+  
+  // 根据平台配置不同的下载链接和提取码
+  const downloadConfig = {
+    windows: {
+      link: 'https://pan.baidu.com/s/1example_windows_link',
+      code: 'win1'
+    },
+    macos: {
+      link: 'https://pan.baidu.com/s/1example_macos_link', 
+      code: 'mac1'
+    }
+  };
+  
+  const currentConfig = downloadConfig[platform];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -43,7 +57,7 @@ const BaiduPanModal: React.FC<BaiduPanModalProps> = ({ isOpen, onClose, platform
                 <label className="block text-sm font-medium text-gray-700 mb-1">链接:</label>
                 <div className="bg-white border rounded-md p-2">
                   <code className="text-sm text-blue-600 break-all">
-                    https://pan.baidu.com/s/1doYK5YhyiSaOc3dCVvy4jw?pwd=pbgk
+                    {currentConfig.link}
                   </code>
                 </div>
               </div>
@@ -51,7 +65,7 @@ const BaiduPanModal: React.FC<BaiduPanModalProps> = ({ isOpen, onClose, platform
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">提取码:</label>
                 <div className="bg-white border rounded-md p-2">
-                  <code className="text-sm font-bold text-red-600">pbgk</code>
+                  <code className="text-sm font-bold text-red-600">{currentConfig.code}</code>
                 </div>
               </div>
             </div>
@@ -59,7 +73,7 @@ const BaiduPanModal: React.FC<BaiduPanModalProps> = ({ isOpen, onClose, platform
 
           <div className="flex flex-col space-y-3">
             <a
-              href="https://pan.baidu.com/s/1doYK5YhyiSaOc3dCVvy4jw?pwd=pbgk"
+              href={currentConfig.link}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full bg-blue-600 text-white font-medium py-3 px-4 rounded-md hover:bg-blue-700 transition-colors text-center"

@@ -316,7 +316,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
-    type: "toolbar",
+    type: process.platform === 'darwin' ? "panel" : "toolbar",
     paintWhenInitiallyHidden: true,
     titleBarStyle: "hidden",
     enableLargerThanScreen: true,
@@ -327,6 +327,17 @@ async function createWindow(): Promise<void> {
 
   // 🆕 强制确保不在任务栏显示
   state.mainWindow.setSkipTaskbar(true)
+  
+  // 🆕 强制设置窗口为最高级别，确保覆盖全屏应用
+  if (process.platform === 'darwin') {
+    // macOS 使用 pop-up-menu 级别
+    state.mainWindow.setAlwaysOnTop(true, "pop-up-menu" as any)
+    state.mainWindow.setVisibleOnAllWorkspaces(true)
+    console.log("🔝 初始化时设置窗口为 pop-up-menu 级别")
+  } else {
+    state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
+    state.mainWindow.setVisibleOnAllWorkspaces(true)
+  }
 
   // 不在这里设置全局穿透，而是通过IPC消息来控制
   // state.mainWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -524,11 +535,36 @@ async function createWindow(): Promise<void> {
     }
   }, 1000); // 等待前端加载完成
   
-  // Ensure window is always on top and visible on all workspaces
-  state.mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
-  state.mainWindow.setVisibleOnAllWorkspaces(true, {
-    visibleOnFullScreen: true
-  });
+  // 🆕 强制设置最高级别覆盖 - 使用最强级别
+  const ensureAlwaysOnTop = () => {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+      if (process.platform === 'darwin') {
+        // macOS 使用 pop-up-menu 级别 - 这是唯一能覆盖全屏的级别
+        state.mainWindow.setAlwaysOnTop(true, "pop-up-menu" as any)
+        state.mainWindow.setVisibleOnAllWorkspaces(true)
+        console.log("🔝 设置窗口为 pop-up-menu 级别")
+      } else {
+        state.mainWindow.setAlwaysOnTop(true, "screen-saver" as any)
+        state.mainWindow.setVisibleOnAllWorkspaces(true)
+      }
+    }
+  }
+  
+  // 立即设置
+  ensureAlwaysOnTop()
+  
+  // 添加窗口事件监听，确保始终保持最高级别
+  state.mainWindow.on('focus', () => {
+    ensureAlwaysOnTop()
+  })
+  
+  state.mainWindow.on('blur', () => {
+    // 即使失去焦点也保持最高级别
+    setTimeout(ensureAlwaysOnTop, 100)
+  })
+  
+  // 定期重新设置（确保覆盖全屏应用）
+  setInterval(ensureAlwaysOnTop, 5000)
   
   console.log(`Window created and shown. Visible: ${state.isWindowVisible}, Position: (${state.currentX}, ${state.currentY})`);
   
