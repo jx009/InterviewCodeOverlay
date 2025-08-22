@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { User } from '../types';
 import { Pagination } from '../components/shared/Pagination';
+import UsageSummaryCards from '../components/Admin/UsageSummaryCards';
 
 // 使用与其他模块一致的API基础URL
 const API_BASE_URL = process.env.NODE_ENV === 'production'
@@ -2730,6 +2731,9 @@ export default function ManagerPage() {
         {/* 使用情况统计标签页 */}
         {currentTab === 'usage-stats' && (
           <>
+            {/* 汇总计数卡 */}
+            <UsageSummaryCards className="mb-8" />
+            
             {/* 筛选条件 */}
             <div className="bg-gray-800 rounded-lg p-6 mb-8">
               <h2 className="text-xl font-semibold mb-4">筛选条件</h2>

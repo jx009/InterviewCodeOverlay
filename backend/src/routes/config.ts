@@ -12,7 +12,7 @@ const router = Router();
 const configValidation = [
   body('selectedProvider')
     .optional()
-    .isIn(['claude', 'gemini', 'openai'])
+    .isIn(['claude', 'gemini', 'openai', 'xai'])
     .withMessage('无效的AI服务提供商'),
   // 新的分类模型字段
   body('programmingModel')
@@ -191,12 +191,19 @@ router.get('/models', authenticateToken, async (req: AuthenticatedRequest, res: 
     // 直接返回我们配置的模型列表，使用新的映射规则
     const modelMapping = {
       'claude-sonnet-4-20250514': 'claude-4-sonnet',
+      'claude-opus-4-1-20250805': 'claude-opus-4.1',
+      'claude-opus-4-1-20250805-thinking': 'claude-opus-4.1-thinking',
+      'claude-sonnet-4-20250514-thinking': 'claude4-thinking',
       'gemini-2.5-pro': 'gemini-pro-2.5',
       'gemini-2.5-flash-preview-04-17': 'gemini-flash-2.5',
       'gpt-4o': 'gpt-4o',
       'gpt-4o-mini': 'gpt-4o-mini',
       'o4-mini-high-all': 'o4-mini-high',
-      'o4-mini-all': 'o4-mini'
+      'o4-mini-all': 'o4-mini',
+      'gpt-5-chat-latest': 'gpt5',
+      'gpt-5-mini': 'gpt-5-mini',
+      'gpt-5-nano': 'gpt-5-nano',
+      'grok-4': 'grok4'
     };
 
     const defaultModels = Object.entries(SUPPORTED_MODELS).flatMap(([provider, modelList]) =>
@@ -205,7 +212,7 @@ router.get('/models', authenticateToken, async (req: AuthenticatedRequest, res: 
         modelId: model.id,
         name: model.id,
         displayName: modelMapping[model.id] || model.name,
-        provider: provider as 'claude' | 'gemini' | 'openai',
+        provider: provider as 'claude' | 'gemini' | 'openai' | 'xai',
         category: model.category,
         isActive: true,
         priority: 0,

@@ -1,6 +1,6 @@
 {
   "name": "quizcoze-2025",
-  "version": "2025.08.17",
+  "version": "2025.08.20",
   "main": "./dist-electron/main.js",
   "scripts": {
     "clean": "npx rimraf dist dist-electron",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.chunginlee.quizcoze",
-    "productName": "QuizCoze 2025.08.16",
+    "productName": "QuizCoze 2025.08.20",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

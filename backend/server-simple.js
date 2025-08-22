@@ -107,7 +107,14 @@ const aiModels = [
   { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', category: 'standard' },
   { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', category: 'standard' },
   { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', category: 'premium' },
-  { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', category: 'standard' }
+  { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', category: 'standard' },
+  { id: 8, name: 'claude-opus-4-1-20250805', displayName: 'claude-opus-4.1', provider: 'anthropic', category: 'premium' },
+  { id: 9, name: 'claude-opus-4-1-20250805-thinking', displayName: 'claude-opus-4.1-thinking', provider: 'anthropic', category: 'premium' },
+  { id: 10, name: 'claude-sonnet-4-20250514-thinking', displayName: 'claude4-thinking', provider: 'anthropic', category: 'premium' },
+  { id: 11, name: 'gpt-5-chat-latest', displayName: 'gpt5', provider: 'openai', category: 'premium' },
+  { id: 12, name: 'gpt-5-mini', displayName: 'gpt-5-mini', provider: 'openai', category: 'standard' },
+  { id: 13, name: 'gpt-5-nano', displayName: 'gpt-5-nano', provider: 'openai', category: 'standard' },
+  { id: 14, name: 'grok-4', displayName: 'grok4', provider: 'xai', category: 'premium' }
 ];
 
 // 🆕 增强认证相关配置

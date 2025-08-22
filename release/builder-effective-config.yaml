@@ -2,7 +2,7 @@ directories:
   output: release
   buildResources: assets
 appId: com.chunginlee.quizcoze
-productName: QuizCoze 2025.08.17
+productName: QuizCoze 2025.08.17-test
 files:
   - filter:
       - dist/**/*
@@ -14,6 +14,12 @@ compression: maximum
 generateUpdatesFilesForAllChannels: true
 mac:
   category: public.app-category.developer-tools
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+  type: development
+  entitlements: null
+  entitlementsInherit: null
   target:
     - target: dmg
       arch:
@@ -23,7 +29,7 @@ mac:
       arch:
         - x64
         - arm64
-  artifactName: Interview-Coder-${arch}.${ext}
+  artifactName: QuizCoze-2025.08.16-${arch}.${ext}
   icon: assets/icons/mac/logo_qz.icns
   protocols:
     name: quizcoze-protocol

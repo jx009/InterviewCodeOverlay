@@ -69,14 +69,14 @@ export interface AIModel {
   id: string;
   modelId: string;
   name: string;
-  provider: 'claude' | 'gemini' | 'openai';
+  provider: 'claude' | 'gemini' | 'openai' | 'xai';
   category: 'extraction' | 'solution' | 'debugging' | 'general';
   isActive: boolean;
   priority: number;
 }
 
 export interface UserConfigData {
-  selectedProvider: 'claude' | 'gemini' | 'openai';
+  selectedProvider: 'claude' | 'gemini' | 'openai' | 'xai';
   // 分离的模型配置
   programmingModel: string;
   multipleChoiceModel: string;
@@ -143,7 +143,10 @@ export interface UsageStats {
 // 支持的AI模型配置
 export const SUPPORTED_MODELS = {
   claude: [
-    { id: 'claude-sonnet-4-20250514', name: 'claude-4-sonnet', category: 'general' }
+    { id: 'claude-sonnet-4-20250514', name: 'claude-4-sonnet', category: 'general' },
+    { id: 'claude-opus-4-1-20250805', name: 'claude-opus-4.1', category: 'general' },
+    { id: 'claude-opus-4-1-20250805-thinking', name: 'claude-opus-4.1-thinking', category: 'general' },
+    { id: 'claude-sonnet-4-20250514-thinking', name: 'claude4-thinking', category: 'general' }
   ],
   gemini: [
     { id: 'gemini-2.5-pro', name: 'gemini-pro-2.5', category: 'general' },
@@ -153,7 +156,13 @@ export const SUPPORTED_MODELS = {
     { id: 'gpt-4o', name: 'gpt-4o', category: 'general' },
     { id: 'gpt-4o-mini', name: 'gpt-4o-mini', category: 'general' },
     { id: 'o4-mini-high-all', name: 'o4-mini-high', category: 'general' },
-    { id: 'o4-mini-all', name: 'o4-mini', category: 'general' }
+    { id: 'o4-mini-all', name: 'o4-mini', category: 'general' },
+    { id: 'gpt-5-chat-latest', name: 'gpt5', category: 'general' },
+    { id: 'gpt-5-mini', name: 'gpt-5-mini', category: 'general' },
+    { id: 'gpt-5-nano', name: 'gpt-5-nano', category: 'general' }
+  ],
+  xai: [
+    { id: 'grok-4', name: 'grok4', category: 'general' }
   ]
 } as const;
 

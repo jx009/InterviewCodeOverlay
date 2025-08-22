@@ -932,7 +932,7 @@ router.get('/usage-stats/transactions', async (req: Request, res: Response) => {
  */
 router.get('/usage-stats/summary', async (req: Request, res: Response) => {
   try {
-    const { startDate, endDate, userEmail } = req.query;
+    const { startDate, endDate, userEmail, excludeAdmin } = req.query;
     
     // 构建时间范围条件
     const dateWhere: any = {};
@@ -947,16 +947,19 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
     }
 
     // 用户筛选条件
-    let userWhere = {};
+    let userWhere: any = {};
     if (userEmail) {
-      userWhere = {
-        email: { contains: userEmail as string, mode: 'insensitive' as any }
-      };
+      userWhere.email = { contains: userEmail as string, mode: 'insensitive' as any };
+    }
+    
+    // 排除管理员用户
+    if (excludeAdmin === 'true') {
+      userWhere.role = { not: 'ADMIN' };
     }
 
     // 获取总用户数
     const totalUsers = await prisma.user.count({
-      where: userEmail ? userWhere : {}
+      where: userWhere
     });
 
     // 获取活跃用户数（有积分交易的用户）
@@ -964,7 +967,7 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
       by: ['userId'],
       where: {
         ...dateWhere,
-        ...(userEmail ? { user: userWhere } : {})
+        ...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {})
       }
     });
 
@@ -972,7 +975,7 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
     const transactionStats = await prisma.pointTransaction.aggregate({
       where: {
         ...dateWhere,
-        ...(userEmail ? { user: userWhere } : {})
+        ...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {})
       },
       _count: { id: true },
       _sum: { amount: true }
@@ -983,7 +986,7 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
       by: ['transactionType'],
       where: {
         ...dateWhere,
-        ...(userEmail ? { user: userWhere } : {})
+        ...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {})
       },
       _count: { id: true },
       _sum: { amount: true }
@@ -1006,6 +1009,91 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('获取使用统计失败:', error);
     ResponseUtils.internalError(res, '获取使用统计失败');
+  }
+});
+
+/**
+ * 获取使用情况趋势数据
+ * GET /api/admin/usage-stats/trend
+ */
+router.get('/usage-stats/trend', async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate, excludeAdmin } = req.query;
+    
+    // 构建时间范围条件（默认最近30天）
+    const now = new Date();
+    const defaultStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    const start = startDate ? new Date(startDate as string) : defaultStartDate;
+    const end = endDate ? new Date(endDate as string) : now;
+    
+    // 用户筛选条件
+    let userWhere: any = {};
+    if (excludeAdmin === 'true') {
+      userWhere.role = { not: 'ADMIN' };
+    }
+    
+    // 获取每日趋势数据
+    const dailyTrends = [];
+    const currentDate = new Date(start);
+    
+    while (currentDate <= end) {
+      const dayStart = new Date(currentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      // 获取当天的交易统计
+      const dayTransactions = await prisma.pointTransaction.groupBy({
+        by: ['transactionType'],
+        where: {
+          createdAt: {
+            gte: dayStart,
+            lte: dayEnd
+          },
+          ...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {})
+        },
+        _sum: { amount: true },
+        _count: { id: true }
+      });
+      
+      // 计算当天的消费和充值
+      let consumed = 0;
+      let recharged = 0;
+      
+      dayTransactions.forEach(transaction => {
+        const amount = Math.abs(transaction._sum.amount || 0);
+        if (['consume', 'programming', 'multiple_choice'].includes(transaction.transactionType)) {
+          consumed += amount;
+        } else if (transaction.transactionType === 'recharge') {
+          recharged += amount;
+        }
+      });
+      
+      dailyTrends.push({
+        date: currentDate.toISOString().split('T')[0],
+        consumed,
+        recharged,
+        transactionCount: dayTransactions.reduce((sum, t) => sum + (t._count.id || 0), 0)
+      });
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    ResponseUtils.success(res, {
+      trend: dailyTrends,
+      summary: {
+        totalDays: dailyTrends.length,
+        totalConsumed: dailyTrends.reduce((sum, day) => sum + day.consumed, 0),
+        totalRecharged: dailyTrends.reduce((sum, day) => sum + day.recharged, 0),
+        totalTransactions: dailyTrends.reduce((sum, day) => sum + day.transactionCount, 0)
+      },
+      message: '获取趋势数据成功'
+    });
+  } catch (error) {
+    console.error('获取趋势数据失败:', error);
+    ResponseUtils.internalError(res, '获取趋势数据失败');
   }
 });
 

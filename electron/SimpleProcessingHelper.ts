@@ -710,7 +710,7 @@ export class SimpleProcessingHelper {
           };
         }
 
-        const BASE_URL = 'https://quiz.playoffer.cn';
+        const BASE_URL = 'http://159.75.174.234:3004';
 
         // 1. 检查积分
         const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
@@ -933,7 +933,7 @@ export class SimpleProcessingHelper {
           };
         }
 
-        const BASE_URL = 'https://quiz.playoffer.cn';
+        const BASE_URL = 'http://159.75.174.234:3004';
 
         // 1. 检查积分
         const checkResponse = await fetch(`${BASE_URL}/api/client/credits/check`, {
@@ -994,42 +994,15 @@ export class SimpleProcessingHelper {
         };
       }
 
-      // 根据题目类型提取不同的信息
-      const problemInfo = await this.extractProblemInfo(imageDataList, questionType, userConfig, language, signal)
-
-      if (!problemInfo.success) {
-        // 提取信息失败，退款积分
-        try {
-          await this.refundCredits(operationId, 0, "题目信息提取失败: " + (problemInfo.error || "未知错误"));
-        } catch (refundError) {
-          console.error("退款失败:", refundError);
-          // 继续处理，不中断流程
-        }
-        return problemInfo
-      }
-
-      console.log("✅ 题目信息提取成功:", (problemInfo as any).data)
-
-      // Step 2: 生成解决方案
+      // Step 2: 直接生成解决方案
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
-          message: "正在生成解决方案...",
-          progress: 60
+          message: `正在生成${questionType === 'programming' ? '编程题' : '选择题'}解决方案...`,
+          progress: 40
         })
       }
 
-      // 存储题目信息
-      this.deps.setProblemInfo((problemInfo as any).data)
-
-      // 发送题目提取成功事件
-      if (mainWindow) {
-        mainWindow.webContents.send(
-            this.deps.PROCESSING_EVENTS.PROBLEM_EXTRACTED,
-            (problemInfo as any).data
-        )
-      }
-
-      const solutionsResult = await this.generateSolutions(userConfig, language, (problemInfo as any).data, signal, operationId)
+      const solutionsResult = await this.generateSolutionsDirectly(userConfig, language, imageDataList, questionType, signal, operationId)
 
       console.log('🔍 搜题结果检查 - solutionsResult.success:', solutionsResult.success);
       console.log('🔍 当前operationId:', operationId);
@@ -1119,6 +1092,38 @@ export class SimpleProcessingHelper {
   }
 
   /**
+   * 直接从图片生成解决方案（新方法）
+   */
+  private async generateSolutionsDirectly(userConfig: any, language: string, imageDataList: string[], questionType: 'programming' | 'multiple_choice', signal: AbortSignal, parentOperationId?: string) {
+    try {
+      if (!(await this.ensureAIClient())) {
+        return {
+          success: false,
+          error: "AI客户端初始化失败"
+        }
+      }
+
+      // 根据题目类型选择处理方式
+      if (questionType === 'multiple_choice') {
+        return await this.generateMultipleChoiceSolutionsDirectly(userConfig, imageDataList, signal, parentOperationId)
+      } else {
+        return await this.generateProgrammingSolutionsDirectly(userConfig, language, imageDataList, signal, parentOperationId)
+      }
+
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "处理已被用户取消"
+        }
+      }
+
+      console.error("生成解决方案错误:", error)
+      return { success: false, error: error.message || "生成解决方案失败" }
+    }
+  }
+
+  /**
    * 生成编程题解决方案
    */
   private async generateProgrammingSolutions(userConfig: any, language: string, problemInfo: any, signal: AbortSignal, parentOperationId?: string) {
@@ -1175,9 +1180,10 @@ ${problemInfo.example_output || "未提供示例输出"}
 
 **解决方案要求：**
 1. 仔细分析题目要求，确保理解正确
-2. 选择最合适的算法和数据结构
+2. 必须选择时间最优的算法和数据结构，严禁暴力解法
 3. 代码必须能正确处理所有边界情况
-4. 优化时间和空间复杂度
+4. 优先追求最佳时间复杂度，然后考虑空间复杂度优化
+5. 如果有O(n)解法绝不使用O(n²)，如果有O(logn)解法绝不使用O(n)
 
 **回复格式：**
 
@@ -1212,7 +1218,7 @@ ${problemInfo.example_output || "未提供示例输出"}
         const response = await this.ismaqueClient.chat.completions.create({
           model: mapToActualModel(model, 'programming'),  // 编程题映射
           messages: [
-            { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。" },
+            { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。\n\n**重要要求：**\n- 必须提供时间最优解，追求最佳时间复杂度\n- 严禁使用暴力解法（如多重循环遍历），除非题目规模很小且无更优解法\n- 优先考虑高效算法：动态规划、贪心、分治、图算法、数据结构优化等\n- 如果存在O(n)解法，绝不使用O(n²)或更高复杂度的方法\n- 在保证正确性的前提下，时间复杂度是第一优先级" },
             { role: "user", content: promptText }
           ],
           max_tokens: 6000,
@@ -1428,6 +1434,413 @@ ${problemInfo.example_output || "未提供示例输出"}
       return {
         success: false,
         error: error.message || "AI处理失败，请重试"
+      }
+    }
+  }
+
+  /**
+   * 直接从图片生成编程题解决方案
+   */
+  private async generateProgrammingSolutionsDirectly(userConfig: any, language: string, imageDataList: string[], signal: AbortSignal, parentOperationId?: string) {
+    const operationId = parentOperationId || `prog_direct_${randomUUID()}`;
+    console.log(`📝 编程题直接生成使用操作ID: ${operationId} ${parentOperationId ? '(继承自父级)' : '(新生成)'}`);
+    
+    try {
+      // 🔧 使用可用的模型，优先使用用户配置
+      let model = userConfig.programmingModel || userConfig.aiModel || 'gpt-3.5-turbo'
+      console.log('🎯 使用模型:', model)
+      
+      // 如果没有父级操作ID，说明是独立调用，需要检查和扣除积分
+      if (!parentOperationId) {
+        console.log('💰 独立调用，需要检查并扣除积分');
+        const deductionInfo = await this.checkAndDeductCredits(model, 'programming', operationId);
+
+        if (!deductionInfo.success) {
+          return {
+            success: false,
+            error: deductionInfo.message || "积分检查失败"
+          }
+        }
+      } else {
+        console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
+      }
+
+      // 🆕 使用流式调用替代批式调用
+      console.log('🌊 开始流式AI调用...')
+      let fullContent = ''
+      let chunkCount = 0
+      
+      try {
+        // 创建AI调用（统一使用流式输出）
+        const response = await this.ismaqueClient.chat.completions.create({
+          model: mapToActualModel(model, 'programming'),  // 编程题映射
+          messages: [
+            { 
+              role: "system", 
+              content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是直接从截图中读取编程题目信息，然后提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。\n\n**重要要求：**\n- 必须提供时间最优解，追求最佳时间复杂度\n- 严禁使用暴力解法（如多重循环遍历），除非题目规模很小且无更优解法\n- 优先考虑高效算法：动态规划、贪心、分治、图算法、数据结构优化等\n- 如果存在O(n)解法，绝不使用O(n²)或更高复杂度的方法\n- 在保证正确性的前提下，时间复杂度是第一优先级" 
+            },
+            { 
+              role: "user", 
+              content: [
+                {
+                  type: "text",
+                  text: `请直接从这些截图中读取编程题目信息，并提供最优解决方案。
+
+编程语言：${language}
+
+**解决方案要求：**
+1. 仔细分析截图中的题目要求，确保理解正确
+2. 必须选择时间最优的算法和数据结构，严禁暴力解法
+3. 代码必须能正确处理所有边界情况
+4. 优先追求最佳时间复杂度，然后考虑空间复杂度优化
+5. 如果有O(n)解法绝不使用O(n²)，如果有O(logn)解法绝不使用O(n)
+
+**回复格式：**
+
+**解题思路：**
+- [分析思路1]
+- [分析思路2]
+- [核心算法]
+
+**代码实现：**
+\`\`\`${language}
+[完整的ACM竞赛格式代码]
+\`\`\`
+
+**复杂度分析：**
+时间复杂度：O(X) - [详细解释]
+空间复杂度：O(X) - [详细解释]
+
+**代码要求：**
+- 完整的ACM竞赛格式（包含main函数和输入输出处理）
+- Java语言使用"public class Main"
+- 严格按照题目的输入输出格式
+- 包含必要的导入语句
+- 代码可直接运行，无需修改`
+                },
+                ...imageDataList.map(data => ({
+                  type: "image_url" as const,
+                  image_url: { url: `data:image/png;base64,${data}` }
+                }))
+              ]
+            }
+          ],
+          max_tokens: 6000,
+          temperature: 0.1,
+          stream: true  // 编程题统一使用流式输出
+        }, { signal })
+
+        const isStreamEnabled = true
+        console.log(`✅ 编程题AI调用启动成功 (${isStreamEnabled ? '流式' : '非流式'} 模式)`)
+
+        if (isStreamEnabled) {
+          // 流式处理逻辑
+          const mainWindow = this.deps.getMainWindow()
+          if (!mainWindow) {
+            throw new Error('主窗口不可用')
+          }
+
+          // 🆕 发送流式传输开始信号
+          mainWindow.webContents.send('solution-stream-chunk', {
+            delta: '',
+            fullContent: '',
+            progress: 0,
+            isComplete: false,
+            chunkIndex: 0,
+            streamingStarted: true  // 标识流式传输开始
+          })
+          console.log('🚀 流式传输开始信号已发送')
+
+          // 🆕 流式数据处理循环
+          for await (const chunk of response) {
+          if (signal.aborted) {
+            throw new Error('操作已取消')
+          }
+
+          // 尝试不同的字段路径，适配不同模型的响应格式
+          const delta = (chunk as any).choices[0]?.delta?.content || 
+                       (chunk as any).choices[0]?.message?.content ||
+                       (chunk as any).choices[0]?.text ||
+                       (chunk as any).delta?.content ||
+                       (chunk as any).content ||
+                       ''
+
+          if (delta) {
+            chunkCount++
+            fullContent += delta
+            
+            // 🔧 每个数据块都发送到前端，确保真正的流式效果
+            mainWindow.webContents.send('solution-stream-chunk', {
+              delta: delta,
+              fullContent: fullContent,
+              progress: Math.min(80, chunkCount * 2),
+              isComplete: false,
+              chunkIndex: chunkCount
+            })
+          }
+        }
+
+        // 流式传输完成
+        console.log(`✅ 流式传输完成，总共处理了 ${chunkCount} 个数据块`)
+        console.log(`📄 完整内容长度: ${fullContent.length} 字符`)
+      } else {
+        // 模拟流式传输效果 (fallback)
+        console.log('⚠️ 流式模式未启用，使用模拟流式传输')
+        const chunkSize = 50  // 每个模拟块的字符数
+        const mainWindow = this.deps.getMainWindow()
+        if (mainWindow) {
+          for (let i = 0; i < fullContent.length; i += chunkSize) {
+            if (signal.aborted) {
+              throw new Error('操作已取消')
+            }
+            
+            const chunk = fullContent.substring(i, i + chunkSize)
+            const progress = Math.min(90, (i / fullContent.length) * 90)
+            
+            mainWindow.webContents.send('solution-stream-chunk', {
+              delta: chunk,
+              fullContent: fullContent.substring(0, i + chunkSize),
+              progress: progress,
+              isComplete: false,
+              chunkIndex: Math.floor(i / chunkSize) + 1
+            })
+            
+            // 小延迟模拟真实的流式传输
+            await new Promise(resolve => setTimeout(resolve, 50))
+          }
+        }
+      }
+
+      // 🆕 发送流式传输完成信号
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow) {
+        mainWindow.webContents.send('solution-stream-chunk', {
+          delta: '',
+          fullContent: fullContent,
+          progress: 100,
+          isComplete: true,
+          chunkIndex: chunkCount || Math.ceil(fullContent.length / 50)
+        })
+        console.log('🏁 流式传输完成信号已发送')
+      }
+    } catch (streamError) {
+      console.error('❌ 流式调用错误:', streamError)
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow) {
+        mainWindow.webContents.send('solution-stream-error', streamError.message || '流式调用失败')
+      }
+      
+      throw streamError
+    }
+
+    console.log('✅ AI调用完成')
+
+    // 解析AI响应内容
+    const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
+    const code = codeMatch ? codeMatch[1].trim() : fullContent
+
+    // 提取解题思路
+    const thoughtsMatch = fullContent.match(/\*\*解题思路：?\*\*\s*([\s\S]*?)(?:\*\*代码实现|\*\*复杂度分析|$)/i)
+    const thoughtsText = thoughtsMatch ? thoughtsMatch[1].trim() : ""
+    const thoughts = thoughtsText.split(/[-•]\s*/).filter(thought => thought.trim().length > 0).map(thought => thought.trim())
+
+    // 提取复杂度分析
+    const timeComplexityMatch = fullContent.match(/时间复杂度[：:]\s*([^\n-]+)/i)
+    const timeComplexity = timeComplexityMatch ? timeComplexityMatch[1].trim() : "未分析"
+
+    const spaceComplexityMatch = fullContent.match(/空间复杂度[：:]\s*([^\n-]+)/i)
+    const spaceComplexity = spaceComplexityMatch ? spaceComplexityMatch[1].trim() : "未分析"
+
+    const formattedResponse = {
+      type: 'programming',
+      code: code,
+      thoughts: thoughts.length > 0 ? thoughts : ["基于算法分析的高效解决方案"],
+      time_complexity: timeComplexity,
+      space_complexity: spaceComplexity
+    }
+
+    // 如果没有父级操作ID，标记积分操作完成
+    if (!parentOperationId) {
+      console.log('💰 标记积分操作完成')
+      try {
+        await this.completeCreditsOperation(operationId);
+        console.log('✅ 积分操作完成标记成功');
+      } catch (error) {
+        console.error('❌ 积分完成标记失败:', error);
+        // 继续处理，不中断流程
+      }
+    } else {
+      console.log('ℹ️ 跳过积分完成标记（将由父级方法处理）')
+    }
+
+    return { success: true, data: formattedResponse }
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        error: "处理已被用户取消"
+      }
+    }
+
+    console.error("AI处理错误:", error)
+    return {
+      success: false,
+      error: error.message || "AI处理失败，请重试"
+    }
+  }
+}
+
+  /**
+   * 直接从图片生成选择题解决方案
+   */
+  private async generateMultipleChoiceSolutionsDirectly(userConfig: any, imageDataList: string[], signal: AbortSignal, parentOperationId?: string) {
+    const operationId = parentOperationId || `mcq_direct_${randomUUID()}`;
+    console.log(`📝 选择题直接生成使用操作ID: ${operationId} ${parentOperationId ? '(继承自父级)' : '(新生成)'}`);
+    
+    try {
+      // 🔧 使用可用的模型，优先使用用户配置
+      let model = userConfig.multipleChoiceModel || userConfig.aiModel || 'claude-sonnet-4-20250514'
+      console.log('🎯 使用模型:', model)
+      
+      // 如果没有父级操作ID，说明是独立调用，需要检查和扣除积分
+      if (!parentOperationId) {
+        console.log('💰 独立调用，需要检查并扣除积分');
+        const deductionInfo = await this.checkAndDeductCredits(model, 'multiple_choice', operationId);
+
+        if (!deductionInfo.success) {
+          return {
+            success: false,
+            error: deductionInfo.message || "积分检查失败"
+          }
+        }
+      } else {
+        console.log('ℹ️ 跳过重复的积分检查（已在上层方法中完成）')
+      }
+
+      // 创建AI调用
+      try {
+        const response = await this.ismaqueClient.chat.completions.create({
+          model: mapToActualModel(model, 'multiple_choice'),  // 选择题映射
+          messages: [
+            { 
+              role: "system", 
+              content: "你是一位专业的考试专家和教育工作者。你的任务是直接从截图中读取选择题信息，然后提供准确的分析和答案。请确保分析过程清晰、逻辑严密、答案准确。" 
+            },
+            { 
+              role: "user", 
+              content: [
+                {
+                  type: "text",
+                  text: `请直接从这些截图中读取选择题信息，并提供详细的分析和答案。
+
+**分析要求：**
+1. 仔细阅读截图中的题目内容和选项
+2. 对每道题目进行详细的逻辑分析
+3. 提供清晰的解题思路和推理过程
+4. 给出准确的答案选择
+
+**回复格式：**
+
+**题目分析：**
+- [题目理解和关键信息提取]
+- [选项分析]
+- [解题思路]
+
+**答案选择：**
+[明确的答案选择，如A、B、C、D等]
+
+**详细解释：**
+[详细的推理过程和解释]
+
+如果有多道题目，请按照题目顺序分别分析。`
+                },
+                ...imageDataList.map(data => ({
+                  type: "image_url" as const,
+                  image_url: { url: `data:image/png;base64,${data}` }
+                }))
+              ]
+            }
+          ],
+          max_tokens: 4000,
+          temperature: 0.1,
+          stream: false  // 选择题使用非流式输出
+        }, { signal })
+
+        console.log('✅ 选择题AI调用完成')
+
+        // 解析AI响应
+        let content = ''
+        if (typeof response === 'string') {
+          try {
+            const parsed = JSON.parse(response)
+            content = parsed.choices[0]?.message?.content || ''
+          } catch {
+            content = response
+          }
+        } else {
+          content = response.choices[0]?.message?.content || ''
+        }
+
+        if (!content) {
+          throw new Error('AI响应为空')
+        }
+
+        // 解析响应内容
+        const analysisMatch = content.match(/\*\*题目分析：?\*\*\s*([\s\S]*?)(?:\*\*答案选择|\*\*详细解释|$)/i)
+        const answerMatch = content.match(/\*\*答案选择：?\*\*\s*([A-Z]+)/i)
+        const explanationMatch = content.match(/\*\*详细解释：?\*\*\s*([\s\S]*?)$/i)
+
+        const analysis = analysisMatch ? analysisMatch[1].trim() : ""
+        const thoughts = analysis.split(/[-•]\s*/).filter(thought => thought.trim().length > 0).map(thought => thought.trim())
+        
+        const answer = answerMatch ? answerMatch[1].trim() : "需要人工确认"
+        const explanation = explanationMatch ? explanationMatch[1].trim() : content
+
+        const formattedResponse = {
+          type: 'multiple_choice',
+          questions: [{
+            question_number: 1,
+            selected_answer: answer,
+            explanation: explanation,
+            confidence: 0.9
+          }],
+          thoughts: thoughts.length > 0 ? thoughts : ["基于选择题分析的解答"],
+          analysis: explanation || content
+        }
+
+        // 如果没有父级操作ID，标记积分操作完成
+        if (!parentOperationId) {
+          console.log('💰 标记积分操作完成')
+          try {
+            await this.completeCreditsOperation(operationId);
+            console.log('✅ 积分操作完成标记成功');
+          } catch (error) {
+            console.error('❌ 积分完成标记失败:', error);
+            // 继续处理，不中断流程
+          }
+        } else {
+          console.log('ℹ️ 跳过积分完成标记（将由父级方法处理）')
+        }
+
+        return { success: true, data: formattedResponse }
+
+      } catch (aiError) {
+        console.error('❌ AI调用错误:', aiError)
+        throw aiError
+      }
+
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          error: "处理已被用户取消"
+        }
+      }
+
+      console.error("选择题AI处理错误:", error)
+      return {
+        success: false,
+        error: error.message || "选择题AI处理失败，请重试"
       }
     }
   }
@@ -2265,12 +2678,7 @@ ${questionsText}
       operationId?: string
   ) {
     try {
-      const problemInfo = this.deps.getProblemInfo()
       const mainWindow = this.deps.getMainWindow()
-
-      if (!problemInfo) {
-        throw new Error("没有可用的题目信息")
-      }
 
       if (mainWindow) {
         mainWindow.webContents.send("processing-status", {
@@ -2295,32 +2703,53 @@ ${questionsText}
       const messages = [
         {
           role: "system" as const,
-          content: `你是一位编程面试助手，帮助调试和改进解决方案。分析这些包含错误信息、错误输出或测试用例的截图，并提供详细的调试帮助。
+          content: `你是一位资深的编程调试专家和算法竞赛教练。你的任务是直接从截图中读取编程题目信息和代码错误信息，然后提供详细的调试帮助和改进方案。
+
+**重要要求：**
+- 修正代码时必须提供时间最优解，追求最佳时间复杂度
+- 严禁使用暴力解法，除非题目规模很小且无更优解法
+- 优先考虑高效算法：动态规划、贪心、分治、图算法、数据结构优化等
+- 在保证正确性的前提下，时间复杂度是第一优先级
 
 请按照以下格式提供回复：
-1. 代码：修正后的完整ACM竞赛模式的${language}实现
-2. 解题思路：关键修改和改进的要点列表
-3. 时间复杂度：O(X)格式，并提供详细解释（至少2句话）
-4. 空间复杂度：O(X)格式，并提供详细解释（至少2句话）
-5. 修改说明：详细说明相比原代码进行了哪些修改和为什么需要这些修改`
+
+**代码实现：**
+\`\`\`${language}
+[修正后的完整ACM竞赛模式代码（时间最优解）]
+\`\`\`
+
+**解题思路：**
+- [关键修改和改进的要点列表（重点说明时间复杂度优化）]
+
+**复杂度分析：**
+时间复杂度：O(X) - [详细解释]
+空间复杂度：O(X) - [详细解释]
+
+**修改说明：**
+[详细说明相比原代码进行了哪些修改和为什么需要这些修改（特别是算法优化）]`
         },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const,
-              text: `我正在解决这个编程题目："${problemInfo.problem_statement}"，使用${language}语言。
+              text: `请直接从这些截图中读取编程题目信息和我的代码/错误信息，然后提供详细的调试帮助。
 
-题目约束：
-${problemInfo.constraints || "未提供具体约束条件。"}
+使用编程语言：${language}
 
-示例输入：
-${problemInfo.example_input || "未提供示例输入。"}
+**分析要求：**
+1. 仔细阅读截图中的题目要求和约束条件
+2. 分析我的代码中存在的问题（如果有的话）
+3. 识别错误信息或测试失败的原因
+4. 提供时间最优的改进方案
+5. 确保代码能正确处理所有边界情况
 
-示例输出：
-${problemInfo.example_output || "未提供示例输出。"}
+**特别要求：**
+- 必须选择时间最优的算法和数据结构，严禁暴力解法
+- 优先追求最佳时间复杂度，然后考虑空间复杂度优化
+- 如果有O(n)解法绝不使用O(n²)，如果有O(logn)解法绝不使用O(n)
 
-我需要调试或改进我的解决方案的帮助。这里是我的代码、错误或测试用例的截图。请提供详细分析。`
+请提供完整的、可直接运行的ACM竞赛格式代码。`
             },
             ...imageDataList.map(data => ({
               type: "image_url" as const,
@@ -2444,13 +2873,13 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
 
       // 🆕 调试历史记录保存（暂时禁用，需要实现saveToHistory方法）
-      if (operationId && problemInfo) {
+      if (operationId) {
         console.log('📝 调试会话信息记录:', {
           operationId,
-          question: problemInfo.problem_statement || "调试截图分析", 
+          question: "调试截图分析", 
           model: userConfig.programmingModel || userConfig.aiModel || 'claude-sonnet-4-20250514',
           language: language,
-          hasResponse: !!response
+          hasResponse: !!debugResponse
         });
         // TODO: 实现历史记录保存功能
         // await this.saveToHistory(operationId, { ... })
@@ -2927,7 +3356,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
   private async refundCredits(operationId: string, amount: number, reason: string) {
     const token = simpleAuthManager.getToken();
     if (!token) return; // 如果没有token，无法退款
-    const BASE_URL = 'https://quiz.playoffer.cn';
+    const BASE_URL = 'http://159.75.174.234:3004';
     await fetch(`${BASE_URL}/api/client/credits/refund`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
@@ -2963,7 +3392,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
 
       console.log('🔄 更新结束时间，交易ID:', operation.transactionId)
 
-      const BASE_URL = 'https://quiz.playoffer.cn'
+      const BASE_URL = 'http://159.75.174.234:3004'
       const response = await fetch(`${BASE_URL}/api/client/credits/complete`, {
         method: 'PUT',
         headers: {
@@ -3005,7 +3434,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       const token = simpleAuthManager.getToken()
       if (!token) return null
 
-      const BASE_URL = 'https://quiz.playoffer.cn'
+      const BASE_URL = 'http://159.75.174.234:3004'
       const response = await fetch(`${BASE_URL}/api/client/credits`, {
         method: 'GET',
         headers: {
@@ -3052,7 +3481,7 @@ ${problemInfo.example_output || "未提供示例输出。"}
       }
 
       console.time('credits-check-and-deduct-api')
-      const BASE_URL = 'https://quiz.playoffer.cn'
+      const BASE_URL = 'http://159.75.174.234:3004'
       const url = `${BASE_URL}/api/client/credits/check-and-deduct`
       const requestBody = {
         modelName,

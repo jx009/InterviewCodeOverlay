@@ -1078,7 +1078,7 @@ export class SimpleAuthManager extends EventEmitter {
         url.includes('?auth=success') ||
         url.includes('#auth-success') ||
         url.includes('/auth-success') ||
-        (url.includes('quiz.playoffer.cn') && !url.includes('/login') && !url.includes('/register'))
+        (url.includes('159.75.174.234:3004') && !url.includes('/login') && !url.includes('/register'))
     );
 
     const isBackendRedirect = url.includes('/api/auth/callback');

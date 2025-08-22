@@ -36,6 +36,13 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
           { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
           { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
           { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
+          { id: 8, name: 'claude-opus-4-1-20250805', displayName: 'claude-opus-4.1', provider: 'anthropic', description: 'Claude Opus 4.1，高端推理能力' },
+          { id: 9, name: 'claude-opus-4-1-20250805-thinking', displayName: 'claude-opus-4.1-thinking', provider: 'anthropic', description: 'Claude Opus 4.1 思维模式' },
+          { id: 10, name: 'claude-sonnet-4-20250514-thinking', displayName: 'claude4-thinking', provider: 'anthropic', description: 'Claude 4 Sonnet 思维模式' },
+          { id: 11, name: 'gpt-5-chat-latest', displayName: 'gpt5', provider: 'openai', description: 'GPT-5 最新聊天模型' },
+          { id: 12, name: 'gpt-5-mini', displayName: 'gpt-5-mini', provider: 'openai', description: 'GPT-5 迷你版本' },
+          { id: 13, name: 'gpt-5-nano', displayName: 'gpt-5-nano', provider: 'openai', description: 'GPT-5 纳米版本' },
+          { id: 14, name: 'grok-4', displayName: 'grok4', provider: 'xai', description: 'xAI的Grok-4模型' },
         ];
         setModels(newModels);
         
@@ -65,6 +72,13 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
           { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
           { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
           { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
+          { id: 8, name: 'claude-opus-4-1-20250805', displayName: 'claude-opus-4.1', provider: 'anthropic', description: 'Claude Opus 4.1，高端推理能力' },
+          { id: 9, name: 'claude-opus-4-1-20250805-thinking', displayName: 'claude-opus-4.1-thinking', provider: 'anthropic', description: 'Claude Opus 4.1 思维模式' },
+          { id: 10, name: 'claude-sonnet-4-20250514-thinking', displayName: 'claude4-thinking', provider: 'anthropic', description: 'Claude 4 Sonnet 思维模式' },
+          { id: 11, name: 'gpt-5-chat-latest', displayName: 'gpt5', provider: 'openai', description: 'GPT-5 最新聊天模型' },
+          { id: 12, name: 'gpt-5-mini', displayName: 'gpt-5-mini', provider: 'openai', description: 'GPT-5 迷你版本' },
+          { id: 13, name: 'gpt-5-nano', displayName: 'gpt-5-nano', provider: 'openai', description: 'GPT-5 纳米版本' },
+          { id: 14, name: 'grok-4', displayName: 'grok4', provider: 'xai', description: 'xAI的Grok-4模型' },
         ];
         setModels(mockModels);
         setProgrammingModel('claude-sonnet-4-20250514');
@@ -100,6 +114,12 @@ export default function AIModelSettings({ onClose, onSave }: AIModelSettingsProp
         return (
           <div className="w-6 h-6 mr-2 rounded-full bg-blue-500 flex items-center justify-center">
             <span className="text-xs font-bold text-white">G</span>
+          </div>
+        );
+      case 'xai':
+        return (
+          <div className="w-6 h-6 mr-2 rounded-full bg-black flex items-center justify-center">
+            <span className="text-xs font-bold text-white">X</span>
           </div>
         );
       default:
