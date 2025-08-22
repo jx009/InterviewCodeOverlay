@@ -992,6 +992,33 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
       _sum: { amount: true }
     });
 
+    // 模型使用统计 - 只统计消费类型的交易
+    const modelStats = await prisma.pointTransaction.groupBy({
+      by: ['modelName'],
+      where: {
+        ...dateWhere,
+        ...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {}),
+        transactionType: 'CONSUME',
+        modelName: { not: null }
+      },
+      _count: { id: true },
+      _sum: { amount: true }
+    });
+
+    // 充值统计 - 按金额分组统计充值次数
+    const rechargeStats = await prisma.pointTransaction.groupBy({
+      by: ['amount'],
+      where: {
+        ...dateWhere,
+        ...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {}),
+        transactionType: 'RECHARGE'
+      },
+      _count: { id: true }
+    });
+
+    console.log('🔍 后端调试 - modelStats查询结果:', JSON.stringify(modelStats, null, 2));
+    console.log('🔍 后端调试 - rechargeStats查询结果:', JSON.stringify(rechargeStats, null, 2));
+
     ResponseUtils.success(res, {
       summary: {
         totalUsers,
@@ -1002,6 +1029,15 @@ router.get('/usage-stats/summary', async (req: Request, res: Response) => {
           type: item.transactionType,
           count: item._count.id,
           amount: item._sum.amount || 0
+        })),
+        modelStats: modelStats.map(item => ({
+          model: item.modelName || '未知模型',
+          count: item._count.id,
+          amount: Math.abs(item._sum.amount || 0)
+        })),
+        rechargeStats: rechargeStats.map(item => ({
+          amount: item.amount,
+          count: item._count.id
         }))
       },
       message: '获取使用统计成功'

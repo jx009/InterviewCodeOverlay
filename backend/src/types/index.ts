@@ -180,7 +180,10 @@ export const PROGRAMMING_LANGUAGES = [
   { value: 'swift', label: 'Swift' },
   { value: 'php', label: 'PHP' },
   { value: 'ruby', label: 'Ruby' },
-  { value: 'scala', label: 'Scala' }
+  { value: 'scala', label: 'Scala' },
+  { value: 'shell', label: 'Shell' },
+  { value: 'makefile', label: 'Makefile' },
+  { value: 'verilog', label: 'Verilog' }
 ] as const;
 
 // 扩展Express Request类型

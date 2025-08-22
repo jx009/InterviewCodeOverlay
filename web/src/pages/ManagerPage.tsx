@@ -3,6 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { User } from '../types';
 import { Pagination } from '../components/shared/Pagination';
 import UsageSummaryCards from '../components/Admin/UsageSummaryCards';
+import APITestComponent from '../components/Admin/APITestComponent';
 
 // 使用与其他模块一致的API基础URL
 const API_BASE_URL = process.env.NODE_ENV === 'production'

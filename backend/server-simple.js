@@ -992,8 +992,9 @@ app.get('/api/config/models', authenticateSession, (req, res) => {
 // 获取编程语言列表
 app.get('/api/config/languages', authenticateSession, (req, res) => {
   const languages = [
-    'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#',
-    'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin', 'Dart', 'MySQL'
+    'python', 'javascript', 'java', 'cpp', 'c', 'csharp', 
+    'go', 'rust', 'typescript', 'kotlin', 'swift', 'php', 
+    'ruby', 'scala', 'shell', 'makefile', 'verilog'
   ];
   res.json(languages);
 });

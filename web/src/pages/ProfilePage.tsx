@@ -474,7 +474,7 @@ export default function ProfilePage() {
         { id: 14, name: 'grok-4', displayName: 'grok4', provider: 'xai', description: 'xAI的Grok-4模型' },
       ]
 
-      const defaultLanguages = ['python', 'javascript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust', 'typescript', 'kotlin', 'swift', 'php', 'ruby', 'scala']
+      const defaultLanguages = ['python', 'javascript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust', 'typescript', 'kotlin', 'swift', 'php', 'ruby', 'scala', 'shell', 'makefile', 'verilog']
 
       // 首先设置默认数据
       setAiModels(defaultModels)
@@ -522,7 +522,9 @@ export default function ProfilePage() {
         }
 
         if (languagesData && languagesData.length > 0) {
-          setLanguages(languagesData)
+          // 转换API返回的格式 {value: 'python', label: 'Python'} 为字符串数组
+          const languageValues = languagesData.map((lang: any) => lang.value || lang);
+          setLanguages(languageValues)
         }
       } catch (apiError) {
         console.error('API调用失败，使用默认数据:', apiError)
@@ -823,11 +825,34 @@ export default function ProfilePage() {
                           onChange={(e) => handleConfigChange('language', e.target.value)}
                           className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2"
                       >
-                        {languages.map((lang) => (
+                        {languages.map((lang) => {
+                          // 语言显示名称映射
+                          const languageLabels: Record<string, string> = {
+                            'python': 'Python',
+                            'javascript': 'JavaScript',
+                            'java': 'Java',
+                            'cpp': 'C++',
+                            'c': 'C',
+                            'csharp': 'C#',
+                            'go': 'Go',
+                            'rust': 'Rust',
+                            'typescript': 'TypeScript',
+                            'kotlin': 'Kotlin',
+                            'swift': 'Swift',
+                            'php': 'PHP',
+                            'ruby': 'Ruby',
+                            'scala': 'Scala',
+                            'shell': 'Shell',
+                            'makefile': 'Makefile',
+                            'verilog': 'Verilog'
+                          };
+                          
+                          return (
                             <option key={lang} value={lang}>
-                              {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                              {languageLabels[lang] || lang.charAt(0).toUpperCase() + lang.slice(1)}
                             </option>
-                        ))}
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
