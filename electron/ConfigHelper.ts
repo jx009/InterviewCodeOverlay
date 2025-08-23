@@ -11,6 +11,7 @@ interface Config {
     // 客户端特定设置
     windowPosition?: { x: number; y: number };
     windowSize?: { width: number; height: number };
+    windowWidth?: number; // 🆕 窗口宽度
     lastLanguage?: string; // 最后使用的语言
     opacity?: number; // 窗口透明度（已废弃，保留兼容性）
     backgroundOpacity?: number; // 🆕 背景透明度（代替窗口透明度）

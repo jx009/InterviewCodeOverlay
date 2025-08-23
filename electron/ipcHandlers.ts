@@ -472,16 +472,55 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("web-get-ai-models", async () => {
     try {
-      // 简化版：返回固定的AI模型列表
-      const models = [
+      // 🆕 从数据库动态获取模型列表
+      const token = simpleAuthManager.getToken()
+      if (!token) {
+        console.log("❌ 获取AI模型列表失败：用户未登录")
+        return { success: false, error: "用户未登录", models: [] }
+      }
+
+      const BASE_URL = 'http://159.75.174.234:3004'
+      const response = await fetch(`${BASE_URL}/api/client/credits/models`, {
+        method: 'GET',
+        headers: {
+          'X-Session-Id': token,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const result = await response.json()
+      console.log('📋 从数据库获取模型列表结果:', result)
+
+      if (!response.ok || !result.success) {
+        console.error("❌ 获取模型列表失败:", result.message)
+        // 降级到硬编码列表
+        const fallbackModels = [
+          'claude-sonnet-4-20250514',
+          'gpt-4o', 
+          'gemini-2.5-flash-nothinking'
+        ]
+        return { success: true, models: fallbackModels, source: 'fallback' }
+      }
+
+      // 返回所有可用模型的列表
+      const models = result.data.allModels || []
+      console.log(`✅ 成功获取 ${models.length} 个模型:`, models)
+      
+      return { 
+        success: true, 
+        models: models,
+        source: 'database',
+        byQuestionType: result.data.byQuestionType
+      }
+    } catch (error) {
+      console.error("获取AI模型列表异常:", error)
+      // 降级到硬编码列表
+      const fallbackModels = [
         'claude-sonnet-4-20250514',
         'gpt-4o',
-        'gemini-2.0-flash'
+        'gemini-2.5-flash-nothinking'
       ]
-      return { success: true, models: models }
-    } catch (error) {
-      console.error("Failed to get AI models:", error)
-      return { success: false, error: error.message, models: [] }
+      return { success: true, models: fallbackModels, source: 'fallback', error: error.message }
     }
   })
 

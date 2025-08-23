@@ -58,25 +58,40 @@ export class ShortcutsHelper {
       }
     })
 
+    // 编程题快捷键 - Ctrl+Enter (Command+Enter)
     globalShortcut.register("CommandOrControl+Enter", async () => {
+      console.log("Ctrl/Cmd + Enter pressed. Processing as programming questions...")
       await this.deps.processingHelper?.processScreenshots()
     })
 
-    // 多选题快捷键
-    globalShortcut.register("CommandOrControl+Shift+Enter", async () => {
-      console.log("Ctrl/Cmd + Shift + Enter pressed. Processing as multiple choice questions...")
-      // 生成新的operationId，因为这是独立的快捷键操作
-      const operationId = `shortcut_multiple_choice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice(operationId)
+    // 单选题快捷键 - Alt+Enter (Option+Enter)  
+    globalShortcut.register("Alt+Enter", async () => {
+      console.log("Alt/Option + Enter pressed. Processing as single choice questions...")
+      await this.deps.processingHelper?.processScreenshotsAsChoice()
     })
 
-    globalShortcut.register("CommandOrControl+R", () => {
+    // 多选题快捷键 - Ctrl+Shift+Enter (Command+Shift+Enter)
+    globalShortcut.register("CommandOrControl+Shift+Enter", async () => {
+      console.log("Ctrl/Cmd + Shift + Enter pressed. Processing as multiple choice questions...")
+      await this.deps.processingHelper?.processScreenshotsAsMultipleChoice()
+    })
+
+    globalShortcut.register("CommandOrControl+R", async () => {
       console.log(
         "Command + R pressed. Canceling requests and resetting queues..."
       )
 
       // Cancel ongoing API requests
       this.deps.processingHelper?.cancelOngoingRequests()
+
+      // 🆕 取消所有积分预留和待处理操作
+      if (this.deps.processingHelper) {
+        try {
+          await this.deps.processingHelper.cancelAllCreditReservations()
+        } catch (error) {
+          console.error("取消积分预留失败:", error)
+        }
+      }
 
       // Clear both screenshot queues
       this.deps.clearQueues()
@@ -310,6 +325,120 @@ export class ShortcutsHelper {
       console.log("✅ 水平滚动快捷键注册成功 (Ctrl+Shift+Left/Right)")
     } else {
       console.error("❌ 水平滚动快捷键注册失败")
+    }
+
+    // 🆕 窗口宽度调整快捷键
+    const decreaseWidthSuccess = globalShortcut.register("CommandOrControl+Shift+3", () => {
+      console.log("🔥 Command/Ctrl + Shift + 3 pressed. Decreasing window width...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const oldBounds = mainWindow.getBounds()
+        console.log(`📏 当前窗口尺寸: ${oldBounds.width}x${oldBounds.height} at (${oldBounds.x}, ${oldBounds.y})`)
+        
+        // 检查窗口限制
+        const minSize = mainWindow.getMinimumSize()
+        const maxSize = mainWindow.getMaximumSize()
+        console.log(`🔍 窗口尺寸限制: 最小 ${minSize[0]}x${minSize[1]}, 最大 ${maxSize[0]}x${maxSize[1]}`)
+        
+        const newWidth = oldBounds.width - 50
+        console.log(`📏 计算新宽度: ${newWidth}px (原宽度: ${oldBounds.width}px)`)
+        
+        if (newWidth !== oldBounds.width) {
+          console.log(`🔄 尝试设置窗口尺寸为: ${newWidth}x${oldBounds.height}`)
+          
+          // 强制设置新尺寸
+          mainWindow.setResizable(true)
+          mainWindow.setSize(newWidth, oldBounds.height)
+          
+          // 🆕 标记用户手动调整了窗口大小
+          if ((this.deps as any).setUserManuallyResized) {
+            (this.deps as any).setUserManuallyResized(true)
+            console.log("🔒 标记窗口为用户手动调整状态")
+          }
+          
+          // 🆕 保存宽度到本地配置
+          try {
+            configHelper.updateClientSettings({ windowWidth: newWidth })
+            console.log(`💾 窗口宽度已保存到配置: ${newWidth}px`)
+          } catch (error) {
+            console.error('保存窗口宽度失败:', error)
+          }
+          
+          // 验证调整后的尺寸
+          setTimeout(() => {
+            const newBounds = mainWindow.getBounds()
+            console.log(`🎯 最终窗口尺寸: ${newBounds.width}x${newBounds.height}`)
+            if (newBounds.width === newWidth) {
+              console.log("✅ 窗口宽度调整成功!")
+            } else {
+              console.log(`❌ 窗口宽度调整失败 (期望: ${newWidth}px, 实际: ${newBounds.width}px)`)
+            }
+          }, 100)
+        }
+      }
+    })
+
+    const increaseWidthSuccess = globalShortcut.register("CommandOrControl+Shift+4", () => {
+      console.log("🔥 Command/Ctrl + Shift + 4 pressed. Increasing window width...")
+      const mainWindow = this.deps.getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const oldBounds = mainWindow.getBounds()
+        console.log(`📏 当前窗口尺寸: ${oldBounds.width}x${oldBounds.height} at (${oldBounds.x}, ${oldBounds.y})`)
+        
+        // 检查窗口限制
+        const minSize = mainWindow.getMinimumSize()
+        const maxSize = mainWindow.getMaximumSize()
+        console.log(`🔍 窗口尺寸限制: 最小 ${minSize[0]}x${minSize[1]}, 最大 ${maxSize[0]}x${maxSize[1]}`)
+        
+        const { screen } = require('electron')
+        const primaryDisplay = screen.getPrimaryDisplay()
+        const workArea = primaryDisplay.workArea
+        const systemMaxWidth = workArea.width - 100
+        const windowMaxWidth = maxSize[0] > 0 ? maxSize[0] : systemMaxWidth
+        const effectiveMaxWidth = Math.min(systemMaxWidth, windowMaxWidth)
+        
+        const newWidth = Math.min(effectiveMaxWidth, oldBounds.width + 50)
+        console.log(`📏 计算新宽度: ${newWidth}px (原宽度: ${oldBounds.width}px, 有效最大宽度: ${effectiveMaxWidth}px)`)
+        
+        if (newWidth !== oldBounds.width) {
+          console.log(`🔄 尝试设置窗口尺寸为: ${newWidth}x${oldBounds.height}`)
+          
+          // 强制设置新尺寸
+          mainWindow.setResizable(true)
+          mainWindow.setSize(newWidth, oldBounds.height)
+          
+          // 🆕 标记用户手动调整了窗口大小
+          if ((this.deps as any).setUserManuallyResized) {
+            (this.deps as any).setUserManuallyResized(true)
+            console.log("🔒 标记窗口为用户手动调整状态")
+          }
+          
+          // 🆕 保存宽度到本地配置
+          try {
+            configHelper.updateClientSettings({ windowWidth: newWidth })
+            console.log(`💾 窗口宽度已保存到配置: ${newWidth}px`)
+          } catch (error) {
+            console.error('保存窗口宽度失败:', error)
+          }
+          
+          // 验证调整后的尺寸
+          setTimeout(() => {
+            const newBounds = mainWindow.getBounds()
+            console.log(`🎯 最终窗口尺寸: ${newBounds.width}x${newBounds.height}`)
+            if (newBounds.width === newWidth) {
+              console.log("✅ 窗口宽度调整成功!")
+            } else {
+              console.log(`❌ 窗口宽度调整失败 (期望: ${newWidth}px, 实际: ${newBounds.width}px)`)
+            }
+          }, 100)
+        }
+      }
+    })
+
+    if (decreaseWidthSuccess && increaseWidthSuccess) {
+      console.log("✅ 窗口宽度调整快捷键注册成功 (Ctrl+Shift+3/4)")
+    } else {
+      console.error("❌ 窗口宽度调整快捷键注册失败")
     }
     
     // Unregister shortcuts when quitting

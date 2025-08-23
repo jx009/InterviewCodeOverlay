@@ -459,8 +459,8 @@ export default function ProfilePage() {
       // 首先设置默认的模型数据
       const defaultModels = [
         { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
-        { id: 2, name: 'gemini-2.5-pro', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
-        { id: 3, name: 'gemini-2.5-flash-preview-04-17', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
+        { id: 2, name: 'gemini-2.5-pro-nothinking', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
+        { id: 3, name: 'gemini-2.5-flash-nothinking', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
         { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
         { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
         { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },

@@ -30,6 +30,7 @@ const state = {
   step: 0,
   currentX: 0,
   currentY: 0,
+  userManuallyResized: false, // 🆕 标记用户是否手动调整了窗口大小
 
   // Application helpers
   screenshotHelper: null as ScreenshotHelper | null,
@@ -93,6 +94,7 @@ export interface IShortcutsHelperDeps {
   moveWindowRight: () => void
   moveWindowUp: () => void
   moveWindowDown: () => void
+  setUserManuallyResized: (resized: boolean) => void // 🆕 添加标记函数
 }
 
 export interface IIpcHandlerDeps {
@@ -225,7 +227,11 @@ function initializeHelpers() {
         )
       ),
     moveWindowUp: () => moveWindowVertical((y) => y - state.step),
-    moveWindowDown: () => moveWindowVertical((y) => y + state.step)
+    moveWindowDown: () => moveWindowVertical((y) => y + state.step),
+    setUserManuallyResized: (resized: boolean) => {
+      state.userManuallyResized = resized
+      console.log(`🔄 设置用户手动调整状态: ${resized}`)
+    }
   } as IShortcutsHelperDeps)
 }
 
@@ -286,15 +292,22 @@ async function createWindow(): Promise<void> {
   state.step = 60
   state.currentY = 50
 
-  // 🆕 从配置中加载保存的背景透明度
+  // 🆕 从配置中加载保存的背景透明度和窗口宽度
   const config = configHelper.loadConfig()
   const savedBackgroundOpacity = config.clientSettings?.backgroundOpacity || 0.8
+  const savedWindowWidth = config.clientSettings?.windowWidth || 800
   console.log(`Loading saved background opacity: ${savedBackgroundOpacity}`)
+  console.log(`Loading saved window width: ${savedWindowWidth}px`)
+  
+  // 如果有保存的宽度且不是默认值，标记为用户手动调整
+  if (config.clientSettings?.windowWidth && config.clientSettings.windowWidth !== 800) {
+    state.userManuallyResized = true
+    console.log("🔒 检测到保存的自定义宽度，标记为用户手动调整状态")
+  }
 
   const windowSettings: Electron.BrowserWindowConstructorOptions = {
-    width: 800,
+    width: savedWindowWidth,
     height: 600,
-    minWidth: 750,
     minHeight: 550,
     x: state.currentX,
     y: 50,
@@ -316,7 +329,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#00000000",
     focusable: true,
     skipTaskbar: true,
-    type: process.platform === 'darwin' ? "panel" : "toolbar",
+    resizable: true,
     paintWhenInitiallyHidden: true,
     titleBarStyle: "hidden",
     enableLargerThanScreen: true,
@@ -812,6 +825,15 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
 // Window dimension functions
 function setWindowDimensions(width: number, height: number): void {
   if (!state.mainWindow?.isDestroyed()) {
+    // 🆕 如果用户手动调整了窗口大小，则跳过自动调整宽度
+    if (state.userManuallyResized) {
+      console.log("⚠️ 用户已手动调整窗口大小，跳过自动宽度调整")
+      // 只调整高度，保留用户设置的宽度
+      const currentBounds = state.mainWindow.getBounds()
+      state.mainWindow.setSize(currentBounds.width, Math.ceil(height))
+      return
+    }
+
     const [currentX, currentY] = state.mainWindow.getPosition()
     const primaryDisplay = screen.getPrimaryDisplay()
     const workArea = primaryDisplay.workAreaSize
@@ -1021,7 +1043,9 @@ function getExtraScreenshotQueue(): string[] {
 function clearQueues(): void {
   state.screenshotHelper?.clearQueues()
   state.problemInfo = null
+  state.userManuallyResized = false // 🆕 重置时清除手动调整标志
   setView("queue")
+  console.log("🔄 已重置窗口手动调整状态")
 }
 
 async function takeScreenshot(): Promise<string> {

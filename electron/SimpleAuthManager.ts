@@ -58,10 +58,10 @@ export class SimpleAuthManager extends EventEmitter {
   private userConfig: UserConfig | null = null
   private apiBaseUrl: string
   private apiClient: AxiosInstance
-  private configCacheExpiry: number = 0 // 配置缓存过期时间
+  // 配置缓存已移除，每次都从数据库实时读取
   private isAutoReloginInProgress: boolean = false // 防止并发自动重新登录
 
-  constructor(apiBaseUrl: string = 'https://quiz.playoffer.cn') {
+  constructor(apiBaseUrl: string = 'http://159.75.174.234:3004') {
     super()
     this.apiBaseUrl = apiBaseUrl
 
@@ -440,7 +440,7 @@ export class SimpleAuthManager extends EventEmitter {
   }
 
   /**
-   * 刷新用户配置（带缓存机制）
+   * 刷新用户配置（每次都从数据库实时读取，不使用缓存）
    */
   public async refreshUserConfig(forceRefresh: boolean = false): Promise<UserConfig | null> {
     if (!this.token || !this.user) {
@@ -448,35 +448,38 @@ export class SimpleAuthManager extends EventEmitter {
       return null
     }
 
-    // 检查缓存是否有效（5分钟缓存）
-    const now = Date.now()
-    const cacheAge = now - this.configCacheExpiry
-    const cacheValid = cacheAge < 5 * 60 * 1000
-
-    console.log(`📋 配置缓存状态检查:`)
-    console.log(`  - 强制刷新: ${forceRefresh}`)
-    console.log(`  - 缓存年龄: ${Math.round(cacheAge / 1000)}秒`)
-    console.log(`  - 缓存有效: ${cacheValid}`)
-    console.log(`  - 当前有配置: ${!!this.userConfig}`)
-
-    if (!forceRefresh && cacheValid && this.userConfig) {
-      console.log('📋 使用缓存的用户配置')
-      console.log(`📋 缓存配置详情: multipleChoiceModel=${this.userConfig.multipleChoiceModel}`)
-      return this.userConfig
-    }
-
-    console.log(`🔄 开始${forceRefresh ? '强制' : '自动'}刷新配置...`)
+    console.log('🔄 从数据库实时读取用户配置（无缓存）...')
     try {
       await this.fetchUserConfig()
-      this.configCacheExpiry = now
-      console.log('✅ 配置已刷新并缓存')
-      console.log(`📋 新配置详情: multipleChoiceModel=${this.userConfig?.multipleChoiceModel}`)
+      console.log('✅ 用户配置已从数据库刷新')
+      console.log(`📋 最新配置详情: multipleChoiceModel=${this.userConfig?.multipleChoiceModel}, programmingModel=${this.userConfig?.programmingModel}`)
       return this.userConfig
     } catch (error) {
-      console.error('❌ 刷新用户配置失败:', error)
-      // 如果刷新失败但有缓存，返回缓存
+      console.error('❌ 从数据库读取用户配置失败:', error)
+      return null
+    }
+  }
+
+  /**
+   * 🆕 获取用户配置（完全绕过缓存，专用于处理操作）
+   */
+  public async getFreshUserConfig(): Promise<UserConfig | null> {
+    if (!this.token || !this.user) {
+      console.log('❌ 无法获取新配置：缺少token或用户信息')
+      return null
+    }
+
+    console.log('🔄 获取最新用户配置（绕过缓存）...')
+    try {
+      await this.fetchUserConfig()
+      console.log('✅ 获取最新配置成功')
+      console.log(`📋 最新配置详情: multipleChoiceModel=${this.userConfig?.multipleChoiceModel}, programmingModel=${this.userConfig?.programmingModel}, language=${this.userConfig?.language}`)
+      return this.userConfig
+    } catch (error) {
+      console.error('❌ 获取最新用户配置失败:', error)
+      // 如果获取失败但有现有配置，返回现有配置
       if (this.userConfig) {
-        console.log('📋 刷新失败，使用缓存配置')
+        console.log('📋 获取最新配置失败，使用现有配置')
         return this.userConfig
       }
       return null

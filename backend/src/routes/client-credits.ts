@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PointService } from '../services/PointService';
 import { ResponseUtils } from '../utils/response';
 import { QuestionType } from '../types/points';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, optionalAuth } from '../middleware/auth';
 import { body, param } from 'express-validator';
 import { validateRequest } from '../middleware/validation';
 import { PrismaClient } from '@prisma/client';
@@ -33,12 +33,15 @@ const getUserId = async (req: Request, res: Response, next: Function) => {
     }
 
     // 两种认证都失败
-    return ResponseUtils.unauthorized(res, '用户未认证');
+    ResponseUtils.unauthorized(res, '用户未认证');
+    return;
   } catch (error) {
     console.error('认证中间件错误:', error);
-    return ResponseUtils.unauthorized(res, '认证失败');
+    ResponseUtils.unauthorized(res, '认证失败');
+    return;
   }
 };
+
 
 /**
  * 获取用户积分余额
@@ -47,6 +50,7 @@ const getUserId = async (req: Request, res: Response, next: Function) => {
  */
 router.get('/', authMiddleware, getUserId, async (req: Request, res: Response) => {
   try {
+    console.log('📊 根路由被调用 - 文件已加载');
     const userId = (req as any).userId;
     if (!userId) {
       return ResponseUtils.unauthorized(res, '用户ID无效');
@@ -653,5 +657,6 @@ router.put('/complete',
     }
   }
 );
+
 
 export default router; 

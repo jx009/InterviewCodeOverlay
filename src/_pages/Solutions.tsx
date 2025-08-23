@@ -77,7 +77,24 @@ const SolutionSection = ({
 
   const copyToClipboard = () => {
     // 🆕 优先复制流式内容，否则复制最终内容
-    const textToCopy = (isStreaming && streamingContent) ? streamingContent : content
+    let textToCopy = content
+    
+    if (isStreaming && streamingContent) {
+      // 🆕 优化的复制代码提取 - 优先从**代码实现：**部分提取
+      const codeImplMatch = streamingContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
+      if (codeImplMatch) {
+        textToCopy = codeImplMatch[1].trim()
+      } else {
+        // 后备方案：传统代码块提取
+        const codeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*?)(?:```|$)/)
+        if (codeMatch && codeMatch[1]) {
+          textToCopy = codeMatch[1].trim()
+        } else {
+          textToCopy = streamingContent
+        }
+      }
+    }
+    
     if (typeof textToCopy === "string") {
       navigator.clipboard.writeText(textToCopy).then(() => {
         setCopied(true)
@@ -90,27 +107,54 @@ const SolutionSection = ({
   let displayContent = content
   
   if (isStreaming && streamingContent) {
-    // 🔧 从流式内容中提取代码部分进行显示
-    const codeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*?)(?:```|$)/)
-    if (codeMatch && codeMatch[1]) {
-      // 找到代码块，显示代码内容
-      displayContent = codeMatch[1]
+    // 🆕 优化的流式代码提取 - 优先从**代码实现：**部分提取
+    const codeImplMatch = streamingContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
+    if (codeImplMatch) {
+      displayContent = codeImplMatch[1].trim()
+      console.log('✅ SolutionSection从代码实现部分提取到代码，长度:', displayContent.length)
     } else {
-      // 没有找到完整代码块，尝试查找部分代码
-      const partialCodeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*)$/)
-      if (partialCodeMatch && partialCodeMatch[1]) {
-        displayContent = partialCodeMatch[1]
-      } else {
-        // 如果没有代码块标记，检查是否包含代码关键字，如果是则显示原始内容
-        if (streamingContent.includes('def ') || streamingContent.includes('function') || 
-            streamingContent.includes('class ') || streamingContent.includes('import') ||
-            streamingContent.includes('public ') || streamingContent.includes('#include') ||
-            streamingContent.includes('var ') || streamingContent.includes('let ') ||
-            streamingContent.includes('const ') || streamingContent.includes('int main')) {
-          displayContent = streamingContent
+      // 后备方案：传统代码块提取，但检查是否是示例
+      const codeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*?)(?:```|$)/)
+      if (codeMatch && codeMatch[1]) {
+        const code = codeMatch[1].trim()
+        const firstLine = code.split('\n')[0]
+        const mightBeExample = /^\d+[\s\d]*$/.test(firstLine)
+        
+        if (mightBeExample) {
+          // 可能是示例，尝试找其他代码块
+          const allCodeMatches = streamingContent.match(/```[\s\S]*?```/g) || []
+          if (allCodeMatches.length > 1) {
+            const secondCodeBlock = allCodeMatches[1]
+            const secondCode = secondCodeBlock.replace(/```\w*\n?/, '').replace(/```\s*$/, '').trim()
+            if (secondCode.length > 20 && (secondCode.includes('def') || secondCode.includes('main') || secondCode.includes('function') || secondCode.includes('class'))) {
+              displayContent = secondCode
+              console.log('✅ SolutionSection使用第二个代码块（跳过示例）')
+            } else {
+              displayContent = code
+            }
+          } else {
+            displayContent = code
+          }
         } else {
-          // 如果当前内容不像代码，则保持显示已有的内容或空
-          displayContent = content || ""
+          displayContent = code
+        }
+      } else {
+        // 没有找到完整代码块，尝试查找部分代码
+        const partialCodeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*)$/)
+        if (partialCodeMatch && partialCodeMatch[1]) {
+          displayContent = partialCodeMatch[1]
+        } else {
+          // 如果没有代码块标记，检查是否包含代码关键字，如果是则显示原始内容
+          if (streamingContent.includes('def ') || streamingContent.includes('function') || 
+              streamingContent.includes('class ') || streamingContent.includes('import') ||
+              streamingContent.includes('public ') || streamingContent.includes('#include') ||
+              streamingContent.includes('var ') || streamingContent.includes('let ') ||
+              streamingContent.includes('const ') || streamingContent.includes('int main')) {
+            displayContent = streamingContent
+          } else {
+            // 如果当前内容不像代码，则保持显示已有的内容或空
+            displayContent = content || ""
+          }
         }
       }
     }
@@ -498,12 +542,20 @@ const Solutions: React.FC<SolutionsProps> = ({
         queryClient.setQueryData(["solution"], data)
 
         // Set state based on data type
-        if (data.type === 'multiple_choice') {
-          // Multiple choice data processing
-          console.log("🎯 Processing multiple choice data")
-          setSolutionData(null) // Multiple choice doesn't show code
+        if (data.type === 'multiple_choice' || data.type === 'single_choice') {
+          // Multiple choice or single choice data processing
+          console.log(`🎯 Processing ${data.type === 'single_choice' ? 'single' : 'multiple'} choice data`)
+          console.log('📊 Choice data details:', {
+            hasAnswers: !!data.answers,
+            answersLength: data.answers?.length || 0,
+            answersData: data.answers,
+            hasThoughts: !!data.thoughts,
+            thoughtsLength: data.thoughts?.length || 0,
+            thoughtsData: data.thoughts
+          })
+          setSolutionData(null) // Choice questions don't show code
           setThoughtsData(data.thoughts || null)
-          setTimeComplexityData(null) // Multiple choice doesn't show complexity
+          setTimeComplexityData(null) // Choice questions don't show complexity
           setSpaceComplexityData(null)
           setMultipleChoiceAnswers(data.answers || null)
         } else {

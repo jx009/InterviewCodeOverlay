@@ -324,7 +324,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="truncate">解决</span>
+                              <span className="truncate">编程题</span>
                               <div className="flex gap-1 flex-shrink-0">
                             <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
                               {COMMAND_KEY}
@@ -338,6 +338,49 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                               {screenshotCount > 0
                                   ? "根据当前问题生成解决方案。"
                                   : "请先截屏然后生成解决方案。"}
+                            </p>
+                          </div>
+
+                          {/* Single Choice Command */}
+                          <div
+                              className="cursor-pointer rounded px-2 py-1.5 hover:bg-white/10 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="truncate">单选题</span>
+                              <div className="flex gap-1 flex-shrink-0">
+                            <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                              Alt
+                            </span>
+                                <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                              ↵
+                            </span>
+                              </div>
+                            </div>
+                            <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
+                              分析单选题并给出答案。
+                            </p>
+                          </div>
+
+                          {/* Multiple Choice Command */}
+                          <div
+                              className="cursor-pointer rounded px-2 py-1.5 hover:bg-white/10 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="truncate">多选题</span>
+                              <div className="flex gap-1 flex-shrink-0">
+                            <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                              {COMMAND_KEY}
+                            </span>
+                            <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                              Shift
+                            </span>
+                                <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] leading-none">
+                              ↵
+                            </span>
+                              </div>
+                            </div>
+                            <p className="text-[10px] leading-relaxed text-white/70 truncate mt-1">
+                              分析多选题并给出答案。
                             </p>
                           </div>
 

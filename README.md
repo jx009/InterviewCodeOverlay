@@ -68,7 +68,9 @@ The application uses unidentifiable global keyboard shortcuts that won't be dete
 - Move Window: [Control or Cmd + Arrow keys]
 - Take Screenshot: [Control or Cmd + H]
 - Delete Last Screenshot: [Control or Cmd + L]
-- Process Screenshots: [Control or Cmd + Enter]
+- **Process as Programming Question**: [Control or Cmd + Enter]
+- **Process as Single Choice Question**: [Alt or Option + Enter]
+- **Process as Multiple Choice Question**: [Control or Cmd + Shift + Enter]
 - Start New Problem: [Control or Cmd + R]
 - Quit: [Control or Cmd + Q]
 - Decrease Opacity: [Control or Cmd + []
@@ -76,6 +78,8 @@ The application uses unidentifiable global keyboard shortcuts that won't be dete
 - Zoom Out: [Control or Cmd + -]
 - Reset Zoom: [Control or Cmd + 0]
 - Zoom In: [Control or Cmd + =]
+- **Decrease Window Width**: [Control or Cmd + Shift + 3]
+- **Increase Window Width**: [Control or Cmd + Shift + 4]
 
 ## Invisibility Compatibility
 

@@ -17,7 +17,7 @@ export interface ParsedStreamContent {
 }
 
 /**
- * 解析流式编程题解决方案
+ * 解析流式编程题解决方案 - 支持JSON格式
  */
 export function parseStreamedProgrammingSolution(content: string): ParsedStreamContent {
   const result: ParsedStreamContent = {
@@ -30,6 +30,7 @@ export function parseStreamedProgrammingSolution(content: string): ParsedStreamC
     progress: 0
   }
 
+  // 🆕 使用改进的markdown格式解析（优先代码实现部分）
   // 计算内容完整度，用于进度估算
   const hasThoughts = content.includes('思路') || content.includes('解题思路')
   const hasCode = content.includes('```')
@@ -42,20 +43,42 @@ export function parseStreamedProgrammingSolution(content: string): ParsedStreamC
   
   result.progress = Math.min(progress, 95) // 最高95%，完成时才100%
 
-  // 提取代码块 - 支持不完整的代码块
-  const codeMatches = content.match(/```[\s\S]*?```/g) || []
-  if (codeMatches.length > 0) {
-    // 取最后一个代码块（最完整的）
-    const lastCodeBlock = codeMatches[codeMatches.length - 1]
-    result.code = lastCodeBlock
-      .replace(/```\w*\n?/, '')  // 移除开始标记
-      .replace(/```\s*$/, '')    // 移除结束标记
-      .trim()
+  // 🆕 优化的代码提取逻辑 - 优先从**代码实现：**部分提取
+  const codeImplMatch = content.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
+  if (codeImplMatch) {
+    result.code = codeImplMatch[1].trim()
+    console.log('✅ 从代码实现部分提取到代码 (流式):', {
+      codeLength: result.code.length,
+      startsWithValidCode: result.code.includes('main') || result.code.includes('def') || result.code.includes('class') || result.code.includes('function')
+    })
   } else {
-    // 如果没有完整代码块，尝试提取部分代码
-    const partialCodeMatch = content.match(/```[\w]*\n?([\s\S]*)$/m)
-    if (partialCodeMatch) {
-      result.code = partialCodeMatch[1]?.trim() || ''
+    // 后备方案：提取代码块，但检查是否是示例
+    const codeMatches = content.match(/```[\s\S]*?```/g) || []
+    if (codeMatches.length > 0) {
+      // 先检查第一个代码块是否像示例输入
+      const firstCodeBlock = codeMatches[0]
+      const firstCode = firstCodeBlock.replace(/```\w*\n?/, '').replace(/```\s*$/, '').trim()
+      const mightBeExample = /^\d+[\s\d]*$/.test(firstCode.split('\n')[0])
+      
+      if (mightBeExample && codeMatches.length > 1) {
+        // 如果第一个像示例，尝试第二个
+        const secondCodeBlock = codeMatches[1]
+        const secondCode = secondCodeBlock.replace(/```\w*\n?/, '').replace(/```\s*$/, '').trim()
+        if (secondCode.length > 20 && (secondCode.includes('def') || secondCode.includes('main') || secondCode.includes('function') || secondCode.includes('class'))) {
+          result.code = secondCode
+          console.log('✅ 使用第二个代码块 (流式，跳过示例)')
+        } else {
+          result.code = firstCode // 还是用第一个
+        }
+      } else {
+        result.code = firstCode
+      }
+    } else {
+      // 如果没有完整代码块，尝试提取部分代码
+      const partialCodeMatch = content.match(/```[\w]*\n?([\s\S]*)$/m)
+      if (partialCodeMatch) {
+        result.code = partialCodeMatch[1]?.trim() || ''
+      }
     }
   }
 

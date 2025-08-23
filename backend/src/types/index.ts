@@ -149,8 +149,8 @@ export const SUPPORTED_MODELS = {
     { id: 'claude-sonnet-4-20250514-thinking', name: 'claude4-thinking', category: 'general' }
   ],
   gemini: [
-    { id: 'gemini-2.5-pro', name: 'gemini-pro-2.5', category: 'general' },
-    { id: 'gemini-2.5-flash-preview-04-17', name: 'gemini-flash-2.5', category: 'general' }
+    { id: 'gemini-2.5-pro-nothinking', name: 'gemini-pro-2.5', category: 'general' },
+    { id: 'gemini-2.5-flash-nothinking', name: 'gemini-flash-2.5', category: 'general' }
   ],
   openai: [
     { id: 'gpt-4o', name: 'gpt-4o', category: 'general' },
