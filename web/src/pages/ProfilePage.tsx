@@ -67,6 +67,40 @@ interface InviteRecharge {
   };
 }
 
+// 新增邀请汇总数据类型
+interface InviteSummary {
+  userInfo: {
+    id: number;
+    username: string;
+    isTrafficAgent: boolean;
+  };
+  pointRewards: {
+    totalRewards: number;
+    registerRewards: number;
+    rechargeRewards: number;
+  };
+  commissionSummary?: {
+    totalCommission: number;
+    pendingCommission: number;
+    paidCommission: number;
+    monthlyCommission: number;
+  };
+}
+
+// 佣金记录类型
+interface CommissionRecord {
+  id: number;
+  inviteeId: number;
+  inviteeUsername: string;
+  inviteeEmail: string;
+  rechargeAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  paymentOrderId: string;
+  status: string;
+  createdAt: string;
+}
+
 export default function ProfilePage() {
   const { user, logout, isAuthenticated, loading: authLoading } = useAuthContext()
   const [config, setConfig] = useState<UserConfig | null>(null)
@@ -93,7 +127,7 @@ export default function ProfilePage() {
   const [copySuccess, setCopySuccess] = useState(false)
 
   // 邀请记录状态
-  const [inviteDetailTab, setInviteDetailTab] = useState<'overview' | 'registrations' | 'recharges'>('overview')
+  const [inviteDetailTab, setInviteDetailTab] = useState<'overview' | 'registrations' | 'recharges' | 'commissions'>('overview')
   const [registrations, setRegistrations] = useState<InviteRegistration[]>([])
   const [recharges, setRecharges] = useState<InviteRecharge[]>([])
   const [registrationsLoading, setRegistrationsLoading] = useState(false)
@@ -126,6 +160,18 @@ export default function ProfilePage() {
     totalRechargeCount: 0
   })
 
+  // 新增：邀请汇总数据状态
+  const [inviteSummary, setInviteSummary] = useState<InviteSummary | null>(null)
+  const [inviteSummaryLoading, setInviteSummaryLoading] = useState(false)
+
+  // 新增：佣金记录状态（仅流量手）
+  const [commissionRecords, setCommissionRecords] = useState<CommissionRecord[]>([])
+  const [commissionLoading, setCommissionLoading] = useState(false)
+  const [commissionPage, setCommissionPage] = useState(1)
+  const [commissionTotalPages, setCommissionTotalPages] = useState(1)
+  const [commissionPageSize] = useState(10)
+
+
   // 检查认证状态，与ProtectedRoute保持一致
   const hasSessionId = !!localStorage.getItem('sessionId');
   const hasValidSession = isAuthenticated || hasSessionId;
@@ -152,12 +198,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (currentTab === 'invite' && hasValidSession) {
       loadInviteData();
+      loadInviteSummary(); // 加载新的邀请汇总数据
     }
   }, [currentTab, hasValidSession]);
 
   // 加载邀请详细记录（应用默认筛选）
   useEffect(() => {
-    if (currentTab === 'invite' && hasValidSession) {
+    if (currentTab === 'invite' && hasValidSession && inviteSummary) {
       console.log('🎯 加载邀请数据，使用默认筛选:', inviteFilters);
       if (inviteDetailTab === 'overview') {
         loadInviteStats(inviteFilters);
@@ -165,9 +212,11 @@ export default function ProfilePage() {
         loadInviteRegistrations(1, inviteFilters);
       } else if (inviteDetailTab === 'recharges') {
         loadInviteRecharges(1, inviteFilters);
+      } else if (inviteDetailTab === 'commissions' && inviteSummary?.userInfo.isTrafficAgent) {
+        loadCommissionRecords(1);
       }
     }
-  }, [currentTab, hasValidSession, inviteDetailTab]); // 注意：这里不包含inviteFilters，避免循环
+  }, [currentTab, hasValidSession, inviteDetailTab, inviteSummary]); // 注意：这里不包含inviteFilters，避免循环
 
   const loadInviteData = async () => {
     if (!user?.id) return;
@@ -281,6 +330,53 @@ export default function ProfilePage() {
     }
   };
 
+  // 加载邀请汇总数据
+  const loadInviteSummary = async () => {
+    try {
+      setInviteSummaryLoading(true);
+      console.log('🔍 调用邀请汇总API...');
+      const result = await inviteApi.getInviteSummary();
+      console.log('📊 邀请汇总API返回结果:', result);
+
+      if (result.success) {
+        setInviteSummary(result.data);
+        console.log('✅ 邀请汇总数据加载成功:', {
+          isTrafficAgent: result.data.userInfo.isTrafficAgent,
+          totalRewards: result.data.pointRewards.totalRewards
+        });
+      }
+    } catch (error) {
+      console.error('❌ 加载邀请汇总数据失败:', error);
+      setMessage('加载邀请汇总数据失败');
+    } finally {
+      setInviteSummaryLoading(false);
+    }
+  };
+
+  // 加载佣金记录（仅流量手）
+  const loadCommissionRecords = async (page: number = 1) => {
+    try {
+      setCommissionLoading(true);
+      console.log('🔍 调用佣金记录API，参数:', { page, limit: commissionPageSize });
+      const result = await inviteApi.getCommissionRecords({
+        page,
+        limit: commissionPageSize
+      });
+      console.log('💰 佣金记录API返回结果:', result);
+
+      if (result.success) {
+        setCommissionRecords(result.data.records);
+        setCommissionPage(result.data.page);
+        setCommissionTotalPages(result.data.totalPages);
+      }
+    } catch (error) {
+      console.error('❌ 加载佣金记录失败:', error);
+      setMessage('加载佣金记录失败');
+    } finally {
+      setCommissionLoading(false);
+    }
+  };
+
   // 处理筛选
   const handleInviteFilter = () => {
     console.log('🔍 确认筛选被点击，当前筛选条件:', inviteFilters);
@@ -350,24 +446,43 @@ export default function ProfilePage() {
   };
 
   const copyInviteUrl = async () => {
-    if (!inviteData?.inviteUrl) return;
+    if (!inviteData?.inviteUrl) {
+      console.error('❌ 邀请链接不存在');
+      setMessage('邀请链接不存在');
+      return;
+    }
 
     try {
       await navigator.clipboard.writeText(inviteData.inviteUrl);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
-      console.log('✅ 邀请链接已复制到剪贴板');
+      console.log('✅ 邀请链接已复制到剪贴板:', inviteData.inviteUrl);
     } catch (error) {
-      console.error('❌ 复制失败:', error);
-      // 备用方案：选择文本
-      const textArea = document.createElement('textarea');
-      textArea.value = inviteData.inviteUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
+      console.error('❌ 现代API复制失败，尝试备用方案:', error);
+      try {
+        // 备用方案：选择文本
+        const textArea = document.createElement('textarea');
+        textArea.value = inviteData.inviteUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const result = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (result) {
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
+          console.log('✅ 使用备用方案复制成功');
+        } else {
+          throw new Error('备用复制方案也失败');
+        }
+      } catch (fallbackError) {
+        console.error('❌ 备用复制方案也失败:', fallbackError);
+        setMessage('复制失败，请手动复制链接');
+      }
     }
   };
 
@@ -462,16 +577,9 @@ export default function ProfilePage() {
         { id: 2, name: 'gemini-2.5-pro-nothinking', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
         { id: 3, name: 'gemini-2.5-flash-nothinking', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
         { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
-        { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', description: 'GPT-4o的迷你版本' },
         { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
         { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
-        { id: 8, name: 'claude-opus-4-1-20250805', displayName: 'claude-opus-4.1', provider: 'anthropic', description: 'Claude Opus 4.1，高端推理能力' },
-        { id: 9, name: 'claude-opus-4-1-20250805-thinking', displayName: 'claude-opus-4.1-thinking', provider: 'anthropic', description: 'Claude Opus 4.1 思维模式' },
-        { id: 10, name: 'claude-sonnet-4-20250514-thinking', displayName: 'claude4-thinking', provider: 'anthropic', description: 'Claude 4 Sonnet 思维模式' },
-        { id: 11, name: 'gpt-5-chat-latest', displayName: 'gpt5', provider: 'openai', description: 'GPT-5 最新聊天模型' },
-        { id: 12, name: 'gpt-5-mini', displayName: 'gpt-5-mini', provider: 'openai', description: 'GPT-5 迷你版本' },
-        { id: 13, name: 'gpt-5-nano', displayName: 'gpt-5-nano', provider: 'openai', description: 'GPT-5 纳米版本' },
-        { id: 14, name: 'grok-4', displayName: 'grok4', provider: 'xai', description: 'xAI的Grok-4模型' },
+
       ]
 
       const defaultLanguages = ['python', 'javascript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust', 'typescript', 'kotlin', 'swift', 'php', 'ruby', 'scala', 'shell', 'makefile', 'verilog']
@@ -1087,46 +1195,116 @@ export default function ProfilePage() {
 
           {currentTab === 'invite' && (
               <div className="space-y-6">
-                {/* 邀请链接卡片 */}
-                <div className="bg-gray-800 rounded-lg p-6">
-                  <h2 className="text-xl font-semibold mb-4">👥 邀请管理</h2>
 
-                  {inviteLoading ? (
-                      <div className="flex justify-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                      </div>
-                  ) : inviteData ? (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">您的邀请码</label>
-                          <div className="bg-gray-700 rounded-lg p-3">
-                            <code className="text-green-400">{inviteData.inviteCode}</code>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">邀请链接</label>
-                          <div className="bg-gray-700 rounded-lg p-3 break-all">
-                            <code className="text-blue-400">{inviteData.inviteUrl}</code>
-                          </div>
-                        </div>
-                        <button
-                            onClick={copyInviteUrl}
-                            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                                copySuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                {/* 积分奖励和邀请链接 */}
+                {inviteSummary && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* 积分奖励汇总 - 窄一点的宽度 */}
+                    <div className="lg:col-span-1 bg-gradient-to-br from-blue-800 to-blue-900 rounded-lg p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-blue-600 rounded-lg p-2">
+                          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z"/>
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z"/>
                           </svg>
-                          {copySuccess ? '已复制' : '复制邀请链接'}
-                        </button>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">积分奖励</h3>
+                          <p className="text-blue-200 text-sm">累计获得积分奖励</p>
+                        </div>
                       </div>
-                  ) : (
-                      <div className="text-center py-8 text-gray-400">
-                        <p>暂无邀请数据</p>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-blue-200 text-sm">注册奖励:</span>
+                          <span className="text-white font-medium">{inviteSummary.pointRewards.registerRewards}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-blue-200 text-sm">充值奖励:</span>
+                          <span className="text-white font-medium">{inviteSummary.pointRewards.rechargeRewards}</span>
+                        </div>
+                        <div className="border-t border-blue-700 pt-2 mt-2">
+                          <div className="flex justify-between">
+                            <span className="text-blue-100 font-medium">总计:</span>
+                            <span className="text-blue-300 font-bold text-lg">{inviteSummary.pointRewards.totalRewards}</span>
+                          </div>
+                        </div>
                       </div>
-                  )}
-                </div>
+                    </div>
+
+                    {/* 邀请链接生成 - 宽一点的宽度 */}
+                    <div className="lg:col-span-2 bg-gray-800 rounded-lg p-6">
+                      <h2 className="text-lg font-semibold mb-4">🔗 邀请链接</h2>
+
+                      {inviteLoading ? (
+                          <div className="flex justify-center py-8">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                          </div>
+                      ) : inviteData ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-300 mb-1">邀请码</label>
+                              <div className="bg-gray-700 rounded-lg p-2">
+                                <code className="text-green-400 text-sm">{inviteData.inviteCode}</code>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-300 mb-1">邀请链接</label>
+                              <div className="bg-gray-700 rounded-lg p-2 break-all">
+                                <code className="text-blue-400 text-xs">{inviteData.inviteUrl}</code>
+                              </div>
+                            </div>
+                            <button
+                                onClick={copyInviteUrl}
+                                className={`w-full px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm ${
+                                    copySuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              {copySuccess ? '已复制' : '复制链接'}
+                            </button>
+                          </div>
+                      ) : (
+                          <div className="text-center py-6 text-gray-400">
+                            <p className="text-sm">暂无数据</p>
+                          </div>
+                      )}
+                    </div>
+
+                    {/* 现金佣金汇总（仅流量手） */}
+                    {inviteSummary.userInfo.isTrafficAgent && inviteSummary.commissionSummary && (
+                      <div className="lg:col-span-3 bg-gradient-to-br from-green-800 to-green-900 rounded-lg p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="bg-green-600 rounded-lg p-2">
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-white">现金佣金</h3>
+                            <p className="text-green-200 text-sm">流量手专属现金收益</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="flex justify-between">
+                            <span className="text-green-200 text-sm">本月佣金:</span>
+                            <span className="text-white font-medium">¥{inviteSummary.commissionSummary.monthlyCommission.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-green-200 text-sm">待结算:</span>
+                            <span className="text-white font-medium">¥{inviteSummary.commissionSummary.pendingCommission.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-green-100 font-medium">总佣金:</span>
+                            <span className="text-green-300 font-bold text-lg">¥{inviteSummary.commissionSummary.totalCommission.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
 
                 {/* 邀请记录详情 */}
                 <div className="bg-gray-800 rounded-lg p-6">
@@ -1164,6 +1342,19 @@ export default function ProfilePage() {
                     >
                       充值明细
                     </button>
+                    {/* 佣金记录标签页（仅流量手可见） */}
+                    {inviteSummary?.userInfo.isTrafficAgent && (
+                      <button
+                          onClick={() => setInviteDetailTab('commissions')}
+                          className={`px-4 py-2 text-sm font-medium transition-colors ${
+                              inviteDetailTab === 'commissions'
+                                  ? 'text-green-400 border-b-2 border-green-400'
+                                  : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        💰 佣金记录
+                      </button>
+                    )}
                   </div>
 
                   {/* 筛选条件 */}
@@ -1352,6 +1543,154 @@ export default function ProfilePage() {
                         )}
                       </div>
                   )}
+
+                  {/* 佣金记录（仅流量手） */}
+                  {inviteDetailTab === 'commissions' && inviteSummary?.userInfo.isTrafficAgent && (
+                      <div>
+                        {commissionLoading ? (
+                            <div className="flex justify-center py-8">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                              {/* 佣金汇总信息 */}
+                              {inviteSummary.commissionSummary && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                  <div className="bg-green-700 rounded-lg p-3">
+                                    <div className="text-green-200 text-sm">总佣金</div>
+                                    <div className="text-white font-bold text-lg">
+                                      ¥{inviteSummary.commissionSummary.totalCommission.toFixed(2)}
+                                    </div>
+                                  </div>
+                                  <div className="bg-yellow-700 rounded-lg p-3">
+                                    <div className="text-yellow-200 text-sm">本月佣金</div>
+                                    <div className="text-white font-bold text-lg">
+                                      ¥{inviteSummary.commissionSummary.monthlyCommission.toFixed(2)}
+                                    </div>
+                                  </div>
+                                  <div className="bg-orange-700 rounded-lg p-3">
+                                    <div className="text-orange-200 text-sm">待结算</div>
+                                    <div className="text-white font-bold text-lg">
+                                      ¥{inviteSummary.commissionSummary.pendingCommission.toFixed(2)}
+                                    </div>
+                                  </div>
+                                  <div className="bg-blue-700 rounded-lg p-3">
+                                    <div className="text-blue-200 text-sm">已结算</div>
+                                    <div className="text-white font-bold text-lg">
+                                      ¥{inviteSummary.commissionSummary.paidCommission.toFixed(2)}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {commissionRecords.length > 0 ? (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                      <thead className="bg-gray-700">
+                                      <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">被邀请用户</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">充值金额</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">佣金比例</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">佣金金额</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">状态</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">时间</th>
+                                      </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-700">
+                                      {commissionRecords.map((record) => (
+                                          <tr key={record.id} className="hover:bg-gray-700">
+                                            <td className="px-4 py-3 text-sm">
+                                              <div>
+                                                <div className="font-medium">{record.inviteeUsername}</div>
+                                                <div className="text-gray-400 text-xs">{record.inviteeEmail}</div>
+                                              </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                              <span className="text-blue-400 font-medium">¥{record.rechargeAmount.toFixed(2)}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                              {(record.commissionRate * 100).toFixed(1)}%
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                              <span className="text-green-400 font-medium">¥{record.commissionAmount.toFixed(2)}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                record.status === 'PAID' 
+                                                  ? 'bg-green-600 text-green-100' 
+                                                  : record.status === 'PENDING'
+                                                  ? 'bg-yellow-600 text-yellow-100'
+                                                  : 'bg-gray-600 text-gray-100'
+                                              }`}>
+                                                {record.status === 'PAID' ? '已结算' : record.status === 'PENDING' ? '待结算' : '已取消'}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-300">
+                                              {formatDateTime(record.createdAt)}
+                                            </td>
+                                          </tr>
+                                      ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                              ) : (
+                                  <div className="text-center py-8 text-gray-400">
+                                    <div className="text-gray-500 mb-2">
+                                      <svg className="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z"/>
+                                      </svg>
+                                    </div>
+                                    <p>暂无佣金记录</p>
+                                    <p className="text-sm mt-1">当被邀请用户充值时，您将获得现金佣金</p>
+                                  </div>
+                              )}
+
+                              {/* 佣金记录分页 */}
+                              {commissionRecords.length > 0 && (
+                                <div className="flex justify-between items-center mt-6">
+                                  <div className="text-sm text-gray-400">
+                                    第 {commissionPage} 页，共 {commissionTotalPages} 页
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                        onClick={() => loadCommissionRecords(1)}
+                                        disabled={commissionPage === 1 || commissionLoading}
+                                        className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                                    >
+                                      首页
+                                    </button>
+                                    <button
+                                        onClick={() => loadCommissionRecords(commissionPage - 1)}
+                                        disabled={commissionPage === 1 || commissionLoading}
+                                        className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                                    >
+                                      上一页
+                                    </button>
+                                    <span className="px-3 py-1 text-sm bg-green-600 rounded">
+                                      {commissionPage}
+                                    </span>
+                                    <button
+                                        onClick={() => loadCommissionRecords(commissionPage + 1)}
+                                        disabled={commissionPage >= commissionTotalPages || commissionLoading}
+                                        className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                                    >
+                                      下一页
+                                    </button>
+                                    <button
+                                        onClick={() => loadCommissionRecords(commissionTotalPages)}
+                                        disabled={commissionPage >= commissionTotalPages || commissionLoading}
+                                        className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                                    >
+                                      末页
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                        )}
+                      </div>
+                  )}
+
                 </div>
               </div>
           )}

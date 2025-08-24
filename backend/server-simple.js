@@ -33,6 +33,9 @@ const Redis = require('ioredis');
 const fs = require('fs');
 const path = require('path');
 const Database = require('./database');
+// 注意：InviteService是TypeScript模块，需要使用编译后的版本
+const InviteService = require('./dist/services/InviteService').InviteService;
+const InviteConfigService = require('./src/services/InviteConfigService').InviteConfigService;
 
 // 导入 Prisma 枚举 - 安全导入方式
 let TransactionType;
@@ -97,7 +100,7 @@ db.getPaymentPackages = async function() {
 };
 
 const app = express();
-const PORT = process.env.PORT || 3003;
+const PORT = process.env.PORT || 3001;
 
 // AI模型数据
 const aiModels = [
@@ -105,16 +108,8 @@ const aiModels = [
   { id: 2, name: 'gemini-2.5-pro-nothinking', displayName: 'gemini-pro-2.5', provider: 'google', category: 'standard' },
   { id: 3, name: 'gemini-2.5-flash-nothinking', displayName: 'gemini-flash-2.5', provider: 'google', category: 'standard' },
   { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', category: 'standard' },
-  { id: 5, name: 'gpt-4o-mini', displayName: 'gpt-4o-mini', provider: 'openai', category: 'standard' },
   { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', category: 'premium' },
   { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', category: 'standard' },
-  { id: 8, name: 'claude-opus-4-1-20250805', displayName: 'claude-opus-4.1', provider: 'anthropic', category: 'premium' },
-  { id: 9, name: 'claude-opus-4-1-20250805-thinking', displayName: 'claude-opus-4.1-thinking', provider: 'anthropic', category: 'premium' },
-  { id: 10, name: 'claude-sonnet-4-20250514-thinking', displayName: 'claude4-thinking', provider: 'anthropic', category: 'premium' },
-  { id: 11, name: 'gpt-5-chat-latest', displayName: 'gpt5', provider: 'openai', category: 'premium' },
-  { id: 12, name: 'gpt-5-mini', displayName: 'gpt-5-mini', provider: 'openai', category: 'standard' },
-  { id: 13, name: 'gpt-5-nano', displayName: 'gpt-5-nano', provider: 'openai', category: 'standard' },
-  { id: 14, name: 'grok-4', displayName: 'grok4', provider: 'xai', category: 'premium' }
 ];
 
 // 🆕 增强认证相关配置
@@ -319,10 +314,10 @@ initializeServices();
 // 中间件
 app.use(cors({
   origin: [
-    'http://localhost:3004', 
+    'http://localhost:3000', 
     'http://localhost:54321',
-    'http://159.75.174.234:3004',
-    'http://159.75.174.234:54321'
+    'http://quiz.playoffer.cn',
+    'http://159.75.174.234:3000'
   ],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Session-Id']
@@ -617,7 +612,7 @@ app.post('/api/verify_code', async (req, res) => {
 // 流程图API 3: /user_register - 用户注册
 app.post('/api/user_register', async (req, res) => {
   try {
-    const { token, verify_code, email, password, username } = req.body;
+    const { token, verify_code, email, password, username, inviterId } = req.body;
 
     if (!token || !verify_code || !email || !password || !username) {
       return res.status(400).json({
@@ -686,6 +681,25 @@ app.post('/api/user_register', async (req, res) => {
     });
 
     console.log(`✅ 用户注册成功: ${username} (${email}), ID: ${newUser.id}`);
+
+    // 🎯 处理邀请关系（如果有邀请人ID）
+    if (inviterId) {
+      try {
+        console.log('🎯 检测到邀请人ID，开始处理邀请关系:', inviterId);
+        const inviteService = new InviteService();
+        const inviteResult = await inviteService.handleInviteRegistration(inviterId, newUser.id);
+        
+        if (inviteResult) {
+          console.log('✅ 邀请关系处理成功');
+        } else {
+          console.log('⚠️ 邀请关系处理失败，但不影响注册');
+        }
+      } catch (inviteError) {
+        console.error('❌ 邀请关系处理异常，但不影响注册:', inviteError);
+      }
+    } else {
+      console.log('📝 无邀请人ID，跳过邀请关系处理');
+    }
 
     // 清理内存中的验证数据（失败不影响注册结果）
     try {
@@ -3579,6 +3593,231 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || '获取邀请汇总统计失败'
+    });
+  }
+});
+
+// =====================================
+// 管理员用户角色管理API
+// =====================================
+
+/**
+ * 管理员 - 获取流量手列表
+ * GET /api/admin/users/traffic-agents
+ */
+app.get('/api/admin/users/traffic-agents', adminAuthMiddleware, async (req, res) => {
+  try {
+    console.log('🎯 管理员获取流量手列表');
+
+    const trafficAgents = await db.prisma.user.findMany({
+      where: { isTrafficAgent: true },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        createdAt: true,
+        points: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // 为每个流量手获取邀请统计数据
+    const inviteService = new InviteService();
+    const trafficAgentsWithStats = await Promise.all(
+      trafficAgents.map(async (agent) => {
+        const summary = await inviteService.getUserInviteSummary(agent.id);
+        return {
+          ...agent,
+          inviteStats: summary
+        };
+      })
+    );
+
+    console.log('✅ 流量手列表获取成功:', { count: trafficAgentsWithStats.length });
+
+    res.json({
+      success: true,
+      data: {
+        trafficAgents: trafficAgentsWithStats,
+        total: trafficAgentsWithStats.length
+      },
+      message: '获取流量手列表成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取流量手列表失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取流量手列表失败'
+    });
+  }
+});
+
+/**
+ * 管理员 - 设置/取消用户流量手身份
+ * PUT /api/admin/users/:id/traffic-agent
+ */
+app.put('/api/admin/users/:id/traffic-agent', adminAuthMiddleware, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { isTrafficAgent } = req.body;
+
+    console.log('🎯 管理员设置流量手身份:', { userId, isTrafficAgent });
+
+    if (typeof isTrafficAgent !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'isTrafficAgent 参数必须是布尔值'
+      });
+    }
+
+    // 检查用户是否存在
+    const user = await db.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, isTrafficAgent: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '用户不存在'
+      });
+    }
+
+    // 更新用户流量手身份
+    const updatedUser = await db.prisma.user.update({
+      where: { id: userId },
+      data: { isTrafficAgent },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        isTrafficAgent: true
+      }
+    });
+
+    console.log('✅ 流量手身份更新成功:', { 
+      userId, 
+      username: updatedUser.username,
+      isTrafficAgent: updatedUser.isTrafficAgent 
+    });
+
+    res.json({
+      success: true,
+      data: { user: updatedUser },
+      message: `${isTrafficAgent ? '设置' : '取消'}流量手身份成功`
+    });
+  } catch (error) {
+    console.error('❌ 设置流量手身份失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '设置流量手身份失败'
+    });
+  }
+});
+
+// =====================================
+// 管理员邀请配置管理API
+// =====================================
+
+/**
+ * 管理员 - 获取邀请配置
+ * GET /api/admin/invite/configs
+ */
+app.get('/api/admin/invite/configs', adminAuthMiddleware, async (req, res) => {
+  try {
+    console.log('🎯 管理员获取邀请配置');
+
+    const inviteConfigService = new InviteConfigService();
+    const configs = await inviteConfigService.getAllConfigs();
+
+    console.log('✅ 邀请配置获取成功:', { count: configs.length });
+
+    res.json({
+      success: true,
+      data: { configs },
+      message: '获取邀请配置成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取邀请配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取邀请配置失败'
+    });
+  }
+});
+
+/**
+ * 管理员 - 更新邀请配置
+ * PUT /api/admin/invite/configs
+ */
+app.put('/api/admin/invite/configs', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { configs } = req.body;
+
+    console.log('🎯 管理员更新邀请配置:', { count: configs?.length });
+
+    if (!Array.isArray(configs) || configs.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '配置参数格式错误'
+      });
+    }
+
+    // 验证配置格式
+    for (const config of configs) {
+      if (!config.configKey || typeof config.configValue !== 'number') {
+        return res.status(400).json({
+          success: false,
+          message: '配置项格式错误，需要 configKey 和 configValue'
+        });
+      }
+    }
+
+    const inviteConfigService = new InviteConfigService();
+    await inviteConfigService.updateConfigs(configs);
+
+    console.log('✅ 邀请配置更新成功');
+
+    res.json({
+      success: true,
+      message: '邀请配置更新成功'
+    });
+  } catch (error) {
+    console.error('❌ 更新邀请配置失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '更新邀请配置失败'
+    });
+  }
+});
+
+/**
+ * 用户 - 获取邀请数据汇总（区分角色）
+ * GET /api/invite/summary
+ */
+app.get('/api/invite/summary', authenticateSession, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    console.log('🎯 用户获取邀请数据汇总:', { userId });
+
+    const inviteService = new InviteService();
+    const summary = await inviteService.getUserInviteSummary(userId);
+
+    console.log('✅ 用户邀请数据汇总获取成功:', { 
+      userId,
+      isTrafficAgent: summary.userInfo?.isTrafficAgent 
+    });
+
+    res.json({
+      success: true,
+      data: summary,
+      message: '获取邀请数据汇总成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取邀请数据汇总失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取邀请数据汇总失败'
     });
   }
 });

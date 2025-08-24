@@ -8,6 +8,7 @@ import { authenticateToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { authMiddleware } from '../middleware/auth';
+import { InviteService } from '../services/InviteService';
 // import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -56,7 +57,7 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       return;
     }
 
-    const { username, email, password } = req.body;
+    const { username, email, password, inviterId } = req.body;
     const config = getConfig();
 
     // 检查用户是否已存在
@@ -95,6 +96,25 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
         theme: 'system'
       }
     });
+
+    // 🎯 处理邀请关系（如果有邀请人ID）
+    if (inviterId) {
+      try {
+        console.log('🎯 检测到邀请人ID，开始处理邀请关系:', inviterId);
+        const inviteService = new InviteService();
+        const inviteResult = await inviteService.handleInviteRegistration(inviterId, user.id);
+        
+        if (inviteResult) {
+          console.log('✅ 邀请关系处理成功');
+        } else {
+          console.log('⚠️ 邀请关系处理失败，但不影响注册');
+        }
+      } catch (inviteError) {
+        console.error('❌ 邀请关系处理异常，但不影响注册:', inviteError);
+      }
+    } else {
+      console.log('📝 无邀请人ID，跳过邀请关系处理');
+    }
 
     // 生成JWT token
     const token = jwt.sign({ userId: user.id }, config.security.jwtSecret, { expiresIn: '7d' });

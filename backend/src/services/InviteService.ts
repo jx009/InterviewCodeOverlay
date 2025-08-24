@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PointService } from './PointService';
+import { InviteConfigService } from './InviteConfigService';
 import crypto from 'crypto';
 
 export interface InviteRecord {
@@ -32,17 +33,12 @@ export interface InviteStats {
 export class InviteService {
   private prisma: PrismaClient;
   private pointService: PointService;
-
-  // 邀请奖励配置
-  private static readonly INVITE_REWARDS = {
-    REGISTER: 10,           // 邀请注册奖励：10积分
-    FIRST_RECHARGE: 0.05,   // 首次充值佣金：5%
-    ONGOING_COMMISSION: 0.02 // 持续佣金：2%
-  };
+  private configService: InviteConfigService;
 
   constructor() {
     this.prisma = new PrismaClient();
     this.pointService = new PointService();
+    this.configService = new InviteConfigService();
   }
 
   /**
@@ -126,8 +122,23 @@ export class InviteService {
 
       console.log('✅ 邀请关系建立成功:', { inviterId: inviter.id, inviteeId: newUserId });
       
-      // 发放注册奖励
-      await this.grantRegisterReward(inviterId, newUserId);
+      // 创建邀请记录到数据库
+      const inviteRecord = await this.prisma.inviteRecord.create({
+        data: {
+          inviterId: inviter.id,
+          inviteeId: newUserId,
+          inviteCode: inviter.id.toString(),
+          status: 'REGISTERED',
+          firstRechargeAmount: 0,
+          commissionAmount: 0,
+          commissionStatus: 'PENDING'
+        }
+      });
+      
+      console.log('✅ 邀请记录已创建:', { recordId: inviteRecord.id });
+      
+      // 发放注册奖励（根据邀请人角色动态配置）
+      await this.grantRegisterReward(inviter.id, newUserId);
       
       return true;
     } catch (error) {
@@ -137,62 +148,105 @@ export class InviteService {
   }
 
   /**
-   * 处理首次充值佣金
+   * 处理充值佣金（支持动态配置和流量手现金佣金）
    */
-  async handleFirstRechargeCommission(userId: number, rechargeAmount: number): Promise<void> {
-    console.log('🎯 处理首次充值佣金:', { userId, rechargeAmount });
+  async handleRechargeCommission(userId: number, rechargeAmount: number, paymentOrderId?: string): Promise<void> {
+    console.log('🎯 处理充值佣金:', { userId, rechargeAmount, paymentOrderId });
     
     try {
-      // 从积分交易记录中查找是否有邀请关系
-      const inviteTransaction = await this.prisma.pointTransaction.findFirst({
-        where: {
-          description: {
-            contains: `邀请用户ID:${userId}注册`
-          }
-        },
-        select: { userId: true }
-      });
-
-      if (!inviteTransaction) {
-        console.log('❌ 用户无邀请人，跳过佣金处理');
-        return;
-      }
-
-      const inviterId = inviteTransaction.userId;
-
-      // 检查是否已经发放过首充佣金
-      const existingCommission = await this.prisma.pointTransaction.findFirst({
-        where: {
-          userId: inviterId,
-          description: {
-            contains: `首次充值佣金 - 被邀请人ID:${userId}`
+      // 查找邀请关系
+      const inviteRecord = await this.prisma.inviteRecord.findUnique({
+        where: { inviteeId: userId },
+        include: {
+          inviter: {
+            select: { id: true, username: true, isTrafficAgent: true }
           }
         }
       });
 
-      if (existingCommission) {
-        console.log('❌ 已经发放过首充佣金，跳过');
+      if (!inviteRecord) {
+        console.log('❌ 用户无邀请人，跳过佣金处理');
         return;
       }
 
-      // 计算佣金
-      const commissionAmount = rechargeAmount * InviteService.INVITE_REWARDS.FIRST_RECHARGE;
-      const commissionPoints = Math.floor(commissionAmount * 10); // 1元=10积分
+      const inviter = inviteRecord.inviter;
+      const inviterId = inviter.id;
 
-      // 发放积分奖励
+      console.log('🎯 找到邀请关系:', { 
+        inviterId, 
+        inviteeId: userId,
+        isTrafficAgent: inviter.isTrafficAgent 
+      });
+
+      // 检查是否已经处理过这个订单的佣金
+      if (paymentOrderId) {
+        const existingCommission = await this.prisma.commissionRecord.findFirst({
+          where: { paymentOrderId }
+        });
+
+        if (existingCommission) {
+          console.log('❌ 该订单已处理过佣金，跳过');
+          return;
+        }
+      }
+
+      // 1. 发放积分奖励（所有用户都有）
+      const pointCommissionRate = await this.configService.getRechargeCommission(inviter.isTrafficAgent);
+      const pointCommission = Math.floor(rechargeAmount * pointCommissionRate * 10); // 1元=10积分
+
       await this.pointService.rechargePoints(
         inviterId,
-        commissionPoints,
-        `首次充值佣金 - 被邀请人ID:${userId}充值${rechargeAmount}元`
+        pointCommission,
+        `充值积分奖励 - 被邀请人ID:${userId}充值${rechargeAmount}元`
       );
 
-      console.log('✅ 首次充值佣金发放成功:', { 
+      console.log('✅ 积分佣金发放成功:', { 
         inviterId, 
-        commission: commissionPoints,
-        originalAmount: rechargeAmount 
+        pointCommission,
+        rate: pointCommissionRate 
+      });
+
+      // 2. 如果是流量手，记录现金佣金
+      if (inviter.isTrafficAgent) {
+        const moneyCommissionRate = await this.configService.getMoneyCommission();
+        const moneyCommission = rechargeAmount * moneyCommissionRate;
+
+        await this.prisma.commissionRecord.create({
+          data: {
+            trafficAgentId: inviterId,
+            inviteeId: userId,
+            rechargeAmount,
+            commissionRate: moneyCommissionRate,
+            commissionAmount: moneyCommission,
+            paymentOrderId,
+            status: 'PENDING'
+          }
+        });
+
+        console.log('✅ 流量手现金佣金记录成功:', { 
+          inviterId,
+          moneyCommission,
+          rate: moneyCommissionRate 
+        });
+      }
+
+      // 3. 更新邀请记录状态
+      await this.prisma.inviteRecord.update({
+        where: { id: inviteRecord.id },
+        data: { 
+          status: 'ACTIVATED',
+          firstRechargeAmount: rechargeAmount
+        }
+      });
+
+      console.log('✅ 充值佣金处理完成:', { 
+        inviterId,
+        userType: inviter.isTrafficAgent ? '流量手' : '默认用户',
+        pointCommission,
+        moneyCommission: inviter.isTrafficAgent ? rechargeAmount * await this.configService.getMoneyCommission() : 0
       });
     } catch (error) {
-      console.error('❌ 处理首次充值佣金失败:', error);
+      console.error('❌ 处理充值佣金失败:', error);
       throw error;
     }
   }
@@ -396,22 +450,42 @@ export class InviteService {
   }
 
   /**
-   * 发放注册奖励
+   * 发放注册奖励（支持动态配置和角色判断）
    */
   private async grantRegisterReward(inviterId: number, newUserId: number): Promise<void> {
     console.log('✅ 发放注册奖励:', { inviterId, newUserId });
 
     try {
+      // 获取邀请人信息，判断是否为流量手
+      const inviter = await this.prisma.user.findUnique({
+        where: { id: inviterId },
+        select: { id: true, username: true, isTrafficAgent: true }
+      });
+
+      if (!inviter) {
+        throw new Error('邀请人不存在');
+      }
+
+      // 获取注册奖励配置（所有用户统一30积分）
+      const rewardAmount = await this.configService.getConfig('REGISTER_REWARD');
+      
+      console.log('🎯 邀请人角色和奖励:', { 
+        inviterId, 
+        isTrafficAgent: inviter.isTrafficAgent,
+        rewardAmount 
+      });
+
       // 发放积分奖励
       await this.pointService.rechargePoints(
         inviterId,
-        InviteService.INVITE_REWARDS.REGISTER,
+        rewardAmount,
         `邀请注册奖励 - 成功邀请用户ID:${newUserId}注册`
       );
 
       console.log('✅ 注册奖励发放成功:', { 
         inviterId, 
-        reward: InviteService.INVITE_REWARDS.REGISTER 
+        reward: rewardAmount,
+        userType: inviter.isTrafficAgent ? '流量手' : '默认用户'
       });
     } catch (error) {
       console.error('❌ 发放注册奖励失败:', error);
@@ -584,5 +658,162 @@ export class InviteService {
       limit,
       totalPages: Math.ceil(total / limit)
     };
+  }
+
+  /**
+   * 获取流量手佣金记录
+   */
+  async getCommissionRecords(trafficAgentId: number, page: number = 1, limit: number = 10): Promise<{
+    records: any[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    summary: {
+      totalCommission: number;
+      pendingCommission: number;
+      paidCommission: number;
+      monthlyCommission: number;
+    };
+  }> {
+    console.log('🎯 获取流量手佣金记录:', { trafficAgentId, page, limit });
+
+    const offset = (page - 1) * limit;
+
+    // 获取佣金记录
+    const [records, total] = await Promise.all([
+      this.prisma.commissionRecord.findMany({
+        where: { trafficAgentId },
+        include: {
+          invitee: {
+            select: { id: true, username: true, email: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      }),
+      this.prisma.commissionRecord.count({
+        where: { trafficAgentId }
+      })
+    ]);
+
+    // 计算汇总数据
+    const allRecords = await this.prisma.commissionRecord.findMany({
+      where: { trafficAgentId }
+    });
+
+    const totalCommission = allRecords.reduce((sum, record) => sum + Number(record.commissionAmount), 0);
+    const pendingCommission = allRecords
+      .filter(record => record.status === 'PENDING')
+      .reduce((sum, record) => sum + Number(record.commissionAmount), 0);
+    const paidCommission = allRecords
+      .filter(record => record.status === 'PAID')
+      .reduce((sum, record) => sum + Number(record.commissionAmount), 0);
+
+    // 计算本月佣金
+    const currentMonth = new Date();
+    currentMonth.setDate(1);
+    currentMonth.setHours(0, 0, 0, 0);
+    
+    const monthlyRecords = allRecords.filter(record => record.createdAt >= currentMonth);
+    const monthlyCommission = monthlyRecords.reduce((sum, record) => sum + Number(record.commissionAmount), 0);
+
+    const formattedRecords = records.map(record => ({
+      id: record.id,
+      inviteeId: record.inviteeId,
+      inviteeUsername: record.invitee.username,
+      inviteeEmail: record.invitee.email,
+      rechargeAmount: Number(record.rechargeAmount),
+      commissionRate: Number(record.commissionRate),
+      commissionAmount: Number(record.commissionAmount),
+      paymentOrderId: record.paymentOrderId,
+      status: record.status,
+      createdAt: record.createdAt
+    }));
+
+    return {
+      records: formattedRecords,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      summary: {
+        totalCommission,
+        pendingCommission,
+        paidCommission,
+        monthlyCommission
+      }
+    };
+  }
+
+  /**
+   * 获取用户邀请汇总（区分角色）
+   */
+  async getUserInviteSummary(userId: number): Promise<{
+    userInfo: {
+      id: number;
+      username: string;
+      isTrafficAgent: boolean;
+    };
+    pointRewards: {
+      totalRewards: number;
+      registerRewards: number;
+      rechargeRewards: number;
+    };
+    commissionSummary?: {
+      totalCommission: number;
+      pendingCommission: number;
+      paidCommission: number;
+      monthlyCommission: number;
+    };
+  }> {
+    console.log('🎯 获取用户邀请汇总:', userId);
+
+    // 获取用户信息
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, isTrafficAgent: true }
+    });
+
+    if (!user) {
+      throw new Error('用户不存在');
+    }
+
+    // 获取积分奖励统计
+    const pointTransactions = await this.prisma.pointTransaction.findMany({
+      where: {
+        userId,
+        OR: [
+          { description: { contains: '邀请注册奖励' } },
+          { description: { contains: '充值积分奖励' } }
+        ]
+      }
+    });
+
+    const totalRewards = pointTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const registerRewards = pointTransactions
+      .filter(tx => tx.description?.includes('邀请注册奖励'))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const rechargeRewards = pointTransactions
+      .filter(tx => tx.description?.includes('充值积分奖励'))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const result: any = {
+      userInfo: user,
+      pointRewards: {
+        totalRewards,
+        registerRewards,
+        rechargeRewards
+      }
+    };
+
+    // 如果是流量手，添加现金佣金汇总
+    if (user.isTrafficAgent) {
+      const commissionData = await this.getCommissionRecords(userId, 1, 1000); // 获取所有记录计算汇总
+      result.commissionSummary = commissionData.summary;
+    }
+
+    return result;
   }
 } 

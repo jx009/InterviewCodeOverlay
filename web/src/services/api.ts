@@ -4,7 +4,7 @@ import { SessionProtection } from '../utils/sessionProtection';
 
 // 使用Vite代理，开发环境使用相对路径
 const BASE_URL = process.env.NODE_ENV === 'production'
-    ? 'http://localhost:3003/api' // 生产环境直接连接
+    ? 'http://localhost:3001/api' // 生产环境连接后端
   : '/api'; // 开发环境使用Vite代理
 
 // Removed unused interfaces
@@ -458,6 +458,54 @@ export const inviteApi = {
   } = {}) => {
     const response = await api.get('/invite/stats', {
       params
+    });
+    return response.data;
+  },
+
+  // 获取用户邀请数据汇总（区分角色）
+  getInviteSummary: async () => {
+    const response = await api.get('/invite/summary');
+    return response.data;
+  },
+
+  // 获取流量手佣金记录
+  getCommissionRecords: async (params: {
+    page?: number;
+    limit?: number;
+  } = {}) => {
+    const response = await api.get('/invite/commissions', {
+      params
+    });
+    return response.data;
+  }
+};
+
+// 管理员API
+export const adminApi = {
+  // 获取流量手列表
+  getTrafficAgents: async () => {
+    const response = await api.get('/admin/users/traffic-agents');
+    return response.data;
+  },
+
+  // 设置/取消用户流量手身份
+  setTrafficAgent: async (userId: number, isTrafficAgent: boolean) => {
+    const response = await api.put(`/admin/users/${userId}/traffic-agent`, {
+      isTrafficAgent
+    });
+    return response.data;
+  },
+
+  // 获取邀请配置
+  getInviteConfigs: async () => {
+    const response = await api.get('/admin/invite/configs');
+    return response.data;
+  },
+
+  // 更新邀请配置
+  updateInviteConfigs: async (configs: Array<{configKey: string; configValue: number}>) => {
+    const response = await api.put('/admin/invite/configs', {
+      configs
     });
     return response.data;
   }

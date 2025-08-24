@@ -4,25 +4,40 @@ const crypto = require('crypto');
 
 class Database {
   constructor() {
-    this.prisma = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    });
-    this.init();
+    this.prisma = null;
+    this.initialized = false;
+    this.initPromise = this.init();
   }
 
   async init() {
     try {
+      this.prisma = new PrismaClient({
+        log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      });
+      
       await this.prisma.$connect();
       console.log('✅ MySQL数据库连接成功');
+      
       await this.seedDefaultData();
       await this.seedDefaultPointConfigs();
+      
+      this.initialized = true;
     } catch (error) {
       console.error('❌ 数据库初始化失败:', error);
       throw error;
     }
   }
 
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initPromise;
+    }
+  }
+
   async seedDefaultData() {
+    console.log('🔍 seedDefaultData - this.prisma:', this.prisma ? 'exists' : 'undefined');
+    console.log('🔍 seedDefaultData - this.prisma.user:', this.prisma ? (this.prisma.user ? 'exists' : 'undefined') : 'prisma is null');
+    
     // 检查是否已有测试用户
     const existingUser = await this.getUserByUsername('123456');
     if (!existingUser) {
@@ -107,6 +122,9 @@ class Database {
   }
 
   async getUserByUsername(username) {
+    console.log('🔍 getUserByUsername - this.prisma:', this.prisma ? 'exists' : 'undefined');
+    console.log('🔍 getUserByUsername - this.prisma.user:', this.prisma ? (this.prisma.user ? 'exists' : 'undefined') : 'prisma is null');
+    
     try {
       return await this.prisma.user.findUnique({
         where: { username },

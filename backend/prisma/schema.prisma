@@ -19,6 +19,7 @@ model User {
   role      UserRole @default(USER) // 用户角色，默认为普通用户
   isActive  Boolean  @default(true)
   points    Int      @default(100) // 用户积分余额，新用户默认100积分
+  isTrafficAgent Boolean @default(false) @map("is_traffic_agent") // 是否为流量手
   
   // 邀请系统字段
   inviteCode String?  @unique @db.VarChar(20) @map("invite_code") // 邀请码
@@ -40,6 +41,10 @@ model User {
   invitedRecords InviteRecord[] @relation("InviteeRecords") // 作为被邀请人的记录
   inviteRewards InviteReward[] @relation("InviterRewards") // 作为邀请人的奖励
   invitedRewards InviteReward[] @relation("InviteeRewards") // 作为被邀请人的奖励
+  
+  // 流量手佣金关系
+  trafficAgentCommissions CommissionRecord[] @relation("TrafficAgentCommissions") // 作为流量手的佣金记录
+  inviteeCommissions CommissionRecord[] @relation("InviteeCommissions") // 作为被邀请人的佣金记录
 
   @@map("users")
 }
@@ -375,6 +380,42 @@ model InviteReward {
   @@map("invite_rewards")
 }
 
+// 邀请配置表
+model InviteConfig {
+  id          Int      @id @default(autoincrement())
+  configKey   String   @unique @db.VarChar(50) @map("config_key")
+  configValue Decimal  @db.Decimal(10,4) @map("config_value")
+  description String   @db.VarChar(200)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("invite_configs")
+}
+
+// 佣金记录表（流量手专用）
+model CommissionRecord {
+  id              Int      @id @default(autoincrement())
+  trafficAgentId  Int      @map("traffic_agent_id")
+  inviteeId       Int      @map("invitee_id")
+  rechargeAmount  Decimal  @db.Decimal(10,2) @map("recharge_amount")
+  commissionRate  Decimal  @db.Decimal(5,4) @map("commission_rate")
+  commissionAmount Decimal @db.Decimal(10,2) @map("commission_amount")
+  paymentOrderId  String?  @db.VarChar(50) @map("payment_order_id")
+  status          String   @default("PENDING") @db.VarChar(20)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  trafficAgent User @relation("TrafficAgentCommissions", fields: [trafficAgentId], references: [id], onDelete: Cascade)
+  invitee      User @relation("InviteeCommissions", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([trafficAgentId])
+  @@index([inviteeId])
+  @@index([status])
+  @@map("commission_records")
+}
+
 // 🔔 公告系统相关表
 
 // 公告表
@@ -398,4 +439,16 @@ model Announcement {
   @@map("announcements")
 }
 
-} 
+// LLM配置表
+model LLMConfig {
+  id          Int      @id @default(autoincrement())
+  configKey   String   @unique @db.VarChar(50) @map("config_key") // 配置键名
+  configValue String   @db.Text @map("config_value") // 配置值
+  description String?  @db.VarChar(255) // 配置描述
+  isActive    Boolean  @default(true) @map("is_active") // 是否启用
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("llm_config")
+}

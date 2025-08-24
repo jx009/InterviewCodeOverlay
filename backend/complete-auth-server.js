@@ -364,7 +364,7 @@ app.post('/api/verify_code', async (req, res) => {
 // 流程图API 2: /user_register - 用户注册
 app.post('/api/user_register', async (req, res) => {
   try {
-    const { token, password, username, verify_code } = req.body;
+    const { token, password, username, verify_code, inviterId } = req.body;
     
     if (!token || !password || !username || !verify_code) {
       return res.status(400).json({
@@ -443,6 +443,26 @@ app.post('/api/user_register', async (req, res) => {
     );
     
     console.log(`✅ 用户注册成功: ${username} (${email}), ID: ${result.insertId}`);
+    
+    // 🎯 处理邀请关系（如果有邀请人ID）
+    if (inviterId) {
+      try {
+        console.log('🎯 检测到邀请人ID，开始处理邀请关系:', inviterId);
+        const InviteService = require('./dist/services/InviteService').InviteService;
+        const inviteService = new InviteService();
+        const inviteResult = await inviteService.handleInviteRegistration(inviterId, result.insertId);
+        
+        if (inviteResult) {
+          console.log('✅ 邀请关系处理成功');
+        } else {
+          console.log('⚠️ 邀请关系处理失败，但不影响注册');
+        }
+      } catch (inviteError) {
+        console.error('❌ 邀请关系处理异常，但不影响注册:', inviteError);
+      }
+    } else {
+      console.log('📝 无邀请人ID，跳过邀请关系处理');
+    }
     
     // 清理Redis中的验证数据（失败不影响注册结果）
     try {

@@ -2,6 +2,7 @@ const express = require('express');
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { v4: uuidv4 } = require('uuid');
 const WechatPayV2Service = require('../services/WechatPayV2Service');
+const InviteService = require('../../dist/services/InviteService').InviteService;
 
 const router = express.Router();
 const wechatPay = new WechatPayV2Service();
@@ -764,6 +765,22 @@ async function processSuccessfulPayment(order, wechatResult) {
       
       console.log(`💰 用户 ${order.userId} 积分充值成功: +${totalPoints}积分，当前余额: ${updatedUser.points}`);
     });
+
+    // 5. 处理邀请佣金（在事务外异步处理，避免影响支付流程）
+    try {
+      const inviteService = new InviteService();
+      await inviteService.handleRechargeCommission(
+        order.userId, 
+        Number(order.amount), 
+        order.orderNo
+      );
+      console.log('✅ 邀请佣金处理完成:', { 
+        userId: order.userId, 
+        amount: Number(order.amount) 
+      });
+    } catch (inviteError) {
+      console.error('❌ 邀请佣金处理失败（不影响支付结果）:', inviteError);
+    }
 
     console.log(`✅ 订单 ${order.orderNo} 支付成功处理完成`);
     return { success: true };

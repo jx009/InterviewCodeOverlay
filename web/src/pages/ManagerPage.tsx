@@ -4,11 +4,12 @@ import { User } from '../types';
 import { Pagination } from '../components/shared/Pagination';
 import UsageSummaryCards from '../components/Admin/UsageSummaryCards';
 import APITestComponent from '../components/Admin/APITestComponent';
+import { adminApi } from '../services/api';
 
 // 使用与其他模块一致的API基础URL
 const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'http://159.75.174.234:3004/api'
-  : 'http://159.75.174.234:3004/api';
+  ? 'http://quiz.playoffer.cn/api'
+  : 'http://quiz.playoffer.cn/api';
 
 interface ModelPointConfig {
   id: number;
@@ -67,6 +68,44 @@ interface LLMConfig {
 interface LLMConfigForm {
   base_url: string;
   api_key: string;
+}
+
+// 邀请配置类型
+interface InviteConfig {
+  id: number;
+  configKey: string;
+  configValue: number;
+  description: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 流量手信息类型
+interface TrafficAgent {
+  id: number;
+  username: string;
+  email: string;
+  createdAt: string;
+  points: number;
+  inviteStats: {
+    userInfo: {
+      id: number;
+      username: string;
+      isTrafficAgent: boolean;
+    };
+    pointRewards: {
+      totalRewards: number;
+      registerRewards: number;
+      rechargeRewards: number;
+    };
+    commissionSummary?: {
+      totalCommission: number;
+      pendingCommission: number;
+      paidCommission: number;
+      monthlyCommission: number;
+    };
+  };
 }
 
 interface UsageTransaction {
@@ -196,7 +235,7 @@ export default function ManagerPage() {
   });
 
   // 邀请管理相关状态
-  const [inviteTab, setInviteTab] = useState<'summary' | 'registrations' | 'recharges'>('summary');
+  const [inviteTab, setInviteTab] = useState<'summary' | 'registrations' | 'recharges' | 'configs' | 'traffic-agents'>('summary');
   const [inviteFilters, setInviteFilters] = useState<InviteFilters>(() => {
     const now = new Date();
     const oneMonthAgo = new Date();
@@ -213,6 +252,16 @@ export default function ManagerPage() {
   const [inviteRecharges, setInviteRecharges] = useState<InviteRecharge[]>([]);
   const [inviteSummary, setInviteSummary] = useState<InviteSummary[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
+
+  // 邀请配置管理状态
+  const [inviteConfigs, setInviteConfigs] = useState<InviteConfig[]>([]);
+  const [inviteConfigsLoading, setInviteConfigsLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+
+  // 流量手管理状态
+  const [trafficAgents, setTrafficAgents] = useState<TrafficAgent[]>([]);
+  const [trafficAgentsLoading, setTrafficAgentsLoading] = useState(false);
+  const [settingTrafficAgent, setSettingTrafficAgent] = useState<number | null>(null);
 
   // 分页状态
   const [registrationsPage, setRegistrationsPage] = useState(1);
@@ -314,7 +363,13 @@ export default function ManagerPage() {
   // 当邀请子标签页或筛选条件变化时，重新加载数据
   useEffect(() => {
     if (isAdmin && currentTab === 'invites') {
-      loadInviteData();
+      if (inviteTab === 'configs') {
+        loadInviteConfigs();
+      } else if (inviteTab === 'traffic-agents') {
+        loadTrafficAgents();
+      } else {
+        loadInviteData();
+      }
     }
   }, [inviteTab]);
 
@@ -1084,6 +1139,123 @@ export default function ManagerPage() {
     }
   };
 
+  // 加载邀请配置
+  const loadInviteConfigs = async () => {
+    try {
+      setInviteConfigsLoading(true);
+      console.log('🔍 加载邀请配置...');
+      const result = await adminApi.getInviteConfigs();
+      console.log('📊 邀请配置API返回结果:', result);
+
+      if (result.success) {
+        setInviteConfigs(result.data.configs || []);
+        console.log('✅ 邀请配置加载成功:', result.data.configs?.length);
+      }
+    } catch (error) {
+      console.error('❌ 加载邀请配置失败:', error);
+      setMessage('加载邀请配置失败');
+    } finally {
+      setInviteConfigsLoading(false);
+    }
+  };
+
+  // 加载流量手列表
+  const loadTrafficAgents = async () => {
+    try {
+      setTrafficAgentsLoading(true);
+      console.log('🔍 加载流量手列表...');
+      const result = await adminApi.getTrafficAgents();
+      console.log('👥 流量手列表API返回结果:', result);
+
+      if (result.success) {
+        setTrafficAgents(result.data.trafficAgents || []);
+        console.log('✅ 流量手列表加载成功:', result.data.trafficAgents?.length);
+      }
+    } catch (error) {
+      console.error('❌ 加载流量手列表失败:', error);
+      setMessage('加载流量手列表失败');
+    } finally {
+      setTrafficAgentsLoading(false);
+    }
+  };
+
+  // 设置/取消用户流量手身份
+  const handleSetTrafficAgent = async (userId: number, isTrafficAgent: boolean) => {
+    try {
+      setSettingTrafficAgent(userId);
+      console.log('🎯 设置流量手身份:', { userId, isTrafficAgent });
+      
+      const result = await adminApi.setTrafficAgent(userId, isTrafficAgent);
+      console.log('✅ 流量手身份设置结果:', result);
+
+      if (result.success) {
+        setMessage(`${isTrafficAgent ? '设置' : '取消'}流量手身份成功`);
+        // 重新加载流量手列表
+        await loadTrafficAgents();
+        // 如果在用户管理页面，也重新加载用户列表
+        if (currentTab === 'users') {
+          await loadUsers();
+        }
+      } else {
+        setMessage(result.message || '操作失败');
+      }
+    } catch (error) {
+      console.error('❌ 设置流量手身份失败:', error);
+      setMessage('设置流量手身份失败');
+    } finally {
+      setSettingTrafficAgent(null);
+    }
+  };
+
+  // 更新邀请配置
+  const handleUpdateInviteConfigs = async (newConfigs: InviteConfig[]) => {
+    try {
+      setConfigSaving(true);
+      console.log('🔧 更新邀请配置:', newConfigs);
+
+      const configsToUpdate = newConfigs.map(config => ({
+        configKey: config.configKey,
+        configValue: config.configValue
+      }));
+
+      const result = await adminApi.updateInviteConfigs(configsToUpdate);
+      console.log('✅ 邀请配置更新结果:', result);
+
+      if (result.success) {
+        setMessage('邀请配置更新成功');
+        // 重新加载配置
+        await loadInviteConfigs();
+      } else {
+        setMessage(result.message || '配置更新失败');
+      }
+    } catch (error) {
+      console.error('❌ 更新邀请配置失败:', error);
+      setMessage('更新邀请配置失败');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  // 获取配置显示名称
+  const getConfigDisplayName = (configKey: string): string => {
+    const displayNames: Record<string, string> = {
+      'REGISTER_REWARD': '注册奖励',
+      'RECHARGE_COMMISSION_RATE': '充值积分佣金比例',
+      'MONEY_COMMISSION_RATE': '充值现金佣金比例'
+    };
+    return displayNames[configKey] || configKey;
+  };
+
+  // 获取配置描述
+  const getConfigDescription = (configKey: string): string => {
+    const descriptions: Record<string, string> = {
+      'REGISTER_REWARD': '新用户注册时获得的积分奖励',
+      'RECHARGE_COMMISSION_RATE': '邀请人获得的被邀请人充值积分佣金比例（%）',
+      'MONEY_COMMISSION_RATE': '流量手获得的被邀请人充值现金佣金比例（%）'
+    };
+    return descriptions[configKey] || '无描述';
+  };
+
   const handleUpdateUserRole = async (userId: string, newRole: 'USER' | 'ADMIN') => {
     try {
       const sessionId = localStorage.getItem('sessionId');
@@ -1798,6 +1970,20 @@ export default function ManagerPage() {
                               >
                                 {userItem.role === 'ADMIN' ? '降为用户' : '提升为管理员'}
                               </button>
+                              <button
+                                onClick={() => handleSetTrafficAgent(userItem.id, !(userItem as any).isTrafficAgent)}
+                                disabled={settingTrafficAgent === userItem.id}
+                                className={`px-3 py-1 rounded text-xs transition-colors ${
+                                  (userItem as any).isTrafficAgent
+                                    ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-800'
+                                    : 'bg-green-600 hover:bg-green-700 disabled:bg-green-800'
+                                }`}
+                              >
+                                {settingTrafficAgent === userItem.id 
+                                  ? '处理中...' 
+                                  : ((userItem as any).isTrafficAgent ? '取消流量手' : '设为流量手')
+                                }
+                              </button>
                             </>
                           )}
                           {userItem.id === user?.id && (
@@ -2188,6 +2374,32 @@ export default function ManagerPage() {
                 >
                   充值记录
                 </button>
+                <button
+                  onClick={() => {
+                    setInviteTab('configs');
+                    setTimeout(() => loadInviteConfigs(), 100);
+                  }}
+                  className={`py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+                    inviteTab === 'configs'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  配置管理
+                </button>
+                <button
+                  onClick={() => {
+                    setInviteTab('traffic-agents');
+                    setTimeout(() => loadTrafficAgents(), 100);
+                  }}
+                  className={`py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
+                    inviteTab === 'traffic-agents'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  流量手管理
+                </button>
               </div>
             </div>
 
@@ -2468,6 +2680,150 @@ export default function ManagerPage() {
                       loading={inviteLoading}
                       className="mt-4"
                     />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 配置管理 */}
+            {inviteTab === 'configs' && (
+              <div className="p-6">
+                {inviteConfigsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="bg-gray-700 rounded-lg p-6">
+                      <h4 className="text-lg font-semibold mb-4">邀请系统配置</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {inviteConfigs.map((config) => (
+                          <div key={config.configKey} className="bg-gray-800 rounded-lg p-4">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-sm font-medium text-gray-300">
+                                {getConfigDisplayName(config.configKey)}
+                              </label>
+                            </div>
+                            <input
+                              type="number"
+                              value={config.configValue}
+                              onChange={(e) => {
+                                const newValue = parseFloat(e.target.value) || 0;
+                                setInviteConfigs(prevConfigs => 
+                                  prevConfigs.map(c => 
+                                    c.configKey === config.configKey 
+                                      ? { ...c, configValue: newValue }
+                                      : c
+                                  )
+                                );
+                              }}
+                              className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                              step="0.01"
+                              min="0"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              {getConfigDescription(config.configKey)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-6 flex justify-end">
+                        <button
+                          onClick={() => handleUpdateInviteConfigs(inviteConfigs)}
+                          disabled={configSaving}
+                          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 px-6 py-2 rounded-lg font-medium transition-colors"
+                        >
+                          {configSaving ? '保存中...' : '保存配置'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 流量手管理 */}
+            {inviteTab === 'traffic-agents' && (
+              <div className="p-6">
+                {trafficAgentsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="bg-gray-700 rounded-lg p-6">
+                      <h4 className="text-lg font-semibold mb-4">流量手管理</h4>
+                      {trafficAgents.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-800">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                  用户信息
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                  注册时间
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                  邀请统计
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                  佣金统计
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                  操作
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-700">
+                              {trafficAgents.map((agent) => (
+                                <tr key={agent.id} className="hover:bg-gray-700">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div>
+                                      <div className="text-sm font-medium text-white">
+                                        {agent.username}
+                                      </div>
+                                      <div className="text-sm text-gray-400">
+                                        {agent.email}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                    {new Date(agent.createdAt).toLocaleDateString()}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-300">
+                                      <div>邀请人数: {agent.inviteCount || 0}</div>
+                                      <div>累计充值: ¥{agent.totalRechargeAmount || 0}</div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-300">
+                                      <div>累计佣金: ¥{agent.totalCommission || 0}</div>
+                                      <div>本月佣金: ¥{agent.monthlyCommission || 0}</div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <button
+                                      onClick={() => handleSetTrafficAgent(agent.id, false)}
+                                      disabled={settingTrafficAgent === agent.id}
+                                      className="bg-red-600 hover:bg-red-700 disabled:bg-red-800 px-3 py-1 rounded text-white transition-colors"
+                                    >
+                                      {settingTrafficAgent === agent.id ? '处理中...' : '取消身份'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-gray-400">
+                          <p>暂无流量手用户</p>
+                          <p className="text-sm mt-2">可以在用户管理页面设置流量手身份</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
