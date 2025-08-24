@@ -4,7 +4,7 @@ import {
   QueryClient,
   QueryClientProvider
 } from "@tanstack/react-query"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   Toast,
   ToastDescription,
@@ -50,6 +50,9 @@ function App() {
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [config, setConfig] = useState({})
+  
+  // Toast定时器引用，用于清理
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Web Authentication Hook
   const { 
@@ -110,7 +113,7 @@ function App() {
     window.__IS_INITIALIZED__ = true
   }, [])
 
-  // Show toast method (enhanced with action support)
+  // Show toast method (enhanced with action support and forced auto-close)
   const showToast = useCallback(
     (
       title: string,
@@ -119,6 +122,12 @@ function App() {
       actionText?: string,
       onActionClick?: () => void
     ) => {
+      // 清理之前的定时器
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = null
+      }
+      
       setToastState({
         open: true,
         title,
@@ -127,6 +136,12 @@ function App() {
         actionText: actionText || "",
         onActionClick: onActionClick || undefined
       })
+      
+      // 强制在1秒后关闭Toast，不受页面焦点状态影响
+      toastTimerRef.current = setTimeout(() => {
+        setToastState(prev => ({ ...prev, open: false }))
+        toastTimerRef.current = null
+      }, 1000)
     },
     []
   )
@@ -299,6 +314,11 @@ function App() {
     return () => {
       window.electronAPI.removeListener("API_KEY_INVALID", onApiKeyInvalid)
       unsubscribeSolutionSuccess()
+      // 清理Toast定时器
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = null
+      }
       window.__IS_INITIALIZED__ = false
       setIsInitialized(false)
     }
@@ -423,11 +443,16 @@ function App() {
           
           <Toast
             open={toastState.open}
-            onOpenChange={(open) =>
+            onOpenChange={(open) => {
               setToastState((prev) => ({ ...prev, open }))
-            }
+              // 如果用户手动关闭Toast，也要清理定时器
+              if (!open && toastTimerRef.current) {
+                clearTimeout(toastTimerRef.current)
+                toastTimerRef.current = null
+              }
+            }}
             variant={toastState.variant}
-            duration={1500}
+            duration={1000}
             actionText={toastState.actionText}
             onActionClick={toastState.onActionClick || undefined}
           >

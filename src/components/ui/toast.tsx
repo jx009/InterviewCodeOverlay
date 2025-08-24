@@ -70,7 +70,7 @@ const Toast = React.forwardRef<
 >(({ className, variant = "neutral", showProgress, onActionClick, actionText, ...props }, ref) => (
   <ToastPrimitive.Root
     ref={ref}
-    duration={variant === 'loading' ? 0 : 5000} // 加载状态不自动消失
+    duration={props.duration !== undefined ? props.duration : (variant === 'loading' ? 0 : 1000)} // 优先使用传入的duration，默认1秒自动消失
     className={cn(
       "group pointer-events-auto relative flex w-full items-start space-x-3 overflow-hidden rounded-lg p-4 shadow-lg border transition-all duration-300",
       toastVariants[variant].bgColor,
