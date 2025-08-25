@@ -2561,9 +2561,9 @@ app.get('/api/invite/registrations', getUserId, async (req, res) => {
 
     console.log('🎯 获取邀请注册记录:', { userId, page, limit, startDate, endDate, email });
 
-    // 构建查询条件
+    // 构建查询条件 - 查询invite_records表
     const whereCondition = {
-      inviterId: userId // 查找被当前用户邀请的用户
+      inviterId: userId // 查找该用户的邀请记录
     };
 
     // 日期范围筛选
@@ -2580,22 +2580,31 @@ app.get('/api/invite/registrations', getUserId, async (req, res) => {
       }
     }
 
-    // 邮箱搜索
+    // 邮箱搜索 - 需要通过关联的user表搜索
+    const includeCondition = {
+      invitee: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          createdAt: true
+        }
+      }
+    };
+
+    // 如果有邮箱搜索条件，添加到where中
     if (email) {
-      whereCondition.email = {
-        contains: email
+      whereCondition.invitee = {
+        email: {
+          contains: email
+        }
       };
     }
 
-    // 直接查询数据库：查找被该用户邀请的用户
-    const invitedUsers = await db.prisma.user.findMany({
+    // 查询邀请记录表，关联被邀请人信息
+    const inviteRecords = await db.prisma.inviteRecord.findMany({
       where: whereCondition,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        createdAt: true
-      },
+      include: includeCondition,
       orderBy: {
         createdAt: 'desc'
       },
@@ -2603,8 +2612,16 @@ app.get('/api/invite/registrations', getUserId, async (req, res) => {
       take: limit
     });
 
+    // 转换数据格式，提取被邀请人信息
+    const invitedUsers = inviteRecords.map(record => ({
+      id: record.invitee.id,
+      username: record.invitee.username,
+      email: record.invitee.email,
+      createdAt: record.createdAt // 使用邀请记录的创建时间
+    }));
+
     // 获取总数
-    const total = await db.prisma.user.count({
+    const total = await db.prisma.inviteRecord.count({
       where: whereCondition
     });
 
@@ -2648,27 +2665,29 @@ app.get('/api/invite/recharges', getUserId, async (req, res) => {
 
     console.log('🎯 获取邀请用户充值记录:', { userId, page, limit, startDate, endDate, email });
 
-    // 构建用户筛选条件
-    const userWhereCondition = {
+    // 构建邀请记录筛选条件
+    const inviteWhereCondition = {
       inviterId: userId
     };
 
-    // 如果有邮箱搜索，添加到用户查询条件
+    // 如果有邮箱搜索，需要通过关联查询
     if (email) {
-      userWhereCondition.email = {
-        contains: email
+      inviteWhereCondition.invitee = {
+        email: {
+          contains: email
+        }
       };
     }
 
     // 查找被该用户邀请的用户列表
-    const invitedUserIds = await db.prisma.user.findMany({
-      where: userWhereCondition,
+    const inviteRecords = await db.prisma.inviteRecord.findMany({
+      where: inviteWhereCondition,
       select: {
-        id: true
+        inviteeId: true
       }
     });
 
-    const invitedIds = invitedUserIds.map(u => u.id);
+    const invitedIds = inviteRecords.map(record => record.inviteeId);
 
     // 如果没有找到符合条件的用户，返回空结果
     if (invitedIds.length === 0) {
@@ -2766,39 +2785,39 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
 
     console.log('🎯 获取邀请统计数据:', { userId, startDate, endDate });
 
-    // 构建用户查询条件
-    const userWhereCondition = {
+    // 构建邀请记录查询条件
+    const inviteWhereCondition = {
       inviterId: userId
     };
 
-    // 日期范围筛选 - 针对用户注册时间
+    // 日期范围筛选 - 针对邀请记录创建时间
     if (startDate || endDate) {
-      userWhereCondition.createdAt = {};
+      inviteWhereCondition.createdAt = {};
       if (startDate) {
-        userWhereCondition.createdAt.gte = new Date(startDate);
+        inviteWhereCondition.createdAt.gte = new Date(startDate);
       }
       if (endDate) {
         // 包含结束日期的整天，所以设置为下一天的开始
         const endDateTime = new Date(endDate);
         endDateTime.setDate(endDateTime.getDate() + 1);
-        userWhereCondition.createdAt.lt = endDateTime;
+        inviteWhereCondition.createdAt.lt = endDateTime;
       }
     }
 
     // 1. 统计邀请注册人数
-    const totalInvitedUsers = await db.prisma.user.count({
-      where: userWhereCondition
+    const totalInvitedUsers = await db.prisma.inviteRecord.count({
+      where: inviteWhereCondition
     });
 
     // 2. 获取被邀请用户的ID列表
-    const invitedUserIds = await db.prisma.user.findMany({
-      where: userWhereCondition,
+    const inviteRecords = await db.prisma.inviteRecord.findMany({
+      where: inviteWhereCondition,
       select: {
-        id: true
+        inviteeId: true
       }
     });
 
-    const invitedIds = invitedUserIds.map(u => u.id);
+    const invitedIds = inviteRecords.map(record => record.inviteeId);
 
     // 构建充值记录查询条件
     const rechargeWhereCondition = {
@@ -2860,6 +2879,118 @@ app.get('/api/invite/stats', getUserId, async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || '获取邀请统计数据失败'
+    });
+  }
+});
+
+/**
+ * 获取佣金记录（仅流量手）
+ * GET /api/invite/commissions?userId=8&page=1&limit=10
+ */
+app.get('/api/invite/commissions', getUserId, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    console.log('💰 获取佣金记录:', { userId, page, limit });
+    
+    // 首先验证用户是否为流量手
+    const user = await db.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isTrafficAgent: true }
+    });
+    
+    if (!user || !user.isTrafficAgent) {
+      return res.status(403).json({
+        success: false,
+        message: '仅流量手可查看佣金记录'
+      });
+    }
+    
+    // 使用原生SQL查询佣金记录，添加错误处理
+    let commissionRecords = [];
+    let total = 0;
+    
+    try {
+      console.log('🔍 开始查询佣金记录表...');
+      
+      commissionRecords = await db.prisma.$queryRaw`
+        SELECT 
+          cr.id,
+          cr.invitee_id as inviteeId,
+          cr.recharge_amount as rechargeAmount,
+          cr.commission_rate as commissionRate,
+          cr.commission_amount as commissionAmount,
+          cr.payment_order_id as paymentOrderId,
+          cr.status,
+          cr.created_at as createdAt,
+          u.username as inviteeUsername,
+          u.email as inviteeEmail
+        FROM commission_records cr
+        LEFT JOIN user u ON cr.invitee_id = u.id
+        WHERE cr.traffic_agent_id = ${userId}
+        ORDER BY cr.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      
+      console.log('🔍 查询佣金记录成功，记录数:', commissionRecords.length);
+      
+      // 获取总数
+      const totalResult = await db.prisma.$queryRaw`
+        SELECT COUNT(*) as count
+        FROM commission_records
+        WHERE traffic_agent_id = ${userId}
+      `;
+      
+      total = Number(totalResult[0]?.count || 0);
+      console.log('🔍 查询佣金记录总数成功:', total);
+      
+    } catch (dbError) {
+      console.error('❌ 数据库查询错误:', dbError);
+      
+      // 如果表不存在，返回空数据
+      if (dbError.message.includes("doesn't exist") || dbError.message.includes('Unknown table')) {
+        console.log('⚠️ commission_records 表不存在，返回空数据');
+        commissionRecords = [];
+        total = 0;
+      } else {
+        throw dbError; // 重新抛出其他错误
+      }
+    }
+    
+    const totalPages = Math.ceil(total / limit);
+    
+    console.log('✅ 佣金记录获取成功:', { total, page, records: commissionRecords.length });
+    
+    res.json({
+      success: true,
+      data: {
+        records: commissionRecords.map((record) => ({
+          id: Number(record.id),
+          inviteeId: Number(record.inviteeId),
+          inviteeUsername: record.inviteeUsername || '未知用户',
+          inviteeEmail: record.inviteeEmail || '未知邮箱',
+          rechargeAmount: Number(record.rechargeAmount),
+          commissionRate: Number(record.commissionRate),
+          commissionAmount: Number(record.commissionAmount),
+          paymentOrderId: record.paymentOrderId,
+          status: record.status,
+          createdAt: record.createdAt
+        })),
+        total,
+        page,
+        limit,
+        totalPages
+      },
+      message: '获取佣金记录成功'
+    });
+  } catch (error) {
+    console.error('❌ 获取佣金记录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取佣金记录失败'
     });
   }
 });
@@ -3122,12 +3253,8 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
 
     console.log('🎯 管理员获取所有邀请注册记录:', { startDate, endDate, inviterEmail, inviteeEmail, page, limit });
 
-    // 构建查询条件
-    const whereCondition = {
-      inviterId: {
-        not: null // 确保有邀请人
-      }
-    };
+    // 构建邀请记录查询条件
+    const whereCondition = {};
 
     // 日期范围筛选
     if (startDate || endDate) {
@@ -3144,60 +3271,46 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
 
     // 被邀请人邮箱筛选
     if (inviteeEmail) {
-      whereCondition.email = {
-        contains: inviteeEmail
+      whereCondition.invitee = {
+        email: {
+          contains: inviteeEmail
+        }
       };
     }
 
-    // 如果有邀请人邮箱筛选，先获取符合条件的邀请人ID
-    let allowedInviterIds = null;
+    // 如果有邀请人邮箱筛选，添加条件
     if (inviterEmail) {
-      const inviters = await db.prisma.user.findMany({
-        where: {
-          email: {
-            contains: inviterEmail
-          }
-        },
-        select: {
-          id: true
+      whereCondition.inviter = {
+        email: {
+          contains: inviterEmail
         }
-      });
-      allowedInviterIds = inviters.map(u => u.id);
-
-      if (allowedInviterIds.length === 0) {
-        return res.json({
-          success: true,
-          data: {
-            registrations: [],
-            page,
-            limit,
-            totalPages: 0,
-            total: 0
-          },
-          message: '获取邀请注册记录成功'
-        });
-      }
-
-      // 添加到查询条件中
-      whereCondition.inviterId = {
-        in: allowedInviterIds
       };
     }
 
     // 获取总数
-    const total = await db.prisma.user.count({
+    const total = await db.prisma.inviteRecord.count({
       where: whereCondition
     });
 
-    // 获取分页的被邀请用户
-    const invitedUsers = await db.prisma.user.findMany({
+    // 获取分页的邀请记录
+    const inviteRecords = await db.prisma.inviteRecord.findMany({
       where: whereCondition,
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        createdAt: true,
-        inviterId: true
+      include: {
+        inviter: {
+          select: {
+            id: true,
+            email: true,
+            username: true
+          }
+        },
+        invitee: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            createdAt: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
@@ -3206,31 +3319,22 @@ app.get('/api/admin/invites/registrations', adminAuthMiddleware, async (req, res
       take: limit
     });
 
-    // 获取邀请人信息
-    const inviterIds = [...new Set(invitedUsers.map(u => u.inviterId))];
-    const inviters = await db.prisma.user.findMany({
-      where: {
-        id: {
-          in: inviterIds
-        }
-      },
-      select: {
-        id: true,
-        email: true,
-        username: true
-      }
-    });
-
-    const inviterMap = inviters.reduce((acc, inviter) => {
-      acc[inviter.id] = inviter;
-      return acc;
-    }, {});
+    // 转换数据格式
+    const invitedUsers = inviteRecords.map(record => ({
+      id: record.invitee.id,
+      email: record.invitee.email,
+      username: record.invitee.username,
+      createdAt: record.invitee.createdAt,
+      inviterId: record.inviter.id,
+      inviterEmail: record.inviter.email,
+      inviterUsername: record.inviter.username
+    }));
 
     // 格式化数据
     const registrations = invitedUsers.map(user => ({
       id: user.id,
-      inviterEmail: inviterMap[user.inviterId]?.email || '',
-      inviterUsername: inviterMap[user.inviterId]?.username || '',
+      inviterEmail: user.inviterEmail,
+      inviterUsername: user.inviterUsername,
       inviteeEmail: user.email,
       inviteeUsername: user.username,
       createdAt: user.createdAt
@@ -3276,56 +3380,69 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
 
     console.log('🎯 管理员获取所有邀请充值记录:', { startDate, endDate, inviterEmail, inviteeEmail, page, limit });
 
-    // 构建充值记录查询条件（使用嵌套查询）
-    const rechargeWhereCondition = {
-      paymentStatus: 'PAID',
-      user: {
-        inviterId: {
-          not: null
-        }
-      }
-    };
+    // 首先获取所有邀请记录，基于筛选条件
+    const inviteWhereCondition = {};
 
     // 被邀请人邮箱筛选
     if (inviteeEmail) {
-      rechargeWhereCondition.user.email = {
-        contains: inviteeEmail
+      inviteWhereCondition.invitee = {
+        email: {
+          contains: inviteeEmail
+        }
       };
     }
 
     // 邀请人邮箱筛选
     if (inviterEmail) {
-      // 先获取符合条件的邀请人ID
-      const inviters = await db.prisma.user.findMany({
-        where: {
-          email: {
-            contains: inviterEmail
-          }
-        },
-        select: {
-          id: true
+      inviteWhereCondition.inviter = {
+        email: {
+          contains: inviterEmail
         }
-      });
-
-      const allowedInviterIds = inviters.map(u => u.id);
-      if (allowedInviterIds.length === 0) {
-        return res.json({
-          success: true,
-          data: {
-            recharges: [],
-            page,
-            limit,
-            totalPages: 0,
-            total: 0
-          },
-          message: '获取邀请充值记录成功'
-        });
-      }
-
-      rechargeWhereCondition.user.inviterId = {
-        in: allowedInviterIds
       };
     }
+
+    // 获取符合条件的被邀请用户ID列表
+    const inviteRecords = await db.prisma.inviteRecord.findMany({
+      where: inviteWhereCondition,
+      select: {
+        inviteeId: true,
+        inviter: {
+          select: {
+            id: true,
+            email: true,
+            username: true
+          }
+        }
+      }
+    });
+
+    if (inviteRecords.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          recharges: [],
+          page,
+          limit,
+          totalPages: 0,
+          total: 0
+        },
+        message: '获取邀请充值记录成功'
+      });
+    }
+
+    const inviteeIds = inviteRecords.map(record => record.inviteeId);
+    const inviterMap = inviteRecords.reduce((acc, record) => {
+      acc[record.inviteeId] = record.inviter;
+      return acc;
+    }, {});
+
+    // 构建充值记录查询条件
+    const rechargeWhereCondition = {
+      paymentStatus: 'PAID',
+      userId: {
+        in: inviteeIds
+      }
+    };
 
     // 日期范围筛选
     if (startDate || endDate) {
@@ -3353,8 +3470,7 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
           select: {
             id: true,
             email: true,
-            username: true,
-            inviterId: true
+            username: true
           }
         }
       },
@@ -3365,31 +3481,11 @@ app.get('/api/admin/invites/recharges', adminAuthMiddleware, async (req, res) =>
       take: limit
     });
 
-    // 获取所有邀请人信息
-    const inviterIds = [...new Set(rechargeRecords.map(r => r.user.inviterId))];
-    const inviters = await db.prisma.user.findMany({
-      where: {
-        id: {
-          in: inviterIds
-        }
-      },
-      select: {
-        id: true,
-        email: true,
-        username: true
-      }
-    });
-
-    const inviterMap = inviters.reduce((acc, inviter) => {
-      acc[inviter.id] = inviter;
-      return acc;
-    }, {});
-
     // 格式化数据
     const recharges = rechargeRecords.map(record => ({
       id: record.id,
-      inviterEmail: inviterMap[record.user.inviterId]?.email || '',
-      inviterUsername: inviterMap[record.user.inviterId]?.username || '',
+      inviterEmail: inviterMap[record.user.id]?.email || '',
+      inviterUsername: inviterMap[record.user.id]?.username || '',
       inviteeEmail: record.user.email,
       inviteeUsername: record.user.username,
       amount: parseFloat(record.amount),
@@ -3432,37 +3528,34 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
 
     console.log('🎯 管理员获取所有邀请汇总统计:', { startDate, endDate, inviterEmail });
 
-    // 构建邀请人查询条件
-    const inviterWhereCondition = {};
+    // 构建邀请记录查询条件
+    const inviteWhereCondition = {};
 
     // 邀请人邮箱筛选
     if (inviterEmail) {
-      inviterWhereCondition.email = {
-        contains: inviterEmail
+      inviteWhereCondition.inviter = {
+        email: {
+          contains: inviterEmail
+        }
       };
     }
 
-    // 先获取所有被邀请的用户，找出他们的邀请人ID
-    const invitedUsers = await db.prisma.user.findMany({
-      where: {
-        inviterId: {
-          not: null
-        }
-      },
+    // 获取所有邀请记录，获取唯一的邀请人
+    const inviteRecords = await db.prisma.inviteRecord.findMany({
+      where: inviteWhereCondition,
       select: {
         inviterId: true
       },
       distinct: ['inviterId']
     });
 
-    const inviterIds = [...new Set(invitedUsers.map(u => u.inviterId).filter(id => id !== null))];
+    const inviterIds = [...new Set(inviteRecords.map(record => record.inviterId))];
 
-    // 然后根据邮箱筛选条件查询邀请人信息
+    // 获取邀请人信息
     const inviterFinalWhereCondition = {
       id: {
         in: inviterIds
-      },
-      ...inviterWhereCondition
+      }
     };
 
     const inviters = await db.prisma.user.findMany({
@@ -3478,38 +3571,38 @@ app.get('/api/admin/invites/summary', adminAuthMiddleware, async (req, res) => {
 
     // 为每个邀请人计算统计数据
     const summaryPromises = inviters.map(async (inviter) => {
-      // 构建被邀请用户查询条件
-      const invitedUserWhereCondition = {
+      // 构建邀请记录查询条件
+      const inviteRecordWhereCondition = {
         inviterId: inviter.id
       };
 
-      // 日期范围筛选 - 针对用户注册时间
+      // 日期范围筛选 - 针对邀请记录创建时间
       if (startDate || endDate) {
-        invitedUserWhereCondition.createdAt = {};
+        inviteRecordWhereCondition.createdAt = {};
         if (startDate) {
-          invitedUserWhereCondition.createdAt.gte = new Date(startDate);
+          inviteRecordWhereCondition.createdAt.gte = new Date(startDate);
         }
         if (endDate) {
           const endDateTime = new Date(endDate);
           endDateTime.setDate(endDateTime.getDate() + 1);
-          invitedUserWhereCondition.createdAt.lt = endDateTime;
+          inviteRecordWhereCondition.createdAt.lt = endDateTime;
         }
       }
 
       // 1. 统计邀请注册人数
-      const totalInvitedUsers = await db.prisma.user.count({
-        where: invitedUserWhereCondition
+      const totalInvitedUsers = await db.prisma.inviteRecord.count({
+        where: inviteRecordWhereCondition
       });
 
       // 2. 获取被邀请用户ID列表
-      const invitedUserIds = await db.prisma.user.findMany({
-        where: invitedUserWhereCondition,
+      const inviteRecords = await db.prisma.inviteRecord.findMany({
+        where: inviteRecordWhereCondition,
         select: {
-          id: true
+          inviteeId: true
         }
       });
 
-      const invitedIds = invitedUserIds.map(u => u.id);
+      const invitedIds = inviteRecords.map(record => record.inviteeId);
 
       if (invitedIds.length === 0) {
         return {

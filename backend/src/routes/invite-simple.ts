@@ -342,4 +342,93 @@ router.get('/stats', getUserId, async (req: any, res: Response) => {
   }
 });
 
+/**
+ * 获取佣金记录（仅流量手）
+ * GET /api/invite/commissions?userId=8&page=1&limit=10
+ */
+router.get('/commissions', getUserId, async (req: any, res: Response) => {
+  try {
+    const userId = req.userId;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+    
+    console.log('💰 获取佣金记录:', { userId, page, limit });
+    
+    // 首先验证用户是否为流量手
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isTrafficAgent: true }
+    });
+    
+    if (!user || !user.isTrafficAgent) {
+      return res.status(403).json({
+        success: false,
+        message: '仅流量手可查看佣金记录'
+      });
+    }
+    
+    // 使用原生SQL查询佣金记录，模仿注册明细的查询方式
+    const commissionRecords = await prisma.$queryRaw`
+      SELECT 
+        cr.id,
+        cr.invitee_id as inviteeId,
+        cr.recharge_amount as rechargeAmount,
+        cr.commission_rate as commissionRate,
+        cr.commission_amount as commissionAmount,
+        cr.payment_order_id as paymentOrderId,
+        cr.status,
+        cr.created_at as createdAt,
+        u.username as inviteeUsername,
+        u.email as inviteeEmail
+      FROM commission_records cr
+      LEFT JOIN user u ON cr.invitee_id = u.id
+      WHERE cr.traffic_agent_id = ${userId}
+      ORDER BY cr.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    ` as any[];
+    
+    // 获取总数
+    const totalResult = await prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM commission_records
+      WHERE traffic_agent_id = ${userId}
+    ` as any[];
+    
+    const total = Number(totalResult[0]?.count || 0);
+    const totalPages = Math.ceil(total / limit);
+    
+    console.log('✅ 佣金记录获取成功:', { total, page, records: commissionRecords.length });
+    
+    res.json({
+      success: true,
+      data: {
+        records: commissionRecords.map((record: any) => ({
+          id: Number(record.id),
+          inviteeId: Number(record.inviteeId),
+          inviteeUsername: record.inviteeUsername || '未知用户',
+          inviteeEmail: record.inviteeEmail || '未知邮箱',
+          rechargeAmount: Number(record.rechargeAmount),
+          commissionRate: Number(record.commissionRate),
+          commissionAmount: Number(record.commissionAmount),
+          paymentOrderId: record.paymentOrderId,
+          status: record.status,
+          createdAt: record.createdAt
+        })),
+        total,
+        page,
+        limit,
+        totalPages
+      },
+      message: '获取佣金记录成功'
+    });
+  } catch (error: any) {
+    console.error('❌ 获取佣金记录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取佣金记录失败'
+    });
+  }
+});
+
 export default router; 

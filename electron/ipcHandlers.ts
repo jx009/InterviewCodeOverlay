@@ -479,7 +479,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: "用户未登录", models: [] }
       }
 
-      const BASE_URL = 'http://159.75.174.234:3004'
+      const BASE_URL = 'https://quiz.playoffer.cn'
       const response = await fetch(`${BASE_URL}/api/client/credits/models`, {
         method: 'GET',
         headers: {
@@ -790,7 +790,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 // 积分管理 (独立导出，在main.ts中单独注册)
 export function registerCreditsHandlers(deps: IIpcHandlerDeps) {
   console.log('Initializing credits IPC handlers')
-  const BASE_URL = 'http://159.75.174.234:3004'
+  const BASE_URL = 'https://quiz.playoffer.cn'
 
   const makeAuthenticatedRequest = async (endpoint: string, options: any = {}) => {
     const token = simpleAuthManager.getToken()

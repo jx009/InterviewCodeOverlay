@@ -15,6 +15,70 @@ import { useLanguageConfig } from "../hooks/useLanguageConfig"
 import { parseStreamedSolution, shouldStartDisplaying } from "@/utils/streamParser"
 import { isMacOS } from "../utils/platform"
 
+// 调试内容解析函数
+function parseDebugContent(fullContent: string) {
+  let code = ''
+  let thoughts: string[] = []
+  let timeComplexity = "基于调试分析"
+  let spaceComplexity = "基于调试分析"
+
+  // 提取代码实现部分
+  const codeImplMatch = fullContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
+  if (codeImplMatch) {
+    code = codeImplMatch[1].trim()
+  } else {
+    // 后备方案：提取第一个代码块
+    const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
+    if (codeMatch) {
+      code = codeMatch[1].trim()
+    } else {
+      code = '// 调试模式 - 请查看分析'
+    }
+  }
+
+  // 处理Unicode转义序列
+  if (code && typeof code === 'string') {
+    code = code
+      .replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/\\\\/g, '\\')
+      .trim()
+  }
+
+  // 提取思路
+  const thoughtsMatch = fullContent.match(/\*\*(?:解题思路|思路|分析思路|问题分析)：?\*\*\s*([\s\S]*?)(?:\*\*|$)/i)
+  if (thoughtsMatch) {
+    const thoughtsText = thoughtsMatch[1].trim()
+    thoughts = thoughtsText.split(/[-•]\s*/).filter(thought => thought.trim().length > 0).map(thought => thought.trim())
+  }
+  
+  if (thoughts.length === 0) {
+    thoughts = ["基于截图的调试分析"]
+  }
+
+  // 提取复杂度
+  const timeComplexityMatch = fullContent.match(/时间复杂度[：:]?\s*(O\([^)]+\))/i)
+  if (timeComplexityMatch) {
+    timeComplexity = timeComplexityMatch[1]
+  }
+
+  const spaceComplexityMatch = fullContent.match(/空间复杂度[：:]?\s*(O\([^)]+\))/i)
+  if (spaceComplexityMatch) {
+    spaceComplexity = spaceComplexityMatch[1]
+  }
+
+  return {
+    code,
+    thoughts,
+    timeComplexity,
+    spaceComplexity
+  }
+}
+
 export const ContentSection = ({
   title,
   content,
@@ -41,7 +105,7 @@ export const ContentSection = ({
     )}
   </div>
 )
-const SolutionSection = ({
+export const SolutionSection = ({
   title,
   content,
   isLoading,
@@ -103,62 +167,8 @@ const SolutionSection = ({
     }
   }
 
-  // 🆕 决定显示什么内容：流式内容 > 最终内容
-  let displayContent = content
-  
-  if (isStreaming && streamingContent) {
-    // 🆕 优化的流式代码提取 - 优先从**代码实现：**部分提取
-    const codeImplMatch = streamingContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
-    if (codeImplMatch) {
-      displayContent = codeImplMatch[1].trim()
-      console.log('✅ SolutionSection从代码实现部分提取到代码，长度:', displayContent.length)
-    } else {
-      // 后备方案：传统代码块提取，但检查是否是示例
-      const codeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*?)(?:```|$)/)
-      if (codeMatch && codeMatch[1]) {
-        const code = codeMatch[1].trim()
-        const firstLine = code.split('\n')[0]
-        const mightBeExample = /^\d+[\s\d]*$/.test(firstLine)
-        
-        if (mightBeExample) {
-          // 可能是示例，尝试找其他代码块
-          const allCodeMatches = streamingContent.match(/```[\s\S]*?```/g) || []
-          if (allCodeMatches.length > 1) {
-            const secondCodeBlock = allCodeMatches[1]
-            const secondCode = secondCodeBlock.replace(/```\w*\n?/, '').replace(/```\s*$/, '').trim()
-            if (secondCode.length > 20 && (secondCode.includes('def') || secondCode.includes('main') || secondCode.includes('function') || secondCode.includes('class'))) {
-              displayContent = secondCode
-              console.log('✅ SolutionSection使用第二个代码块（跳过示例）')
-            } else {
-              displayContent = code
-            }
-          } else {
-            displayContent = code
-          }
-        } else {
-          displayContent = code
-        }
-      } else {
-        // 没有找到完整代码块，尝试查找部分代码
-        const partialCodeMatch = streamingContent.match(/```[\w]*\n?([\s\S]*)$/)
-        if (partialCodeMatch && partialCodeMatch[1]) {
-          displayContent = partialCodeMatch[1]
-        } else {
-          // 如果没有代码块标记，检查是否包含代码关键字，如果是则显示原始内容
-          if (streamingContent.includes('def ') || streamingContent.includes('function') || 
-              streamingContent.includes('class ') || streamingContent.includes('import') ||
-              streamingContent.includes('public ') || streamingContent.includes('#include') ||
-              streamingContent.includes('var ') || streamingContent.includes('let ') ||
-              streamingContent.includes('const ') || streamingContent.includes('int main')) {
-            displayContent = streamingContent
-          } else {
-            // 如果当前内容不像代码，则保持显示已有的内容或空
-            displayContent = content || ""
-          }
-        }
-      }
-    }
-  }
+  // 决定显示什么内容：流式内容 > 最终内容
+  let displayContent = (isStreaming && streamingContent) ? streamingContent : (content || '// 代码生成中...')
   
   const showStreamingIndicator = isStreaming && streamingProgress !== undefined
   
@@ -232,10 +242,10 @@ const SolutionSection = ({
                   animation: "pulse 1.5s ease-in-out infinite"
                 })
               }}
-              wrapLongLines={false}
+              wrapLongLines={true}
               className={`pointer-events-none ${isStreaming ? 'streaming-code' : ''}`}
             >
-              {displayContent as string}
+              {typeof displayContent === 'string' ? displayContent : displayContent as string}
             </SyntaxHighlighter>
             
             {/* 🆕 流式模式下的光标效果 */}
@@ -748,6 +758,55 @@ const Solutions: React.FC<SolutionsProps> = ({
         
         showToast("流式处理失败", error, "error")
       }),
+
+      // 🆕 调试事件监听器
+      window.electronAPI.onDebugStart(() => {
+        setIsStreaming(true)
+        setStreamingContent('')
+        setStreamingProgress(0)
+        // 清空现有数据
+        setSolutionData(null)
+        setThoughtsData(null)
+        setTimeComplexityData(null)
+        setSpaceComplexityData(null)
+        setMultipleChoiceAnswers(null)
+      }),
+
+      window.electronAPI.onDebugStreamChunk?.((data: any) => {
+        console.log('🌊 Solutions收到调试流式数据:', data);
+        
+        if (data.isComplete) {
+          // 调试流式完成，解析最终内容
+          setTimeout(() => {
+            setIsStreaming(false)
+            setStreamingProgress(100)
+          }, 1500)
+          
+          // 解析调试内容
+          if (data.fullContent) {
+            const parsed = parseDebugContent(data.fullContent)
+            setSolutionData(parsed.code)
+            setThoughtsData(parsed.thoughts)
+            setTimeComplexityData(parsed.timeComplexity)
+            setSpaceComplexityData(parsed.spaceComplexity)
+            setMultipleChoiceAnswers(null)
+            
+            // 缓存到queryClient
+            queryClient.setQueryData(["solution"], {
+              type: 'programming',
+              code: parsed.code,
+              thoughts: parsed.thoughts,
+              time_complexity: parsed.timeComplexity,
+              space_complexity: parsed.spaceComplexity
+            })
+          }
+        } else {
+          // 调试流式进行中
+          setIsStreaming(true)
+          setStreamingContent(data.fullContent || '')
+          setStreamingProgress(data.progress || 0)
+        }
+      }) || (() => {}),
     ]
 
     // 🆕 监听全局快捷键事件（来自主进程）

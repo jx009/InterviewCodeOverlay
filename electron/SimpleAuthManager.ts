@@ -61,7 +61,7 @@ export class SimpleAuthManager extends EventEmitter {
   // 配置缓存已移除，每次都从数据库实时读取
   private isAutoReloginInProgress: boolean = false // 防止并发自动重新登录
 
-  constructor(apiBaseUrl: string = 'http://159.75.174.234:3004') {
+  constructor(apiBaseUrl: string = 'https://quiz.playoffer.cn') {
     super()
     this.apiBaseUrl = apiBaseUrl
 
@@ -1081,7 +1081,7 @@ export class SimpleAuthManager extends EventEmitter {
         url.includes('?auth=success') ||
         url.includes('#auth-success') ||
         url.includes('/auth-success') ||
-        (url.includes('159.75.174.234:3004') && !url.includes('/login') && !url.includes('/register'))
+        (url.includes('quiz.playoffer.cn') && !url.includes('/login') && !url.includes('/register'))
     );
 
     const isBackendRedirect = url.includes('/api/auth/callback');

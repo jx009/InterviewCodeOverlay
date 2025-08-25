@@ -13,6 +13,7 @@ import { ResponseUtils } from './utils/response';
 import authRoutes from './routes/auth';
 import authEnhancedRoutes, { initAuthEnhanced } from './routes/auth-enhanced';
 import configRoutes from './routes/config';
+import inviteRoutes from './routes/invite-simple';
 // 导入支付路由
 import { paymentRoutes } from './payment';
 
@@ -277,6 +278,9 @@ async function startServer() {
     
     // 配置路由
     app.use('/api/config', configRoutes);
+    
+    // 邀请路由
+    app.use('/api/invite', inviteRoutes);
     
     // 支付路由
     app.use('/api/payment', paymentRoutes);

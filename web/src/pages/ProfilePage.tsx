@@ -31,7 +31,7 @@ interface UserConfig {
 // 积分交易记录类型
 interface PointTransaction {
   id: number;
-  transactionType: 'RECHARGE' | 'DEDUCT' | 'CONSUME' | 'REFUND' | 'REWARD';
+  transactionType: 'RECHARGE' | 'DEDUCT' | 'CONSUME' | 'REFUND' | 'REWARD' | 'INVITE_REWARD';
   amount: number;
   balanceAfter: number;
   modelName?: string;
@@ -355,13 +355,17 @@ export default function ProfilePage() {
 
   // 加载佣金记录（仅流量手）
   const loadCommissionRecords = async (page: number = 1) => {
+    if (!user?.id) return;
+
     try {
       setCommissionLoading(true);
-      console.log('🔍 调用佣金记录API，参数:', { page, limit: commissionPageSize });
-      const result = await inviteApi.getCommissionRecords({
+      const params = {
         page,
-        limit: commissionPageSize
-      });
+        limit: commissionPageSize,
+        userId: user.id
+      };
+      console.log('🔍 调用佣金记录API，参数:', params);
+      const result = await inviteApi.getCommissionRecords(params);
       console.log('💰 佣金记录API返回结果:', result);
 
       if (result.success) {
@@ -573,13 +577,10 @@ export default function ProfilePage() {
 
       // 首先设置默认的模型数据
       const defaultModels = [
-        { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude-4-sonnet', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
-        { id: 2, name: 'gemini-2.5-pro-nothinking', displayName: 'gemini-pro-2.5', provider: 'google', description: 'Google的深度搜索AI模型' },
-        { id: 3, name: 'gemini-2.5-flash-nothinking', displayName: 'gemini-flash-2.5', provider: 'google', description: 'Google的高速AI模型' },
-        { id: 4, name: 'gpt-4o', displayName: 'gpt-4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
-        { id: 6, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
-        { id: 7, name: 'o4-mini-all', displayName: 'o4-mini', provider: 'openai', description: 'OpenAI的迷你模型' },
-
+        { id: 1, name: 'claude-sonnet-4-20250514', displayName: 'claude4', provider: 'anthropic', description: '最新版Claude，综合能力出色' },
+        { id: 2, name: 'gpt-5-mini', displayName: 'gpt-5', provider: 'openai', description: 'GPT-5迷你版本' },
+        { id: 3, name: 'gpt-4o', displayName: 'gpt4o', provider: 'openai', description: '最新的GPT-4o模型，适合复杂编程任务' },
+        { id: 4, name: 'o4-mini-high-all', displayName: 'o4-mini-high', provider: 'openai', description: 'OpenAI的高性能迷你模型' },
       ]
 
       const defaultLanguages = ['python', 'javascript', 'java', 'cpp', 'c', 'csharp', 'go', 'rust', 'typescript', 'kotlin', 'swift', 'php', 'ruby', 'scala', 'shell', 'makefile', 'verilog']
@@ -720,6 +721,8 @@ export default function ProfilePage() {
         return '退款';
       case 'REWARD':
         return '积分补偿';
+      case 'INVITE_REWARD':
+        return '邀请';
       default:
         return transaction.transactionType;
     }
@@ -736,6 +739,17 @@ export default function ProfilePage() {
       minute: '2-digit',
       second: '2-digit'
     });
+  };
+
+  // 格式化模型名称显示
+  const formatModelName = (modelName: string) => {
+    const modelDisplayMap: Record<string, string> = {
+      'gpt-5-mini': 'gpt-5',
+      'claude-sonnet-4-20250514': 'claude4',
+      'o4-mini-high-all': 'o4-mini-high',
+      'gpt-4o': 'gpt4o'
+    };
+    return modelDisplayMap[modelName] || modelName;
   };
 
   if (!hasValidSession) {
@@ -978,14 +992,14 @@ export default function ProfilePage() {
 
                 <div className="bg-gray-800 rounded-lg p-6">
                   <h2 className="text-xl font-semibold mb-4">🤖 AI模型介绍</h2>
-                  <p className="text-gray-300 mb-6">模型性能与积分消耗成正比，请根据需要选择适合的模型</p>
+                  <p className="text-gray-300 mb-6">首选推荐使用claude4和GPT5模型，适合编程题和选择题</p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* claude-4-sonnet - 编程题首选 */}
+                    {/* claude4 - 推荐 */}
                     <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 ring-2 ring-yellow-500">
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-semibold text-white">claude-4-sonnet</h3>
-                        <span className="bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold">编程题首选</span>
+                        <h3 className="text-lg font-semibold text-white">claude4</h3>
+                        <span className="bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold">推荐</span>
                       </div>
                       <p className="text-sm text-gray-300 mb-3">均衡型AI助手，在编程和逻辑推理方面表现优异</p>
                       <div className="flex items-center justify-between mb-2">
@@ -997,25 +1011,25 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    {/* gemini-flash-2.5 - 编程题首选 */}
+                    {/* GPT5 - 推荐 */}
                     <div className="bg-gray-700 rounded-lg p-4 border border-gray-600 ring-2 ring-yellow-500">
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-semibold text-white">gemini-flash-2.5</h3>
-                        <span className="bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold">编程题首选</span>
+                        <h3 className="text-lg font-semibold text-white">GPT5</h3>
+                        <span className="bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold">推荐</span>
                       </div>
-                      <p className="text-sm text-gray-300 mb-3">响应较慢，编程解题准确率高，快速准确</p>
+                      <p className="text-sm text-gray-300 mb-3">GPT-5迷你版本，性价比高，适合日常使用</p>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-orange-400">⚡ 高速</span>
+                        <span className="text-orange-400">⚡ 高效</span>
                       </div>
                       <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-blue-400">
                         <div className="text-sm font-bold text-white mb-1">积分消耗</div>
-                        <div className="text-blue-400 font-semibold">选择题：8积分 | 编程题：12积分</div>
+                        <div className="text-blue-400 font-semibold">选择题：20分 | 编程题：40分</div>
                       </div>
                     </div>
 
-                    {/* gpt-4o */}
+                    {/* gpt4o */}
                     <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                      <h3 className="text-lg font-semibold text-white mb-2">gpt-4o</h3>
+                      <h3 className="text-lg font-semibold text-white mb-2">gpt4o</h3>
                       <p className="text-sm text-gray-300 mb-3">全能型语言模型，在文本理解和知识问答方面见长</p>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-blue-400">🧠 全能</span>
@@ -1026,55 +1040,16 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    {/* gpt-4o-mini */}
-                    <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                      <h3 className="text-lg font-semibold text-white mb-2">gpt-4o-mini</h3>
-                      <p className="text-sm text-gray-300 mb-3">轻量版通用模型，响应迅速，适合基础问题处理</p>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-cyan-400">🔹 轻量</span>
-                      </div>
-                      <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-green-400">
-                        <div className="text-sm font-bold text-white mb-1">积分消耗</div>
-                        <div className="text-green-400 font-semibold">选择题：3积分 | 编程题：4积分</div>
-                      </div>
-                    </div>
-
-                    {/* o4-mini */}
-                    <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                      <h3 className="text-lg font-semibold text-white mb-2">o4-mini</h3>
-                      <p className="text-sm text-gray-300 mb-3">轻量级智能推理模型，经济实用，性能稳定</p>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-blue-400">💡 智能</span>
-                      </div>
-                      <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-orange-400">
-                        <div className="text-sm font-bold text-white mb-1">积分消耗</div>
-                        <div className="text-orange-400 font-semibold">选择题：30积分 | 编程题：40积分</div>
-                      </div>
-                    </div>
-
-                    {/* gemini-pro-2.5 */}
-                    <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                      <h3 className="text-lg font-semibold text-white mb-2">gemini-pro-2.5</h3>
-                      <p className="text-sm text-gray-300 mb-3">多模态专业AI，擅长代码理解和复杂推理分析</p>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-green-400">⭐ 专业</span>
-                      </div>
-                      <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-orange-400">
-                        <div className="text-sm font-bold text-white mb-1">积分消耗</div>
-                        <div className="text-orange-400 font-semibold">选择题：30积分 | 编程题：40积分</div>
-                      </div>
-                    </div>
-
                     {/* o4-mini-high */}
                     <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
                       <h3 className="text-lg font-semibold text-white mb-2">o4-mini-high</h3>
                       <p className="text-sm text-gray-300 mb-3">高级推理引擎，逻辑能力卓越，适合复杂问题求解</p>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-purple-400">🚀 超强</span>
+                        <span className="text-purple-400">🚀 高级</span>
                       </div>
                       <div className="bg-gray-600 rounded-lg p-3 border-l-4 border-red-400">
                         <div className="text-sm font-bold text-white mb-1">积分消耗</div>
-                        <div className="text-red-400 font-semibold">选择题：150积分 | 编程题：250积分</div>
+                        <div className="text-red-400 font-semibold">选择题：100分 | 编程题：150分</div>
                       </div>
                     </div>
                   </div>
@@ -1117,7 +1092,7 @@ export default function ProfilePage() {
                             <tr key={transaction.id} className="hover:bg-gray-700">
                               <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              ['RECHARGE', 'REFUND', 'REWARD'].includes(transaction.transactionType)
+                              ['RECHARGE', 'REFUND', 'REWARD', 'INVITE_REWARD'].includes(transaction.transactionType)
                                   ? 'bg-green-600 text-green-100'
                                   : 'bg-red-600 text-red-100'
                           }`}>
@@ -1125,7 +1100,7 @@ export default function ProfilePage() {
                           </span>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm">
-                          <span className={['RECHARGE', 'REFUND', 'REWARD'].includes(transaction.transactionType) ? 'text-green-400' : 'text-red-400'}>
+                          <span className={['RECHARGE', 'REFUND', 'REWARD', 'INVITE_REWARD'].includes(transaction.transactionType) ? 'text-green-400' : 'text-red-400'}>
                             {transaction.amount > 0 ? '+' : ''}{transaction.amount}
                           </span>
                               </td>
@@ -1133,7 +1108,7 @@ export default function ProfilePage() {
                                 {transaction.balanceAfter}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
-                                {transaction.modelName || '-'}
+                                {transaction.modelName ? formatModelName(transaction.modelName) : '-'}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
                                 {formatTransactionDate(transaction.createdAt)}

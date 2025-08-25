@@ -1,118 +1,14 @@
 // Debug.tsx
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import React, { useEffect, useRef, useState } from "react"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism"
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue"
 import SolutionCommands from "../components/Solutions/SolutionCommands"
 import { Screenshot } from "../types/screenshots"
-import { ComplexitySection, ContentSection } from "./Solutions"
+import { ComplexitySection, ContentSection, SolutionSection } from "./Solutions"
 import { useToast } from "../contexts/toast"
 import { useLanguageConfig } from "../hooks/useLanguageConfig"
 import { isMacOS, COMMAND_KEY } from "../utils/platform"
 
-const CodeSection = ({
-  title,
-  code,
-  isLoading,
-  currentLanguage
-}: {
-  title: string
-  code: React.ReactNode
-  isLoading: boolean
-  currentLanguage: string
-}) => {
-  const [copied, setCopied] = useState(false)
-  const [showCopyButton, setShowCopyButton] = useState(true) // 控制是否显示Copy按钮
-
-  // 组件挂载时从配置中读取showCopyButton设置
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const config = await window.electronAPI.getConfig()
-        setShowCopyButton(config.showCopyButton !== false) // 默认为true
-      } catch (error) {
-        console.error("Failed to load copy button config:", error)
-      }
-    }
-    fetchConfig()
-  }, [])
-
-  const copyToClipboard = () => {
-    if (typeof code === "string") {
-      navigator.clipboard.writeText(code).then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      })
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <h2 className="text-[13px] font-medium text-white tracking-wide"></h2>
-      {isLoading ? (
-        <div className="space-y-1.5">
-          <div className="mt-4 flex">
-            <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-              Loading solutions...
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="w-full relative pointer-events-none overflow-x-auto">
-          {showCopyButton && (
-            <button
-              onClick={copyToClipboard}
-              className="absolute top-2 right-2 text-xs text-white bg-white/10 hover:bg-white/20 rounded px-2 py-1 transition pointer-events-auto z-10"
-            >
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          )}
-          <div>
-            <SyntaxHighlighter
-              showLineNumbers
-              language={
-                currentLanguage === "Go" || currentLanguage === "Golang" ? "go" : 
-                currentLanguage === "JavaScript" ? "javascript" :
-                currentLanguage === "TypeScript" ? "typescript" :
-                currentLanguage === "Cpp" || currentLanguage === "C++" ? "cpp" :
-                currentLanguage === "Csharp" || currentLanguage === "C#" ? "csharp" :
-                currentLanguage === "Java" ? "java" :
-                currentLanguage === "Python" ? "python" :
-                currentLanguage === "Swift" ? "swift" :
-                currentLanguage === "Kotlin" ? "kotlin" :
-                currentLanguage === "Ruby" ? "ruby" :
-                currentLanguage === "Php" || currentLanguage === "PHP" ? "php" :
-                currentLanguage === "Scala" ? "scala" :
-                currentLanguage === "Rust" ? "rust" :
-                currentLanguage === "Sql" || currentLanguage === "SQL" ? "sql" :
-                currentLanguage === "R" ? "r" :
-                currentLanguage.toLowerCase()
-              }
-              style={dracula}
-              customStyle={{
-                maxWidth: "none",
-                width: "100%",
-                minWidth: "600px",
-                margin: 0,
-                padding: "1rem",
-                whiteSpace: "pre",
-                overflowX: "auto",
-                overflowY: "visible",
-                backgroundColor: "rgba(22, 27, 34, 0.5)",
-                userSelect: "none" // 禁止选择文本
-              }}
-              wrapLongLines={false}
-              className="pointer-events-none"
-            >
-              {code as string}
-            </SyntaxHighlighter>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 async function fetchScreenshots(): Promise<Screenshot[]> {
   try {
@@ -127,6 +23,72 @@ async function fetchScreenshots(): Promise<Screenshot[]> {
   } catch (error) {
     console.error("Error loading screenshots:", error)
     throw error
+  }
+}
+
+// 🆕 解析调试内容的函数
+function parseDebugContent(fullContent: string) {
+  let code = ''
+  let thoughts: string[] = []
+  let timeComplexity = "基于调试分析"
+  let spaceComplexity = "基于调试分析"
+  let analysis = fullContent
+
+  // 提取代码实现部分
+  const codeImplMatch = fullContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
+  if (codeImplMatch) {
+    code = codeImplMatch[1].trim()
+  } else {
+    // 后备方案：提取第一个代码块
+    const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
+    if (codeMatch) {
+      code = codeMatch[1].trim()
+    } else {
+      code = '// 调试模式 - 请查看下方的完整分析'
+    }
+  }
+
+  // 处理Unicode转义序列
+  if (code && typeof code === 'string') {
+    code = code
+      .replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/\\\\/g, '\\')
+      .trim()
+  }
+
+  // 提取思路
+  const thoughtsMatch = fullContent.match(/\*\*(?:解题思路|思路|分析思路)：?\*\*\s*([\s\S]*?)(?:\*\*|$)/i)
+  if (thoughtsMatch) {
+    const thoughtsText = thoughtsMatch[1].trim()
+    thoughts = thoughtsText.split(/[-•]\s*/).filter(thought => thought.trim().length > 0).map(thought => thought.trim())
+  }
+  
+  if (thoughts.length === 0) {
+    thoughts = ["基于截图的调试分析"]
+  }
+
+  // 提取复杂度（去掉详细解释，只保留O(...)部分）
+  const timeComplexityMatch = fullContent.match(/时间复杂度[：:]\s*(O\([^)]+\))/i)
+  if (timeComplexityMatch) {
+    timeComplexity = timeComplexityMatch[1]
+  }
+
+  const spaceComplexityMatch = fullContent.match(/空间复杂度[：:]\s*(O\([^)]+\))/i)
+  if (spaceComplexityMatch) {
+    spaceComplexity = spaceComplexityMatch[1]
+  }
+
+  return {
+    code,
+    thoughts,
+    timeComplexity,
+    spaceComplexity,
+    analysis
   }
 }
 
@@ -161,6 +123,8 @@ const Debug: React.FC<DebugProps> = ({
     null
   )
   const [debugAnalysis, setDebugAnalysis] = useState<string | null>(null)
+  const [streamingContent, setStreamingContent] = useState<string>('')
+  const [isStreaming, setIsStreaming] = useState<boolean>(false)
 
   const queryClient = useQueryClient()
   const contentRef = useRef<HTMLDivElement>(null)
@@ -179,27 +143,52 @@ const Debug: React.FC<DebugProps> = ({
     if (newSolution) {
       console.log("Found cached debug solution:", newSolution);
       
-      if (newSolution.debug_analysis) {
-        // Store the debug analysis in its own state variable
-        setDebugAnalysis(newSolution.debug_analysis);
-        // Set code separately for the code section
-        setNewCode(newSolution.code || "// Debug mode - see analysis below");
-        
-        // Process thoughts/analysis points
-        if (newSolution.debug_analysis.includes('\n\n')) {
-          const sections = newSolution.debug_analysis.split('\n\n').filter(Boolean);
-          // Pick first few sections as thoughts
-          setThoughtsData(sections.slice(0, 3));
-        } else {
-          setThoughtsData(["Debug analysis based on your screenshots"]);
-        }
-      } else {
-        // Fallback to code or default
-        setNewCode(newSolution.code || "// No analysis available");
-        setThoughtsData(newSolution.thoughts || ["Debug analysis based on your screenshots"]);
+      // 🆕 完全复制编程题搜题的代码处理方式，包括字符编码检查
+      console.log('🔍 调试模式原始代码数据:', {
+        hasCode: !!newSolution.code,
+        codeType: typeof newSolution.code,
+        originalLength: newSolution.code?.length || 0,
+        containsBackslashN: newSolution.code?.includes('\\n') || false,
+        containsRealNewlines: newSolution.code?.includes('\n') || false,
+        rawPreview: newSolution.code?.substring(0, 150) || ''
+      });
+      
+      // 🆕 完整的字符转义处理，包括Unicode转义序列
+      let cleanCode = "// Debug mode - see analysis below";
+      if (newSolution.code && typeof newSolution.code === 'string') {
+        cleanCode = newSolution.code
+          // 1. 处理Unicode转义序列（如 \u003c -> <, \u003e -> >）
+          .replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => {
+            return String.fromCharCode(parseInt(hex, 16));
+          })
+          // 2. 处理转义的换行符
+          .replace(/\\n/g, '\n')
+          // 3. 处理其他常见转义序列
+          .replace(/\\t/g, '\t')
+          .replace(/\\r/g, '\r')
+          .replace(/\\"/g, '"')
+          .replace(/\\'/g, "'")
+          .replace(/\\\\/g, '\\')
+          .trim();
       }
-      setTimeComplexityData(newSolution.time_complexity || "N/A - Debug mode")
-      setSpaceComplexityData(newSolution.space_complexity || "N/A - Debug mode")
+      
+      console.log('🔧 调试模式代码处理后结果:', {
+        processedLength: cleanCode.length,
+        hasNewlines: cleanCode.includes('\n'),
+        lineCount: cleanCode.split('\n').length,
+        firstTwoLines: cleanCode.split('\n').slice(0, 2),
+        processedPreview: cleanCode.substring(0, 150).replace(/\n/g, '\\n')
+      });
+      setNewCode(cleanCode);
+      setThoughtsData(newSolution.thoughts || ["Debug analysis based on your screenshots"]);
+      setTimeComplexityData(newSolution.time_complexity || "N/A - Debug mode");
+      setSpaceComplexityData(newSolution.space_complexity || "N/A - Debug mode");
+      
+      // 保存完整的调试分析内容供分析区域显示
+      if (newSolution.debug_analysis) {
+        setDebugAnalysis(newSolution.debug_analysis);
+      }
+      
       setIsProcessing(false)
     }
 
@@ -211,49 +200,65 @@ const Debug: React.FC<DebugProps> = ({
         console.log("Debug success event received with data:", data);
         queryClient.setQueryData(["new_solution"], data);
         
-        // Also update local state for immediate rendering
-        if (data.debug_analysis) {
-          // Store the debug analysis in its own state variable
-          setDebugAnalysis(data.debug_analysis);
-          // Set code separately for the code section
-          setNewCode(data.code || "// Debug mode - see analysis below");
-          
-          // Process thoughts/analysis points
-          if (data.debug_analysis.includes('\n\n')) {
-            const sections = data.debug_analysis.split('\n\n').filter(Boolean);
-            // Pick first few sections as thoughts
-            setThoughtsData(sections.slice(0, 3));
-          } else if (data.debug_analysis.includes('\n')) {
-            // Try to find bullet points or numbered lists
-            const lines = data.debug_analysis.split('\n');
-            const bulletPoints = lines.filter(line => 
-              line.trim().match(/^[\d*\-•]+\s/) || 
-              line.trim().match(/^[A-Z][\d\.\)\:]/) ||
-              line.includes(':') && line.length < 100
-            );
-            
-            if (bulletPoints.length > 0) {
-              setThoughtsData(bulletPoints.slice(0, 5));
-            } else {
-              setThoughtsData(["Debug analysis based on your screenshots"]);
-            }
-          } else {
-            setThoughtsData(["Debug analysis based on your screenshots"]);
-          }
-        } else {
-          // Fallback to code or default
-          setNewCode(data.code || "// No analysis available");
-          setThoughtsData(data.thoughts || ["Debug analysis based on your screenshots"]);
-          setDebugAnalysis(null);
+        // 🆕 完全复制编程题搜题的代码处理方式，包括字符编码检查
+        console.log('🔍 调试模式事件原始代码数据:', {
+          hasCode: !!data.code,
+          codeType: typeof data.code,
+          originalLength: data.code?.length || 0,
+          containsBackslashN: data.code?.includes('\\n') || false,
+          containsRealNewlines: data.code?.includes('\n') || false,
+          rawPreview: data.code?.substring(0, 150) || ''
+        });
+        
+        // 🆕 完整的字符转义处理，包括Unicode转义序列
+        let cleanCode = "// Debug mode - see analysis below";
+        if (data.code && typeof data.code === 'string') {
+          cleanCode = data.code
+            // 1. 处理Unicode转义序列（如 \u003c -> <, \u003e -> >）
+            .replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => {
+              return String.fromCharCode(parseInt(hex, 16));
+            })
+            // 2. 处理转义的换行符
+            .replace(/\\n/g, '\n')
+            // 3. 处理其他常见转义序列
+            .replace(/\\t/g, '\t')
+            .replace(/\\r/g, '\r')
+            .replace(/\\"/g, '"')
+            .replace(/\\'/g, "'")
+            .replace(/\\\\/g, '\\')
+            .trim();
         }
+        
+        console.log('🔧 调试模式事件代码处理后结果:', {
+          processedLength: cleanCode.length,
+          hasNewlines: cleanCode.includes('\n'),
+          lineCount: cleanCode.split('\n').length,
+          firstTwoLines: cleanCode.split('\n').slice(0, 2),
+          processedPreview: cleanCode.substring(0, 150).replace(/\n/g, '\\n')
+        });
+        setNewCode(cleanCode);
+        setThoughtsData(data.thoughts || ["Debug analysis based on your screenshots"]);
         setTimeComplexityData(data.time_complexity || "N/A - Debug mode");
         setSpaceComplexityData(data.space_complexity || "N/A - Debug mode");
+        
+        // 保存完整的调试分析内容供分析区域显示
+        if (data.debug_analysis) {
+          setDebugAnalysis(data.debug_analysis);
+        }
         
         setIsProcessing(false);
       }),
       
       window.electronAPI.onDebugStart(() => {
         setIsProcessing(true)
+        setIsStreaming(true)
+        // 🆕 清空前端显示
+        setNewCode(null)
+        setThoughtsData(null)
+        setTimeComplexityData(null)
+        setSpaceComplexityData(null)
+        setDebugAnalysis(null)
+        setStreamingContent('')
       }),
       window.electronAPI.onDebugError((error: string) => {
         showToast(
@@ -263,7 +268,28 @@ const Debug: React.FC<DebugProps> = ({
         )
         setIsProcessing(false)
         console.error("Processing error:", error)
-      })
+      }),
+
+      // 🆕 调试模式流式输出监听器
+      window.electronAPI.onDebugStreamChunk?.((data: any) => {
+        console.log('🌊 收到调试流式数据:', data);
+        
+        if (data.isComplete) {
+          // 流式完成，解析最终内容
+          const parsed = parseDebugContent(data.fullContent);
+          setNewCode(parsed.code);
+          setThoughtsData(parsed.thoughts);
+          setTimeComplexityData(parsed.timeComplexity);
+          setSpaceComplexityData(parsed.spaceComplexity);
+          setDebugAnalysis(parsed.analysis);
+          setIsProcessing(false);
+          setIsStreaming(false);
+          setStreamingContent('');
+        } else {
+          // 流式进行中，更新显示内容
+          setStreamingContent(data.fullContent || '');
+        }
+      }) || (() => {})
     ]
 
     // 🆕 监听全局快捷键事件（来自主进程）
@@ -374,173 +400,58 @@ const Debug: React.FC<DebugProps> = ({
       {/* Main Content */}
       <div className="w-full text-sm text-black opacity-controlled-bg rounded-md pointer-events-none main-content">
         <div className="rounded-lg overflow-hidden">
-          <div className="px-4 py-3 space-y-4">
-            {/* Thoughts Section */}
-            <ContentSection
-              title="What I Changed"
-              content={
-                thoughtsData && (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      {thoughtsData.map((thought, index) => (
-                        <div key={index} className="flex items-start gap-2">
-                          <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-                          <div>{thought}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              }
-              isLoading={!thoughtsData}
-            />
-
-            {/* Code Section */}
-            <CodeSection
-              title={`原始代码 (${COMMAND_KEY} + Shift + ← → 水平滚动)`}
-              code={newCode}
-              isLoading={!newCode}
-              currentLanguage={currentLanguage}
-            />
-            
-            {/* Debug Analysis Section */}
-            <div className="space-y-2">
-              <h2 className="text-[13px] font-medium text-white tracking-wide">Analysis & Improvements</h2>
-              {!debugAnalysis ? (
-                <div className="space-y-1.5">
-                  <div className="mt-4 flex">
-                    <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">
-                      Loading debug analysis...
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="w-full code-block-bg rounded-md p-4 text-[13px] leading-[1.4] text-gray-100 whitespace-pre-wrap overflow-auto max-h-[500px] text-preserve">
-                  {/* Process the debug analysis text by sections and lines */}
-                  {(() => {
-                    // First identify key sections based on common patterns in the debug output
-                    const sections = [];
-                    let currentSection = { title: '', content: [] };
-                    
-                    // Split by possible section headers (### or ##)
-                    const mainSections = debugAnalysis.split(/(?=^#{1,3}\s|^\*\*\*|^\s*[A-Z][\w\s]+\s*$)/m);
-                    
-                    // Filter out empty sections and process each one
-                    mainSections.filter(Boolean).forEach(sectionText => {
-                      // First line might be a header
-                      const lines = sectionText.split('\n');
-                      let title = '';
-                      let startLineIndex = 0;
-                      
-                      // Check if first line is a header
-                      if (lines[0] && (lines[0].startsWith('#') || lines[0].startsWith('**') || 
-                          lines[0].match(/^[A-Z][\w\s]+$/) || lines[0].includes('Issues') || 
-                          lines[0].includes('Improvements') || lines[0].includes('Optimizations'))) {
-                        title = lines[0].replace(/^#+\s*|\*\*/g, '');
-                        startLineIndex = 1;
-                      }
-                      
-                      // Add the section
-                      sections.push({
-                        title,
-                        content: lines.slice(startLineIndex).filter(Boolean)
-                      });
-                    });
-                    
-                    // Render the processed sections
-                    return sections.map((section, sectionIndex) => (
-                      <div key={sectionIndex} className="mb-6">
-                        {section.title && (
-                          <div className="font-bold text-white/90 text-[14px] mb-2 pb-1 border-b border-white/10">
-                            {section.title}
-                          </div>
-                        )}
-                        <div className="pl-1">
-                          {section.content.map((line, lineIndex) => {
-                            // Handle code blocks - detect full code blocks
-                            if (line.trim().startsWith('```')) {
-                              // If we find the start of a code block, collect all lines until the end
-                              if (line.trim() === '```' || line.trim().startsWith('```')) {
-                                // Find end of this code block
-                                const codeBlockEndIndex = section.content.findIndex(
-                                  (l, i) => i > lineIndex && l.trim() === '```'
-                                );
-                                
-                                if (codeBlockEndIndex > lineIndex) {
-                                  // Extract language if specified
-                                  const langMatch = line.trim().match(/```(\w+)/);
-                                  const language = langMatch ? langMatch[1] : '';
-                                  
-                                  // Get the code content
-                                  const codeContent = section.content
-                                    .slice(lineIndex + 1, codeBlockEndIndex)
-                                    .join('\n');
-                                  
-                                  // Skip ahead in our loop
-                                  lineIndex = codeBlockEndIndex;
-                                  
-                                  return (
-                                    <div key={lineIndex} className="font-mono text-xs code-highlight-bg p-3 my-2 rounded overflow-x-auto text-preserve">
-                                      {codeContent}
-                                    </div>
-                                  );
-                                }
-                              }
-                            }
-                            
-                            // Handle bullet points
-                            if (line.trim().match(/^[\-*•]\s/) || line.trim().match(/^\d+\.\s/)) {
-                              return (
-                                <div key={lineIndex} className="flex items-start gap-2 my-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-                                  <div className="flex-1">
-                                    {line.replace(/^[\-*•]\s|^\d+\.\s/, '')}
-                                  </div>
-                                </div>
-                              );
-                            }
-                            
-                            // Handle inline code
-                            if (line.includes('`')) {
-                              const parts = line.split(/(`[^`]+`)/g);
-                              return (
-                                <div key={lineIndex} className="my-1.5">
-                                  {parts.map((part, partIndex) => {
-                                    if (part.startsWith('`') && part.endsWith('`')) {
-                                      return <span key={partIndex} className="font-mono code-block-bg px-1 py-0.5 rounded text-preserve">{part.slice(1, -1)}</span>;
-                                    }
-                                    return <span key={partIndex}>{part}</span>;
-                                  })}
-                                </div>
-                              );
-                            }
-                            
-                            // Handle sub-headers
-                            if (line.trim().match(/^#+\s/) || (line.trim().match(/^[A-Z][\w\s]+:/) && line.length < 60)) {
-                              return (
-                                <div key={lineIndex} className="font-semibold text-white/80 mt-3 mb-1">
-                                  {line.replace(/^#+\s+/, '')}
-                                </div>
-                              );
-                            }
-                            
-                            // Regular text
-                            return <div key={lineIndex} className="my-1.5">{line}</div>;
-                          })}
+          <div className="px-4 py-3 space-y-4 max-w-full">
+            {/* 完全复制Solutions的结构 */}
+            {(newCode || isStreaming) && (
+              <>
+                <ContentSection
+                  title={`我的思路 (${COMMAND_KEY} + 方向键滚动)${isStreaming ? ' - 正在生成...' : ''}`}
+                  content={
+                    thoughtsData && (
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          {thoughtsData.map((thought, index) => (
+                            <div
+                              key={index}
+                              className={`flex items-start gap-2 ${isStreaming ? 'animate-fadeIn' : ''}`}
+                            >
+                              <div className={`w-1 h-1 rounded-full mt-2 shrink-0 ${
+                                isStreaming ? 'bg-blue-400 animate-pulse' : 'bg-blue-400/80'
+                              }`} />
+                              <div className={isStreaming ? 'text-blue-100' : ''}>{thought}</div>
+                            </div>
+                          ))}
+                          
+                          {/* 流式模式下的思路生成提示 */}
+                          {isStreaming && (
+                            <div className="flex items-start gap-2 opacity-60">
+                              <div className="w-1 h-1 rounded-full bg-blue-400 mt-2 shrink-0 animate-ping" />
+                              <div className="text-blue-300 text-xs italic">思路分析中...</div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ));
-                  })()} 
-                </div>
-              )}
-            </div>
+                    )
+                  }
+                  isLoading={!thoughtsData && !isStreaming}
+                />
 
-            {/* Complexity Section */}
-            <ComplexitySection
-              timeComplexity={timeComplexityData}
-              spaceComplexity={spaceComplexityData}
-              isLoading={!timeComplexityData || !spaceComplexityData}
-            />
+                <SolutionSection
+                  title={`调试代码 (${COMMAND_KEY} + Shift + ← → 水平滚动)`}
+                  content={newCode}
+                  isLoading={!newCode && !isStreaming}
+                  currentLanguage={currentLanguage}
+                  isStreaming={isStreaming}
+                  streamingContent={streamingContent}
+                />
+
+                <ComplexitySection
+                  timeComplexity={timeComplexityData}
+                  spaceComplexity={spaceComplexityData}
+                  isLoading={!timeComplexityData || !spaceComplexityData}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>

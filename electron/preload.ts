@@ -101,6 +101,13 @@ const electronAPI = {
       ipcRenderer.removeListener(PROCESSING_EVENTS.DEBUG_ERROR, subscription)
     }
   },
+  onDebugStreamChunk: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("debug-stream-chunk", subscription)
+    return () => {
+      ipcRenderer.removeListener("debug-stream-chunk", subscription)
+    }
+  },
   onSolutionError: (callback: (error: string) => void) => {
     const subscription = (_: any, error: string) => callback(error)
     ipcRenderer.on(PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR, subscription)

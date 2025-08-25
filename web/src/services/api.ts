@@ -472,6 +472,7 @@ export const inviteApi = {
   getCommissionRecords: async (params: {
     page?: number;
     limit?: number;
+    userId?: string;
   } = {}) => {
     const response = await api.get('/invite/commissions', {
       params

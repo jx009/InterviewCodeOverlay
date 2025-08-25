@@ -825,6 +825,18 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
 // Window dimension functions
 function setWindowDimensions(width: number, height: number): void {
   if (!state.mainWindow?.isDestroyed()) {
+    // 🆕 始终优先使用配置文件中保存的宽度
+    const config = configHelper.loadConfig()
+    const savedWindowWidth = config.clientSettings?.windowWidth
+    
+    if (savedWindowWidth && savedWindowWidth !== 800) {
+      console.log(`🔒 使用配置文件中保存的宽度: ${savedWindowWidth}px`)
+      // 只调整高度，保持配置的宽度
+      const currentBounds = state.mainWindow.getBounds()
+      state.mainWindow.setSize(savedWindowWidth, Math.ceil(height))
+      return
+    }
+    
     // 🆕 如果用户手动调整了窗口大小，则跳过自动调整宽度
     if (state.userManuallyResized) {
       console.log("⚠️ 用户已手动调整窗口大小，跳过自动宽度调整")
@@ -1043,9 +1055,9 @@ function getExtraScreenshotQueue(): string[] {
 function clearQueues(): void {
   state.screenshotHelper?.clearQueues()
   state.problemInfo = null
-  state.userManuallyResized = false // 🆕 重置时清除手动调整标志
+  // 🆕 不再重置 userManuallyResized 状态，保持用户的宽度设置
   setView("queue")
-  console.log("🔄 已重置窗口手动调整状态")
+  console.log("🔄 已清除队列，保持窗口宽度设置")
 }
 
 async function takeScreenshot(): Promise<string> {

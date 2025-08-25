@@ -206,10 +206,12 @@ enum QuestionType {
 
 // 交易类型枚举
 enum TransactionType {
-  CONSUME  @map("consume")  // 消费
-  RECHARGE @map("recharge") // 充值
-  REFUND   @map("refund")   // 退款
-  REWARD   @map("reward")   // 奖励
+  CONSUME           @map("consume")           // 消费
+  RECHARGE          @map("recharge")          // 充值
+  REFUND            @map("refund")            // 退款
+  REWARD            @map("reward")            // 奖励
+  INVITE_COMMISSION @map("invite_commission") // 邀请佣金
+  INVITE_REWARD     @map("invite_reward")     // 邀请奖励
 
   @@map("transaction_types")
 }

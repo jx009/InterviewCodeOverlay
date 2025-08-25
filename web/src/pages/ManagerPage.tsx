@@ -3189,37 +3189,37 @@ export default function ManagerPage() {
                   ) : (
                     <>
                       <div className="overflow-x-auto">
-                        <table className="w-full table-fixed min-w-full">
+                        <table className="w-full table-auto min-w-[1200px]">
                           <thead>
                             <tr className="bg-gray-700">
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[100px]">
                                 用户名
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[180px]">
                                 邮箱
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[80px]">
                                 操作类型
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-32">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[120px]">
                                 使用模型
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[80px]">
                                 积分变化
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-24">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[90px]">
                                 操作后余额
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-20">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[80px]">
                                 花费时间
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-36">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[130px]">
                                 操作时间
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-36">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[130px]">
                                 操作结束时间
                               </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider min-w-[200px]">
                                 描述
                               </th>
                             </tr>
@@ -3227,14 +3227,14 @@ export default function ManagerPage() {
                           <tbody className="divide-y divide-gray-700">
                             {usageTransactions.map((transaction) => (
                               <tr key={transaction.id} className="hover:bg-gray-700">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  {transaction.username}
+                                <td className="px-4 py-4 text-sm font-medium">
+                                  <div className="break-words">{transaction.username}</div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                  {transaction.email}
+                                <td className="px-4 py-4 text-sm text-gray-300">
+                                  <div className="break-all">{transaction.email}</div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                <td className="px-4 py-4 text-sm">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                                     transaction.operationType === '充值' 
                                       ? 'bg-green-600 text-green-100'
                                       : transaction.operationType === '编程题'
@@ -3250,20 +3250,20 @@ export default function ManagerPage() {
                                     {transaction.operationType}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                  {transaction.model_name || '-'}
+                                <td className="px-4 py-4 text-sm text-gray-300">
+                                  <div className="break-words">{transaction.model_name || '-'}</div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                  <span className={
+                                <td className="px-4 py-4 text-sm text-center">
+                                  <span className={`font-medium ${
                                     transaction.amount > 0 ? 'text-green-400' : 'text-red-400'
-                                  }>
+                                  }`}>
                                     {transaction.amount > 0 ? '+' : ''}{transaction.amount}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                <td className="px-4 py-4 text-sm text-gray-300 text-center">
                                   {transaction.balance_after}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                <td className="px-4 py-4 text-sm text-gray-300 text-center">
                                   {transaction.end_time && (transaction.operationType === '消费' || transaction.operationType === '编程题' || transaction.operationType === '选择题')
                                     ? (() => {
                                         const startTime = new Date(transaction.created_at).getTime();
@@ -3275,21 +3275,23 @@ export default function ManagerPage() {
                                     : '-'
                                   }
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                  {new Date(transaction.created_at).toLocaleString()}
+                                <td className="px-4 py-4 text-sm text-gray-300">
+                                  <div className="whitespace-nowrap">{new Date(transaction.created_at).toLocaleString()}</div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                  {transaction.end_time && (transaction.operationType === '消费' || transaction.operationType === '编程题' || transaction.operationType === '选择题')
-                                    ? (() => {
-                                        const endTime = new Date(transaction.end_time);
-                                        endTime.setHours(endTime.getHours() - 8);
-                                        return endTime.toLocaleString();
-                                      })()
-                                    : '-'
-                                  }
+                                <td className="px-4 py-4 text-sm text-gray-300">
+                                  <div className="whitespace-nowrap">
+                                    {transaction.end_time && (transaction.operationType === '消费' || transaction.operationType === '编程题' || transaction.operationType === '选择题')
+                                      ? (() => {
+                                          const endTime = new Date(transaction.end_time);
+                                          endTime.setHours(endTime.getHours() - 8);
+                                          return endTime.toLocaleString();
+                                        })()
+                                      : '-'
+                                    }
+                                  </div>
                                 </td>
-                                <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate">
-                                  {transaction.description || '-'}
+                                <td className="px-4 py-4 text-sm text-gray-300">
+                                  <div className="break-words">{transaction.description || '-'}</div>
                                 </td>
                               </tr>
                             ))}
