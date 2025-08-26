@@ -781,18 +781,10 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
   if (!state.mainWindow) return
 
   const newY = updateFn(state.currentY)
-  // Allow window to go 2/3 off screen in either direction
-  const maxUpLimit = (-(state.windowSize?.height || 0) * 2) / 3
-  const maxDownLimit =
-    state.screenHeight + ((state.windowSize?.height || 0) * 2) / 3
 
-  // Log the current state and limits
+  // Log the current position
   console.log({
     newY,
-    maxUpLimit,
-    maxDownLimit,
-    screenHeight: state.screenHeight,
-    windowHeight: state.windowSize?.height,
     currentY: state.currentY,
     step: state.step
   })
@@ -806,20 +798,13 @@ function moveWindowVertical(updateFn: (y: number) => number): void {
     state.isWindowVisible = true
   }
 
-  // Only update if within bounds, or if we're trying to move the window back on screen
-  const isMovingBackOnScreen = (state.currentY < 0 && newY > state.currentY) || 
-                                (state.currentY > state.screenHeight && newY < state.currentY)
-  
-  if ((newY >= maxUpLimit && newY <= maxDownLimit) || isMovingBackOnScreen) {
-    state.currentY = newY
-    state.mainWindow.setPosition(
-      Math.round(state.currentX),
-      Math.round(state.currentY)
-    )
-    console.log(`Window moved to position: (${Math.round(state.currentX)}, ${Math.round(state.currentY)})`)
-  } else {
-    console.log(`Movement blocked - would move outside bounds. Current: ${state.currentY}, Attempted: ${newY}`)
-  }
+  // Allow unlimited vertical movement
+  state.currentY = newY
+  state.mainWindow.setPosition(
+    Math.round(state.currentX),
+    Math.round(state.currentY)
+  )
+  console.log(`Window moved to position: (${Math.round(state.currentX)}, ${Math.round(state.currentY)})`)
 }
 
 // Window dimension functions

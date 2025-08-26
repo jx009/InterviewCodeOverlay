@@ -1584,34 +1584,25 @@ ${problemInfo.example_output || "未提供示例输出"}
 【编程语言】${language}
 
 **解决方案要求：**
-1. 仔细分析题目要求，确保理解正确
-2. 必须选择时间最优的算法和数据结构，严禁暴力解法
-3. 代码必须能正确处理所有边界情况
-4. 优先追求最佳时间复杂度，然后考虑空间复杂度优化
-5. 如果有O(n)解法绝不使用O(n²)，如果有O(logn)解法绝不使用O(n)
+1. 必须提供时间最优解，严禁使用暴力解法
+2. 如果存在O(n)解法，绝不使用O(n²)；如果存在O(logn)解法，绝不使用O(n)
+3. 优先考虑高效算法：动态规划、贪心、分治、图算法、数据结构优化等
+4. **代码必须最简洁，避免冗余代码**
+5. **代码注释必须使用中文**
+6. 在保证正确性的前提下，时间复杂度是第一优先级
+7. **严禁要求澄清题目细节，必须直接从提供的信息中分析并给出代码解决方案**
+8. **严禁输出任何与代码无关的内容，直接输出代码实现**
 
 **回复格式：**
 
-**题目信息确认：**
-- **题目描述**：[确认理解的题目描述]
-- **输入描述**：[输入格式和约束条件]
-- **输出描述**：[输出格式要求]
-- **示例分析**：[对示例输入输出的分析]
-
-**解题思路：**
-- [分析思路1]
-- [分析思路2]
-- [核心算法]
-
 **代码实现：**
 \`\`\`${language}
-// 注意：这里要写完整的程序代码，不是输出示例！
 [完整的ACM竞赛格式代码，包含main函数和完整的输入输出处理逻辑]
 \`\`\`
 
 **复杂度分析：**
-时间复杂度：O(X) - [详细解释]
-空间复杂度：O(Y) - [详细解释]
+时间复杂度：O(X)
+空间复杂度：O(Y)
 
 **代码要求：**
 - 完整的ACM竞赛格式（包含main函数和输入输出处理）
@@ -1619,13 +1610,7 @@ ${problemInfo.example_output || "未提供示例输出"}
 - 严格按照题目的输入输出格式
 - 包含必要的导入语句
 - 代码可直接运行，无需修改
-
-**最终要求：**
-- 必须提供完整的、可直接运行的代码解决方案
-- 代码必须能够解决题目要求，处理所有边界情况
-- 确保代码格式正确，可以直接复制运行
-- **重要：不要在代码实现部分输出示例的输入输出，要写实际的程序代码**
-- **代码实现部分必须包含完整的算法逻辑和输入输出处理**`
+- **最终必须返回完整的可执行代码，不要输出示例数据**`
 
       // 🆕 使用流式调用替代批式调用
       console.log('🌊 开始流式AI调用...')
@@ -1637,10 +1622,9 @@ ${problemInfo.example_output || "未提供示例输出"}
         const response = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: [
-            { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。\n\n**重要要求：**\n- 必须提供时间最优解，追求最佳时间复杂度\n- 严禁使用暴力解法（如多重循环遍历），除非题目规模很小且无更优解法\n- 优先考虑高效算法：动态规划、贪心、分治、图算法、数据结构优化等\n- 如果存在O(n)解法，绝不使用O(n²)或更高复杂度的方法\n- 在保证正确性的前提下，时间复杂度是第一优先级\n- **最终必须返回完整的可执行代码，不要输出示例数据**" },
+            { role: "system", content: "你是一位资深的算法竞赛专家和编程面试官。你的任务是提供准确、高效、可直接运行的编程解决方案。请确保代码质量高、逻辑清晰、性能最优。\n\n**重要要求：**\n- 必须提供时间最优解，追求最佳时间复杂度\n- 严禁使用暴力解法（如多重循环遍历），除非题目规模很小且无更优解法\n- 优先考虑高效算法：动态规划、贪心、分治、图算法、数据结构优化等\n- 如果存在O(n)解法，绝不使用O(n²)或更高复杂度的方法\n- 在保证正确性的前提下，时间复杂度是第一优先级\n- **最终必须返回完整的可执行代码，不要输出示例数据**\n- **直接给出最终答案，不要输出思考过程或推理步骤**" },
             { role: "user", content: promptText }
           ],
-          max_tokens: 6000,
           temperature: 0.1,
           stream: true  // 编程题统一使用流式输出
         }, { signal })
@@ -1802,51 +1786,18 @@ ${problemInfo.example_output || "未提供示例输出"}
 
       console.log('📝 开始解析流式响应内容')
 
-      // 🆕 解析完整的流式响应内容
-      console.log('🔍 传统编程题开始提取代码，查找代码块...')
+      // 解析完整的流式响应内容 - 简洁的代码提取逻辑
+      console.log('🔍 开始提取代码...')
       const codeMatch = fullContent.match(/```(?:\w+)?\s*([\s\S]*?)```/)
-      console.log('🔍 传统编程题代码块匹配结果:', {
+      const code = codeMatch ? codeMatch[1].trim() : fullContent
+      
+      console.log('✅ 代码提取完成:', {
         found: !!codeMatch,
-        matchedContent: codeMatch ? codeMatch[1].substring(0, 200) + '...' : 'null',
-        fullContentContainsCodeBlock: fullContent.includes('```'),
-        fullContentPreview: fullContent.substring(0, 200) + '...'
+        codeLength: code.length,
+        codePreview: code.substring(0, 100) + (code.length > 100 ? '...' : ''),
+        fullContentPreview: fullContent.substring(0, 200) + '...',
+        fallbackToFullContent: !codeMatch
       })
-
-      // 🆕 优化的代码提取逻辑 - 优先从**代码实现：**部分提取
-      let code = ''
-      const codeImplMatch = fullContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
-      if (codeImplMatch) {
-        code = codeImplMatch[1].trim()
-        console.log('✅ 优先从代码实现部分提取到代码:', {
-          codeLength: code.length,
-          codePreview: code.substring(0, 100) + '...',
-          startsWithValidCode: code.includes('main') || code.includes('def') || code.includes('class') || code.includes('function')
-        })
-      } else if (codeMatch) {
-        // 后备方案：使用第一个代码块，但要检查是否是示例输入
-        code = codeMatch[1].trim()
-        const firstLine = code.split('\n')[0]
-        const mightBeExample = /^\d+[\s\d]*$/.test(firstLine)
-
-        if (mightBeExample) {
-          console.log('⚠️ 第一个代码块可能是示例输入，尝试寻找其他代码块...')
-          // 尝试寻找第二个代码块
-          const allCodeMatches = fullContent.match(/```[\s\S]*?```/g) || []
-          if (allCodeMatches.length > 1) {
-            const secondCodeBlock = allCodeMatches[1]
-            const secondCode = secondCodeBlock.replace(/```\w*\n?/, '').replace(/```\s*$/, '').trim()
-            if (secondCode.length > 20 && (secondCode.includes('def') || secondCode.includes('main') || secondCode.includes('function') || secondCode.includes('class'))) {
-              code = secondCode
-              console.log('✅ 使用第二个代码块（更像是实际代码）')
-            }
-          }
-        } else {
-          console.log('✅ 使用第一个代码块作为后备方案')
-        }
-      } else {
-        console.error('❌ 无法提取代码，将返回空代码')
-        code = '// 无法从AI响应中提取代码\n// 原始响应内容:\n' + fullContent
-      }
 
       // 提取思路
       const thoughtsRegex = /(?:解题思路|思路|关键洞察|推理|方法)[:：]([\s\S]*?)(?:(?:代码实现|时间复杂度|复杂度分析|$))/i
@@ -1984,43 +1935,25 @@ ${problemInfo.example_output || "未提供示例输出"}
 
 编程语言：${language}
 
-**题目信息识别要求：**
-1. **题目描述**：完整准确地识别题目描述，包括问题背景、要求解决的问题等
-2. **输入描述**：准确识别输入格式说明，包括输入的数据结构、范围、约束条件等
-3. **输出描述**：准确识别输出格式要求，包括输出的格式、精度要求等
-4. **示例输入输出**：完整识别所有提供的测试样例，包括输入和对应的输出
-5. **约束条件**：识别数据范围、时间限制、空间限制等约束信息
-
 **解决方案要求：**
-1. 仔细分析截图中的题目要求，确保理解正确
-2. 必须选择时间最优的算法和数据结构，严禁暴力解法
-3. 代码必须能正确处理所有边界情况
-4. 优先追求最佳时间复杂度，然后考虑空间复杂度优化
-5. 如果有O(n)解法绝不使用O(n²)，如果有O(logn)解法绝不使用O(n)
+1. 必须选择时间最优的算法和数据结构，严禁暴力解法
+2. 如果有O(n)解法绝不使用O(n²)，如果有O(logn)解法绝不使用O(n)
+3. **代码必须最简洁，避免冗余代码**
+4. **代码注释必须使用中文**
+5. **严禁要求澄清题目细节，必须直接从截图识别题目并给出代码**
+6. **严禁输出任何解释、分析或题目信息，直接输出代码实现**
+7. **严禁输出"题目不清晰"、"需要更多信息"等内容**
 
 **回复格式：**
 
-**题目信息：**
-- **题目描述**：[从截图中识别的完整题目描述]
-- **输入描述**：[输入格式和约束条件]
-- **输出描述**：[输出格式要求]
-- **示例输入**：[测试样例的输入]
-- **示例输出**：[测试样例的输出]
-
-**解题思路：**
-- [分析思路1]
-- [分析思路2]
-- [核心算法]
-
 **代码实现：**
 \`\`\`${language}
-// 注意：这里要写完整的程序代码，不是输出示例！
 [完整的ACM竞赛格式代码，包含main函数和完整的输入输出处理逻辑]
 \`\`\`
 
 **复杂度分析：**
-时间复杂度：O(X) - [详细解释]
-空间复杂度：O(Y) - [详细解释]
+时间复杂度：O(X)
+空间复杂度：O(Y)
 
 **代码要求：**
 - 完整的ACM竞赛格式（包含main函数和输入输出处理）
@@ -2043,7 +1976,6 @@ ${problemInfo.example_output || "未提供示例输出"}
               ]
             }
           ],
-          max_tokens: 6000,
           temperature: 0.1,
           stream: true  // 编程题统一使用流式输出
         }, { signal })
@@ -2245,26 +2177,16 @@ ${problemInfo.example_output || "未提供示例输出"}
       } catch (jsonError) {
         console.log('⚠️ JSON解析失败，使用传统方法提取:', jsonError.message)
 
-        // 降级到传统的代码实现部分匹配
-        const codeImplMatch = fullContent.match(/\*\*代码实现：?\*\*[\s\S]*?```(?:\w+)?\s*([\s\S]*?)```/i)
-        if (codeImplMatch) {
-          code = codeImplMatch[1].trim()
-          console.log('✅ 传统方法使用代码实现匹配提取到代码:', {
-            codeLength: code.length,
-            codePreview: code.substring(0, 100) + '...'
-          })
-        } else if (codeMatch) {
-          // 后备方案：使用第一个代码块
-          code = codeMatch[1].trim()
-          console.log('⚠️ 传统方法使用第一个代码块作为后备方案:', {
-            codeLength: code.length,
-            codePreview: code.substring(0, 100) + '...',
-            mightBeExample: /^\d+[\s\d]*$/.test(code.split('\n')[0])
-          })
-        } else {
-          console.error('❌ 传统方法无法提取代码，将返回空代码')
-          code = '// 无法从AI响应中提取代码\n// 原始响应内容:\n' + fullContent
-        }
+        // 降级到传统的代码实现部分匹配 - 使用简洁的逻辑
+        console.log('⚠️ JSON解析失败，使用传统代码提取方法')
+        code = codeMatch ? codeMatch[1].trim() : fullContent
+        
+        console.log('✅ 传统方法代码提取完成:', {
+          found: !!codeMatch,
+          codeLength: code.length,
+          codePreview: code.substring(0, 100) + (code.length > 100 ? '...' : ''),
+          fallbackToFullContent: !codeMatch
+        })
 
         // 传统方法提取思路
         const thoughtsMatch = fullContent.match(/\*\*解题思路：?\*\*\s*([\s\S]*?)(?:\*\*代码实现|\*\*复杂度分析|$)/i)
@@ -2347,7 +2269,7 @@ ${problemInfo.example_output || "未提供示例输出"}
           messages: [
             {
               role: "system",
-              content: "你是一位专业的多选题分析助手。用户会发送选择题截图，这些都是多选题，每道题可能有多个正确答案。请直接分析图片中的题目并给出答案，将所有正确选项的字母连续写在一起（如ABC、BD等）。"
+              content: "你是一位专业的多选题分析助手。用户会发送选择题截图，这些都是多选题，每道题可能有多个正确答案。请直接分析图片中的题目并给出答案，将所有正确选项的字母连续写在一起（如ABC、BD等）。直接给出最终答案，不要输出思考过程或推理步骤。"
             },
             {
               role: "user",
@@ -2380,7 +2302,7 @@ ${problemInfo.example_output || "未提供示例输出"}
               ]
             }
           ],
-          max_tokens: 4000,
+
           temperature: 0.1,
           stream: false  // 选择题使用非流式输出
         }, { signal })
@@ -2695,10 +2617,10 @@ ${questionsText}
         solutionResponse = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: [
-            { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。" },
+            { role: "system", content: "你是一位专业的选择题分析助手。仔细分析每道题目，提供准确的答案和详细的解题思路。直接给出最终答案，不要输出思考过程或推理步骤。" },
             { role: "user", content: promptText }
           ],
-          max_tokens: 4000,
+
           temperature: 0.2
         }, { signal })
 
@@ -2984,10 +2906,10 @@ ${questionsText}
         solutionResponse = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: [
-            { role: "system", content: "你是一位专业的多选题分析助手。用户已确认这些都是多选题，每道题可能有多个正确答案。请严格按照要求的格式输出答案，将所有正确选项的字母连续写在一起（如ABC、BD等）。绝不能只选择一个选项，要找出所有正确答案。" },
+            { role: "system", content: "你是一位专业的多选题分析助手。用户已确认这些都是多选题，每道题可能有多个正确答案。请严格按照要求的格式输出答案，将所有正确选项的字母连续写在一起（如ABC、BD等）。绝不能只选择一个选项，要找出所有正确答案。直接给出最终答案，不要输出思考过程或推理步骤。" },
             { role: "user", content: promptText }
           ],
-          max_tokens: 4000,
+
           temperature: 0.1
         }, { signal })
 
@@ -3334,7 +3256,6 @@ ${questionsText}
         solutionResponse = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: messages as any,
-          max_tokens: 4000,
           temperature: 0.1
         }, { signal })
 
@@ -3596,10 +3517,10 @@ ${questionsText}
         solutionResponse = await this.ismaqueClient.chat.completions.create({
           model: model,
           messages: [
-            { role: "system", content: "你是一位专业的单选题分析助手。用户已确认这些都是单选题，每道题只有一个正确答案。请严格按照要求的格式输出答案，每题只选择一个选项字母（如A、B、C、D）。" },
+            { role: "system", content: "你是一位专业的单选题分析助手。用户已确认这些都是单选题，每道题只有一个正确答案。请严格按照要求的格式输出答案，每题只选择一个选项字母（如A、B、C、D）。直接给出最终答案，不要输出思考过程或推理步骤。" },
             { role: "user", content: promptText }
           ],
-          max_tokens: 4000,
+
           temperature: 0.1
         }, { signal })
 
@@ -4158,18 +4079,17 @@ ${questionsText}
 [修正后的完整ACM竞赛模式代码（时间最优解），包含main函数和完整的输入输出处理逻辑]
 \`\`\`
 
-**解题思路：**
-- [关键修改和改进的要点列表（重点说明时间复杂度优化）]
-
 **复杂度分析：**
-时间复杂度：O(X) - [详细解释]
-空间复杂度：O(Y) - [详细解释]
+时间复杂度：O(X)
+空间复杂度：O(Y)
 
 **修改说明：**
 [详细说明相比原代码进行了哪些修改和为什么需要这些修改（特别是算法优化）]
 
 **最终要求：**
 - 必须提供完整的、可直接运行的ACM竞赛格式代码
+- **代码必须最简洁，避免冗余代码**
+- **代码注释必须使用中文**
 - 代码必须能够解决题目要求，处理所有边界情况
 - 确保代码格式正确，可以直接复制运行
 - **严禁在代码实现部分直接输出示例输入输出，必须写完整的算法代码**`
@@ -4183,52 +4103,29 @@ ${questionsText}
 
 使用编程语言：${language}
 
-**题目信息识别要求：**
-1. **题目描述**：完整准确地识别题目描述，包括问题背景、要求解决的问题等
-2. **输入描述**：准确识别输入格式说明，包括输入的数据结构、范围、约束条件等
-3. **输出描述**：准确识别输出格式要求，包括输出的格式、精度要求等
-4. **示例输入输出**：完整识别所有提供的测试样例，包括输入和对应的输出
-5. **约束条件**：识别数据范围、时间限制、空间限制等约束信息
-
 **分析要求：**
 1. 仔细阅读截图中的题目要求和约束条件
-2. 分析我的代码中存在的问题（如果有的话）
-3. 识别错误信息或测试失败的原因
-4. 提供时间最优的改进方案
-5. 确保代码能正确处理所有边界情况
+2. 提供时间最优的改进方案
+3. **代码必须最简洁，避免冗余代码**
+4. **代码注释必须使用中文**
+5. **严禁输出分析思路、问题解释或修改说明，直接输出修正后的代码**
+6. 确保代码能正确处理所有边界情况
 
 **回复格式：**
 
-**题目信息：**
-- **题目描述**：[从截图中识别的完整题目描述]
-- **输入描述**：[输入格式和约束条件]
-- **输出描述**：[输出格式要求]
-- **示例输入**：[测试样例的输入]
-- **示例输出**：[测试样例的输出]
-
-**问题分析：**
-- [分析原代码的问题]
-- [错误原因分析]
-- [改进建议]
-
 **代码实现：**
 \`\`\`${language}
-// 注意：这里要写完整的程序代码，不是输出示例！
 [修正后的完整ACM竞赛格式代码（时间最优解），包含main函数和完整的输入输出处理逻辑]
 \`\`\`
 
-**解题思路：**
-- [关键修改和改进的要点列表（重点说明时间复杂度优化）]
-
 **复杂度分析：**
-时间复杂度：O(X) - [详细解释]
-空间复杂度：O(Y) - [详细解释]
-
-**修改说明：**
-[详细说明相比原代码进行了哪些修改和为什么需要这些修改（特别是算法优化）]
+时间复杂度：O(X)
+空间复杂度：O(Y)
 
 **最终要求：**
 - 必须提供完整的、可直接运行的ACM竞赛格式代码
+- **代码必须最简洁，避免冗余代码**
+- **代码注释必须使用中文**
 - 代码必须能够解决题目要求，处理所有边界情况
 - 确保代码格式正确，可以直接复制运行
 - **严禁在代码实现部分直接输出示例输入输出，必须写完整的算法代码**
@@ -4257,7 +4154,7 @@ ${questionsText}
       let debugResponse = await this.ismaqueClient.chat.completions.create({
         model: debuggingModel,
         messages: messages as any,
-        max_tokens: 8000,
+
         temperature: 0.2,
         stream: true  // 🆕 改为流式输出
       }, { signal })
@@ -4448,7 +4345,7 @@ ${questionsText}
       const response = await this.ismaqueClient.chat.completions.create({
         model: model,  // 编程题信息提取不映射，使用写死的模型
         messages: messages as any,
-        max_tokens: 6000,
+
         temperature: 0.0
       }, { signal })
 
@@ -4547,7 +4444,7 @@ ${questionsText}
       const response = await this.ismaqueClient.chat.completions.create({
         model: model,  // 选择题信息提取使用固定模型，不映射
         messages: messages as any,
-        max_tokens: 6000,
+
         temperature: 0.1
       }, { signal })
 

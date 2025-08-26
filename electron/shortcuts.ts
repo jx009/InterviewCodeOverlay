@@ -9,6 +9,76 @@ export class ShortcutsHelper {
     this.deps = deps
   }
 
+  /**
+   * 异步执行耗时的清理操作，不阻塞UI响应
+   * （积分操作已在主流程中同步处理）
+   */
+  private async performAsyncCleanup(): Promise<void> {
+    console.log("🔄 Starting background cleanup operations...")
+    
+    const mainWindow = this.deps.getMainWindow()
+    
+    try {
+      // 异步操作1: 清理临时文件（使用 setTimeout 延迟执行）
+      setTimeout(() => {
+        try {
+          console.log("🔄 Cleaning up temp files in background...")
+          const screenshotHelper = this.deps.getScreenshotHelper?.()
+          if (screenshotHelper) {
+            screenshotHelper.cleanupAllTempFiles()
+            console.log("✅ Temp file cleanup completed")
+          }
+        } catch (error) {
+          console.error("❌ 后台文件清理失败:", error)
+        }
+      }, 100) // 100ms后开始文件清理
+
+      // 异步操作2: 窗口状态检查和恢复（延迟执行）
+      setTimeout(() => {
+        try {
+          if (!mainWindow || mainWindow.isDestroyed()) return
+          
+          console.log("🔄 Checking window state in background...")
+          
+          // 确保窗口可见并恢复焦点
+          if (!this.deps.isVisible()) {
+            console.log("Window was hidden, restoring visibility...")
+            mainWindow.setIgnoreMouseEvents(false)
+            mainWindow.showInactive()
+            // 更新状态管理
+            if (typeof (this.deps as any).setVisible === 'function') {
+              (this.deps as any).setVisible(true)
+            }
+          }
+          
+          // 确保窗口在屏幕内可见
+          const bounds = mainWindow.getBounds()
+          const { screen } = require('electron')
+          const primaryDisplay = screen.getPrimaryDisplay()
+          const workArea = primaryDisplay.workArea
+          
+          // 如果窗口完全在屏幕外，将其移回屏幕内
+          if (bounds.x + bounds.width < 0 || bounds.x > workArea.width ||
+              bounds.y + bounds.height < 0 || bounds.y > workArea.height) {
+            console.log("Window was off-screen, repositioning...")
+            const newX = Math.max(0, Math.min(bounds.x, workArea.width - bounds.width))
+            const newY = Math.max(0, Math.min(bounds.y, workArea.height - bounds.height))
+            mainWindow.setPosition(newX, newY)
+          }
+          
+          console.log("✅ Window state check completed")
+        } catch (error) {
+          console.error("❌ 后台窗口状态检查失败:", error)
+        }
+      }, 50) // 50ms后检查窗口状态
+
+      console.log("🚀 Background cleanup operations scheduled (files & window state)")
+      
+    } catch (error) {
+      console.error("❌ 异步清理过程出错:", error)
+    }
+  }
+
   private adjustOpacity(delta: number): void {
     const mainWindow = this.deps.getMainWindow();
     if (!mainWindow) return;
@@ -77,69 +147,39 @@ export class ShortcutsHelper {
     })
 
     globalShortcut.register("CommandOrControl+R", async () => {
-      console.log(
-        "Command + R pressed. Canceling requests and resetting queues..."
-      )
+      console.log("Command + R pressed. Starting optimized cleanup process...")
 
-      // Cancel ongoing API requests
+      // 立即响应用户操作 - 先执行快速的同步操作
+      const mainWindow = this.deps.getMainWindow()
+      
+      // 1. 立即取消正在进行的API请求（同步，快速）
       this.deps.processingHelper?.cancelOngoingRequests()
+      
+      // 2. 立即清除队列（同步，快速）
+      this.deps.clearQueues()
+      
+      // 3. 立即更新视图状态（同步，快速）
+      this.deps.setView("queue")
+      
+      // 4. 立即通知前端重置（同步，快速）
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("reset-view")
+        mainWindow.webContents.send("reset")
+        console.log("✅ Immediate reset completed - UI should respond instantly")
+      }
 
-      // 🆕 取消所有积分预留和待处理操作
+      // 5. 同步处理积分取消操作（保持原有逻辑）
       if (this.deps.processingHelper) {
         try {
           await this.deps.processingHelper.cancelAllCreditReservations()
+          console.log("✅ Credit cancellations completed")
         } catch (error) {
-          console.error("取消积分预留失败:", error)
+          console.error("❌ 积分取消失败:", error)
         }
       }
 
-      // Clear both screenshot queues
-      this.deps.clearQueues()
-
-      // 🆕 清理所有临时文件和缓存
-      const screenshotHelper = this.deps.getScreenshotHelper?.()
-      if (screenshotHelper) {
-        screenshotHelper.cleanupAllTempFiles()
-      }
-
-      console.log("Cleared queues and cleaned up temp files.")
-
-      // Update the view state to 'queue'
-      this.deps.setView("queue")
-
-      // Notify renderer process to switch view to 'queue'
-      const mainWindow = this.deps.getMainWindow()
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // 确保窗口可见并恢复焦点
-        if (!this.deps.isVisible()) {
-          console.log("Window was hidden, restoring visibility...")
-          mainWindow.setIgnoreMouseEvents(false)
-          mainWindow.showInactive()
-          // 更新状态管理
-          if (typeof (this.deps as any).setVisible === 'function') {
-            (this.deps as any).setVisible(true)
-          }
-        }
-        
-        // 确保窗口在屏幕内可见
-        const bounds = mainWindow.getBounds()
-        const { screen } = require('electron')
-        const primaryDisplay = screen.getPrimaryDisplay()
-        const workArea = primaryDisplay.workArea
-        
-        // 如果窗口完全在屏幕外，将其移回屏幕内
-        if (bounds.x + bounds.width < 0 || bounds.x > workArea.width ||
-            bounds.y + bounds.height < 0 || bounds.y > workArea.height) {
-          console.log("Window was off-screen, repositioning...")
-          const newX = Math.max(0, Math.min(bounds.x, workArea.width - bounds.width))
-          const newY = Math.max(0, Math.min(bounds.y, workArea.height - bounds.height))
-          mainWindow.setPosition(newX, newY)
-        }
-        
-        mainWindow.webContents.send("reset-view")
-        mainWindow.webContents.send("reset")
-        console.log("Reset completed, window visibility ensured")
-      }
+      // 异步执行剩余的清理操作（文件清理和窗口状态检查）
+      this.performAsyncCleanup()
     })
 
     // New shortcuts for moving the window
